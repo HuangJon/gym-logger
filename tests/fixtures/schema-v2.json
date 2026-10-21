@@ -1,0 +1,8 @@
+{ "schemaVersion": 2, "sessions": [
+  { "id": "1792610000000", "session": 1, "date": "2026-10-20", "ts": 1792610000000, "note": "tweaked shoulder", "entries": {
+    "s1-incline": { "status": "complete", "note": "felt solid", "weight": 50, "unit": "lbs", "reps": 9 },
+    "s1-deadlift": { "status": "partial", "note": "", "weight": 177.5, "unit": "lbs", "reps": 6 },
+    "s1-lateral": { "status": "skip", "note": "shoulder" },
+    "s1-crunches": { "status": "complete", "note": "", "weight": 42.5, "unit": "kg", "reps": 11 },
+    "s1-pulldown": { "status": "unrecorded", "note": "" } } }
+] }

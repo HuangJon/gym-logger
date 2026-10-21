@@ -1,14 +1,13 @@
-/** Workout tab: pick a date + session, log each exercise, complete the session. */
+/** Workout tab: pick a date + session, log each exercise against its target, complete the session. */
 import { PREHAB, SESSION_LABELS, SESSION_COLORS, STALE_AFTER_DAYS } from '../config/program.js';
 import { sessionExercises, findExercise, unitOf, repRangeText } from '../core/exercises.js';
 import { todayISO, isISODate, formatShort, agoText, daysBetween } from '../core/dates.js';
-import { hasValue, parseWeight, parseReps } from '../core/numbers.js';
-import { STATUS, buildSessionRecord } from '../core/records.js';
+import { hasValue, parseWeight } from '../core/numbers.js';
+import { STATUS, buildSessionRecord, setsOfEntry } from '../core/records.js';
 import { addSession } from '../core/log.js';
-import { lastPerformance, plannedWeight, repsBadge, nextStepHint, suggestedReps, stepWeight, stepReps } from '../core/progress.js';
+import { lastPerformance, computeTarget, targetReason, stepWeight, stepReps, attemptBadge } from '../core/progress.js';
 import { esc, delegate, autoResize, flash } from './dom.js';
 
-const STATUS_BUTTONS = [[STATUS.COMPLETE, '✓ Done'], [STATUS.PARTIAL, '~ Partial'], [STATUS.SKIP, '✕ Skip']];
 const COMPLETE_LABEL = 'Complete Session';
 
 export function createWorkoutView({ root, repo, onSaved }) {
@@ -22,14 +21,15 @@ export function createWorkoutView({ root, repo, onSaved }) {
   };
 
   let active = null;   // { sessionNum, date } while logging
-  let scratch = {};    // { [exerciseId]: { status?, note?, weight?, reps? } } — not saved until Complete
+  let scratch = {};    // { [exerciseId]: { status?, note?, weight?, sets?, selected? } } — not saved until Complete
   let saving = false;
 
   const entryFor = id => (scratch[id] ||= {});
-  const planned = (ex, date = active?.date) => plannedWeight(repo.sessions, ex, { typed: scratch[ex.id]?.weight, beforeDate: date });
-  const lastFor = ex => lastPerformance(repo.sessions, ex, active.date);
-  /** Reps to aim for today (shown greyed in the reps box until confirmed). */
-  const suggestionFor = ex => suggestedReps(ex, lastFor(ex), planned(ex));
+  const lastFor = (ex, date = active.date) => lastPerformance(repo.sessions, ex, date);
+  const targetFor = (ex, date) => computeTarget(ex, lastFor(ex, date));
+  /** What the card currently shows: your changes, otherwise the target. */
+  const currentWeight = ex => ex.bw ? null : (scratch[ex.id]?.weight ?? targetFor(ex)?.weight ?? null);
+  const currentSets = ex => scratch[ex.id]?.sets ?? (t => Array(t.sets).fill(t.reps))(targetFor(ex));
 
   // ── picker ──────────────────────────────────────────────
   function resetPicker() {
@@ -44,14 +44,17 @@ export function createWorkoutView({ root, repo, onSaved }) {
     ui.hint.hidden = !!n;
     if (!n) { ui.preview.innerHTML = ''; return; }
     const date = isISODate(ui.pickDate.value) ? ui.pickDate.value : todayISO();
-    const rows = sessionExercises(n).map(ex => {
-      const w = planned(ex, date);
-      const weight = ex.bw ? 'bodyweight' : (w != null ? `${w} ${unitOf(ex)}` : '—');
-      return `<div class="preview-ex"><span class="preview-ex-name">${esc(ex.name)}</span><span class="preview-ex-detail">${esc(ex.detail)} · <b>${weight}</b></span></div>`;
-    }).join('');
+    const rows = sessionExercises(n).map(ex => `<div class="preview-ex"><span class="preview-ex-name">${esc(ex.name)}</span>
+      <span class="preview-ex-detail">${esc(ex.detail)} · <b>${targetText(ex, targetFor(ex, date))}</b></span></div>`).join('');
     ui.preview.innerHTML = `<div class="card preview">
-      <div class="preview-header" style="color:${SESSION_COLORS[n]}">${SESSION_LABELS[n]} — exercise preview</div>
+      <div class="preview-header" style="color:${SESSION_COLORS[n]}">${SESSION_LABELS[n]} — today's targets</div>
       <div class="preview-list">${rows}</div></div>`;
+  }
+
+  function targetText(ex, t) {
+    if (!t) return '';
+    const weight = ex.bw ? '' : (hasValue(t.weight) ? `${t.weight} ${unitOf(ex)} × ` : '');
+    return `${weight}${t.reps}${ex.bw || !hasValue(t.weight) ? ' reps' : ''} × ${t.sets} sets`;
   }
 
   function start() {
@@ -98,10 +101,9 @@ export function createWorkoutView({ root, repo, onSaved }) {
 
   function exerciseCard(ex) {
     const sc = scratch[ex.id] || {};
-    const status = sc.status || '';
     const tags = [ex.tag && `<span class="ex-tag tag-circuit">${esc(ex.tag)}</span>`, ex.warn && `<span class="ex-tag tag-warn">${esc(ex.warn)}</span>`].filter(Boolean).join('');
     return `
-      <div class="card ex-card s${active.sessionNum}${status === STATUS.SKIP ? ' is-skipped' : ''}" id="card-${ex.id}" data-ex="${ex.id}">
+      <div class="card ex-card s${active.sessionNum}${sc.status === STATUS.SKIP ? ' is-skipped' : ''}" id="card-${ex.id}" data-ex="${ex.id}">
         <div class="ex-header">
           <div>
             <div class="ex-name">${esc(ex.name)}</div>
@@ -110,12 +112,15 @@ export function createWorkoutView({ root, repo, onSaved }) {
           </div>
           <div>${ex.bw ? '<span class="weight-bw">bodyweight</span>' : ''}</div>
         </div>
-        ${lastTimeRow(ex)}
-        ${ex.bw ? '' : `<div class="ex-row weight-line"><span class="row-label">Weight</span><div class="weight-box" id="wb-${ex.id}">${weightBoxInner(ex)}</div></div>`}
-        ${repsRow(ex, sc)}
+        ${targetRow(ex)}
+        ${lastRow(ex)}
+        <div class="ex-log"${sc.status === STATUS.SKIP ? ' hidden' : ''}>
+          ${ex.bw ? '' : `<div class="ex-row log-line"><span class="row-label">Weight</span><div class="weight-box" id="wb-${ex.id}">${weightBoxInner(ex)}</div></div>`}
+          ${setsRow(ex)}
+        </div>
         <div class="ex-row status-row">
-          <span class="status-label">Mark:</span>
-          ${STATUS_BUTTONS.map(([value, label]) => `<button type="button" class="status-btn" data-action="status" data-status="${value}" aria-pressed="${status === value}">${label}</button>`).join('')}
+          <button type="button" class="status-btn" data-action="status" data-status="${STATUS.COMPLETE}" aria-pressed="${sc.status === STATUS.COMPLETE}">✓ Done</button>
+          <button type="button" class="status-btn" data-action="status" data-status="${STATUS.SKIP}" aria-pressed="${sc.status === STATUS.SKIP}">✕ Skip</button>
         </div>
         <div class="ex-row note-row">
           <span class="note-icon">✎</span>
@@ -124,73 +129,77 @@ export function createWorkoutView({ root, repo, onSaved }) {
       </div>`;
   }
 
-  function weightBoxInner(ex) {
-    const w = planned(ex);
-    if (w == null) return `<div class="weight-row"><span class="weight-placeholder" id="wp-${ex.id}" tabindex="0" role="button" data-action="edit-weight">log weight</span></div>`;
-    return `<div class="weight-row">
-      <button type="button" class="stepper" data-action="weight-step" data-dir="-1" aria-label="Less weight">−</button>
-      <span class="weight-val" id="wv-${ex.id}" tabindex="0" role="button" data-action="edit-weight">${w}</span><span class="weight-unit">${unitOf(ex)}</span>
-      <button type="button" class="stepper" data-action="weight-step" data-dir="1" aria-label="More weight">+</button>
+  function targetRow(ex) {
+    const last = lastFor(ex), target = computeTarget(ex, last);
+    if (!target) return '';
+    const unit = unitOf(ex), reason = targetReason(ex, target, last, unit);
+    const needsWeight = !ex.bw && !hasValue(target.weight);
+    return `<div class="ex-row target-row">
+      <span class="row-label">Target</span>
+      <span class="target-val"><b>${targetText(ex, target)}</b>${needsWeight ? ' <span class="last-when">· set a weight</span>' : ''}</span>
+      ${reason ? `<span class="target-reason">${reason}</span>` : ''}
     </div>`;
   }
 
-  function lastTimeRow(ex) {
+  function lastRow(ex) {
     const last = lastFor(ex);
-    if (!last) return '<div class="ex-row last-row"><span class="last-label">Last time</span><span class="last-none">no previous log</span></div>';
+    if (!last) return '<div class="ex-row last-row"><span class="row-label">Last</span><span class="last-none">no previous log</span></div>';
     const unit = last.unit || unitOf(ex);
-    const value = [!ex.bw && hasValue(last.weight) && `${last.weight} ${unit}`, hasValue(last.reps) && `${last.reps} reps`].filter(Boolean).join(' × ');
-    const hint = nextStepHint(ex, last);
+    const sets = setsOfEntry(last, 1).map(r => (r === 0 ? '–' : r)).join(', ');
+    const value = [!ex.bw && hasValue(last.weight) && `${last.weight} ${unit}`, sets && `${sets} reps`].filter(Boolean).join(' × ');
     const stale = daysBetween(last.date, active.date) > STALE_AFTER_DAYS;
     return `<div class="ex-row last-row">
-      <span class="last-label">Last time</span>
-      <span class="last-val"><b>${value}</b>${last.status === STATUS.PARTIAL ? ' <span class="badge badge-partial">partial</span>' : ''}
+      <span class="row-label">Last</span>
+      <span class="last-val">${value}${last.status === STATUS.PARTIAL ? ' <span class="badge badge-partial">partial</span>' : ''}
         <span class="last-when">${formatShort(last.date)} · ${agoText(last.date, active.date)}</span></span>
-      ${hint ? `<span class="last-hint">${hint}</span>` : ''}
       ${stale ? '<span class="last-stale">⏳ been a while — ease back in</span>' : ''}
     </div>`;
   }
 
-  function repsRow(ex, sc) {
-    if (!ex.reps) return '';
-    const reps = sc.reps ?? '';
-    const suggested = suggestionFor(ex);
-    const badge = repsBadge(reps, ex.reps, suggested);
-    return `<div class="ex-row reps-row"${sc.status === STATUS.SKIP ? ' hidden' : ''}>
-      <div class="reps-left">
-        <span class="row-label">Reps</span>
-        <button type="button" class="stepper" data-action="reps-step" data-dir="-1" aria-label="One less rep">−</button>
-        <input class="reps-input" type="number" inputmode="numeric" min="0" max="99" placeholder="${suggested ?? '–'}" id="reps-${ex.id}" value="${esc(reps)}" data-action="reps" aria-label="${esc(ex.name)} reps">
-        <button type="button" class="stepper" data-action="reps-step" data-dir="1" aria-label="One more rep">+</button>
-        <span class="reps-target">/ ${repRangeText(ex.reps)}</span>
-      </div>
-      <span class="prog-badge ${badge.cls}" id="pb-${ex.id}">${badge.label}</span>
+  function weightBoxInner(ex) {
+    const w = currentWeight(ex);
+    const value = w == null
+      ? `<span class="weight-placeholder" id="wp-${ex.id}" tabindex="0" role="button" data-action="edit-weight">–</span>`
+      : `<span class="weight-val" id="wv-${ex.id}" tabindex="0" role="button" data-action="edit-weight">${w}</span>`;
+    return `<div class="weight-row">
+      <button type="button" class="stepper" data-action="weight-step" data-dir="-1" aria-label="Less weight"${w == null ? ' disabled' : ''}>−</button>
+      ${value}<span class="weight-unit">${unitOf(ex)}</span>
+      <button type="button" class="stepper" data-action="weight-step" data-dir="1" aria-label="More weight">+</button>
     </div>`;
   }
 
-  /** Sync the reps box + badge with `scratch` (after a stepper, Done, or a weight change). */
-  function refreshReps(exId) {
-    const ex = findExercise(exId), input = ui.exercises.querySelector(`#reps-${exId}`);
-    if (!ex?.reps || !input) return;
-    const reps = scratch[exId]?.reps ?? '', suggested = suggestionFor(ex);
-    input.value = reps;
-    input.placeholder = suggested ?? '–';
-    const badge = repsBadge(reps, ex.reps, suggested);
-    const el = ui.exercises.querySelector(`#pb-${exId}`);
-    el.className = `prog-badge ${badge.cls}`;
-    el.textContent = badge.label;
+  function setsRow(ex) {
+    if (!ex.reps) return '';
+    return `<div class="ex-row log-line sets-line">
+      <span class="row-label">Sets</span>
+      <div class="sets-box" id="sets-${ex.id}">${setsInner(ex)}</div>
+    </div>`;
+  }
+
+  function setsInner(ex) {
+    const sets = currentSets(ex), selected = scratch[ex.id]?.selected ?? sets.length - 1;
+    const touched = scratch[ex.id]?.sets || scratch[ex.id]?.weight !== undefined;   // no verdict until you change something
+    const badge = touched ? attemptBadge({ weight: currentWeight(ex), sets }, targetFor(ex)) : { label: '' };
+    return `
+      <div class="set-chips">${sets.map((r, i) => `<button type="button" class="set-chip${r === 0 ? ' not-done' : ''}" data-action="set-select" data-i="${i}" aria-pressed="${i === selected}" aria-label="Set ${i + 1}: ${r} reps">${r === 0 ? '–' : r}</button>`).join('')}</div>
+      <div class="set-controls">
+        <button type="button" class="stepper" data-action="set-step" data-dir="-1" aria-label="One less rep">−</button>
+        <span class="set-label">set ${selected + 1}</span>
+        <button type="button" class="stepper" data-action="set-step" data-dir="1" aria-label="One more rep">+</button>
+        <span class="reps-target">/ ${repRangeText(ex.reps)}</span>
+      </div>
+      ${badge.label ? `<span class="prog-badge ${badge.cls}" id="pb-${ex.id}">${badge.label}</span>` : ''}`;
   }
 
   // ── editing ─────────────────────────────────────────────
-  /** Redraw only this weight box — redrawing the list would wipe whatever you tapped next. */
-  function refreshWeightBox(exId) {
-    const box = ui.exercises.querySelector(`#wb-${exId}`);
-    if (box) box.innerHTML = weightBoxInner(findExercise(exId));
-  }
+  /** Redraw only part of a card — redrawing the list would wipe whatever you tapped next. */
+  const refreshWeightBox = exId => { const el = ui.exercises.querySelector(`#wb-${exId}`); if (el) el.innerHTML = weightBoxInner(findExercise(exId)); };
+  const refreshSets = exId => { const el = ui.exercises.querySelector(`#sets-${exId}`); if (el) el.innerHTML = setsInner(findExercise(exId)); };
 
   function startWeightEdit(exId) {
     const ex = findExercise(exId), box = ui.exercises.querySelector(`#wb-${exId}`);
     if (!ex || !box || box.querySelector('input')) return;
-    box.innerHTML = `<div class="weight-row"><input type="number" inputmode="decimal" step="any" class="weight-input" id="inp-${exId}" value="${planned(ex) ?? ''}" aria-label="${esc(ex.name)} weight"><span class="weight-unit">${unitOf(ex)}</span></div>`;
+    box.innerHTML = `<div class="weight-row"><input type="number" inputmode="decimal" step="any" class="weight-input" id="inp-${exId}" value="${currentWeight(ex) ?? ''}" aria-label="${esc(ex.name)} weight"><span class="weight-unit">${unitOf(ex)}</span></div>`;
     const input = box.querySelector('input');
     let cancelled = false;
     input.addEventListener('keydown', e => {
@@ -201,53 +210,45 @@ export function createWorkoutView({ root, repo, onSaved }) {
       const weight = parseWeight(input.value);
       if (!cancelled && weight !== null) entryFor(exId).weight = weight;
       refreshWeightBox(exId);
+      refreshSets(exId);
     }, { once: true });
     input.focus();
     input.select();
   }
 
-  function setStatus(card, value) {
-    const exId = card.dataset.ex, sc = entryFor(exId), ex = findExercise(exId);
-    sc.status = sc.status === value ? '' : value;   // tap again to clear
-    // Done with no reps entered = you hit the suggested reps
-    if (sc.status === STATUS.COMPLETE && !hasValue(sc.reps)) {
-      const suggested = suggestionFor(ex);
-      if (suggested != null) { sc.reps = suggested; refreshReps(exId); }
-    }
-    card.classList.toggle('is-skipped', sc.status === STATUS.SKIP);
-    card.querySelectorAll('.status-btn').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.status === sc.status)));
-    const reps = card.querySelector('.reps-row');
-    if (reps) reps.hidden = sc.status === STATUS.SKIP;
-  }
-
   function stepWeightBy(exId, direction) {
-    const ex = findExercise(exId), current = planned(ex);
-    if (current == null) return;
-    entryFor(exId).weight = stepWeight(ex, current, direction);
+    const ex = findExercise(exId), current = currentWeight(ex);
+    if (current == null && direction < 0) return;
+    entryFor(exId).weight = stepWeight(ex, current ?? 0, direction);   // nothing yet → + starts from 0
     refreshWeightBox(exId);
-    refreshReps(exId);   // a heavier weight changes the suggested reps
+    refreshSets(exId);   // the badge compares weight with the target
   }
 
-  function stepRepsBy(exId, direction) {
-    const sc = entryFor(exId);
-    const base = hasValue(sc.reps) ? sc.reps : (suggestionFor(findExercise(exId)) ?? 0);
-    sc.reps = stepReps(base, direction);
-    refreshReps(exId);
+  function selectSet(exId, i) {
+    entryFor(exId).selected = i;
+    refreshSets(exId);
   }
 
-  function setReps(input) {
-    const exId = input.closest('[data-ex]').dataset.ex, ex = findExercise(exId), reps = parseReps(input.value);
-    entryFor(exId).reps = reps === null ? '' : reps;
-    const badge = repsBadge(entryFor(exId).reps, ex.reps, suggestionFor(ex));
-    const el = ui.exercises.querySelector(`#pb-${exId}`);
-    el.className = `prog-badge ${badge.cls}`;
-    el.textContent = badge.label;
+  function stepSet(exId, direction) {
+    const ex = findExercise(exId), sc = entryFor(exId), sets = [...currentSets(ex)];
+    const i = sc.selected ?? sets.length - 1;
+    sets[i] = stepReps(sets[i], direction, ex.reps);
+    sc.sets = sets;
+    refreshSets(exId);
+  }
+
+  function setStatus(card, value) {
+    const sc = entryFor(card.dataset.ex);
+    sc.status = sc.status === value ? '' : value;   // tap again to clear
+    card.classList.toggle('is-skipped', sc.status === STATUS.SKIP);
+    card.querySelector('.ex-log').hidden = sc.status === STATUS.SKIP;
+    card.querySelectorAll('.status-btn').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.status === sc.status)));
   }
 
   function changeDate(input) {
     if (!isISODate(input.value)) { input.value = active.date; return; }
     active.date = input.value;
-    renderExercises();   // "last time" depends on the date; typed values live in `scratch`
+    renderExercises();   // targets depend on the date; your changes live in `scratch`
   }
 
   // ── complete ────────────────────────────────────────────
@@ -266,13 +267,13 @@ export function createWorkoutView({ root, repo, onSaved }) {
     btn.disabled = true;
     btn.textContent = 'Saving…';
     try {
-      const record = buildSessionRecord({ sessionNum: active.sessionNum, date: active.date, scratch, plannedWeight: ex => planned(ex) });
+      const record = buildSessionRecord({ sessionNum: active.sessionNum, date: active.date, scratch, targetOf: ex => targetFor(ex) });
       await repo.commit(addSession(repo.sessions, record));
       endSession();
       flash(ui.status, 'Session saved ✓');
       onSaved?.(record);
     } catch (err) {
-      flash(ui.status, 'Save failed — your entries are still here, try again', { error: true, ms: 0 });
+      flash(ui.status, `Save failed — your entries are still here, try again${err?.message ? ` (${err.message})` : ''}`, { error: true, ms: 0 });
       console.error(err);
     } finally {
       saving = false;
@@ -286,23 +287,24 @@ export function createWorkoutView({ root, repo, onSaved }) {
     <div class="prehab-header"><span class="dot" style="background:var(--ph)"></span><h3>${esc(PREHAB.title)}</h3><span>${esc(PREHAB.sets)}</span></div>
     <div class="prehab-pills">${PREHAB.exercises.map(x => `<span class="prehab-pill">${esc(x)}</span>`).join('')}</div>`;
 
+  const exIdOf = el => el.closest('[data-ex]').dataset.ex;
   delegate(root, 'click', {
     'start': start,
     'ask-discard': askDiscard,
     'discard': endSession,
     'keep': el => el.closest('.discard-bar').remove(),
-    'edit-weight': el => startWeightEdit(el.closest('[data-ex]').dataset.ex),
-    'weight-step': el => stepWeightBy(el.closest('[data-ex]').dataset.ex, Number(el.dataset.dir)),
-    'reps-step': el => stepRepsBy(el.closest('[data-ex]').dataset.ex, Number(el.dataset.dir)),
+    'edit-weight': el => startWeightEdit(exIdOf(el)),
+    'weight-step': el => stepWeightBy(exIdOf(el), Number(el.dataset.dir)),
+    'set-select': el => selectSet(exIdOf(el), Number(el.dataset.i)),
+    'set-step': el => stepSet(exIdOf(el), Number(el.dataset.dir)),
     'status': el => setStatus(el.closest('[data-ex]'), el.dataset.status),
     'complete': complete,
   });
   delegate(root, 'keydown', {
-    'edit-weight': (el, e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startWeightEdit(el.closest('[data-ex]').dataset.ex); } },
+    'edit-weight': (el, e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startWeightEdit(exIdOf(el)); } },
   });
   delegate(root, 'input', {
-    'reps': setReps,
-    'note': el => { entryFor(el.closest('[data-ex]').dataset.ex).note = el.value; autoResize(el); },
+    'note': el => { entryFor(exIdOf(el)).note = el.value; autoResize(el); },
   });
   delegate(root, 'change', {
     'pick-session': renderPreview,

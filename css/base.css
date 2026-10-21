@@ -12,6 +12,8 @@ body {
 }
 button { font-family: var(--font); }
 
+.readonly-banner { background: var(--bad-bg); color: var(--bad); font-size: 12px; font-weight: 600; padding: 10px 12px; border-radius: 0 0 var(--radius) var(--radius); }
+
 /* ── tabs ── */
 .tab-bar {
   position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
@@ -72,5 +74,4 @@ button { font-family: var(--font); }
 /* iPhone zooms into any text box smaller than 16px — keep them at 16px on touch screens */
 @media (pointer: coarse) {
   input, select, textarea { font-size: 16px !important; }
-  .reps-input { width: 52px; }
 }

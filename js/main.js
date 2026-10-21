@@ -12,6 +12,7 @@ const storage = createLocalStorage();
 requestPersistentStorage();
 const repo = createRepository(storage);
 repo.load();
+document.getElementById('readonly-banner').hidden = !repo.readOnly;
 
 const tabs = createTabs(document, { onShow: name => { if (name === 'trends') trends.render(); } });
 const history = createHistoryView({ root: document.getElementById('tab-history'), repo, storage });

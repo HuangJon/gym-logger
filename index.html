@@ -22,6 +22,9 @@
   <script type="module" src="js/main.js"></script>
 </head>
 <body>
+  <div class="readonly-banner" id="readonly-banner" role="alert" hidden>
+    This log was saved by a newer version of the app. Close the app completely and reopen it to update — nothing will be saved until then.
+  </div>
   <nav class="tab-bar" role="tablist">
     <button class="tab-btn active" data-tab="workout" role="tab" aria-selected="true">Workout</button>
     <button class="tab-btn" data-tab="history" role="tab" aria-selected="false">History</button>
@@ -72,6 +75,11 @@
         </div>
       </div>
       <div class="bk-msg" id="backup-msg" role="status"></div>
+      <details class="bk-restore" id="restore-panel">
+        <summary>Restore an earlier copy</summary>
+        <p class="bk-hint">The app keeps copies of your last 3 saves on this phone, in case an edit goes wrong. Restoring is safe — your current log is kept as a copy too. (These copies live on the phone, so they're not a replacement for Export.)</p>
+        <div id="snapshot-list"></div>
+      </details>
     </div>
     <div id="history-list"></div>
   </section>

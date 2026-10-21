@@ -1,0 +1,5 @@
+{ "schemaVersion": 3, "sessions": [
+  { "id": "1792620000000", "session": 1, "date": "2026-10-22", "ts": 1792620000000, "futureField": "kept", "entries": {
+    "s1-incline": { "status": "partial", "note": "", "weight": 50, "unit": "lbs", "sets": [9, 8], "reps": 8, "target": { "weight": 50, "reps": 9, "sets": 2 }, "rpe": 8 },
+    "s1-deadlift": { "status": "complete", "note": "", "weight": 185, "unit": "lbs", "sets": [7, 7], "reps": 7, "target": { "weight": 185, "reps": 7, "sets": 2 } } } }
+] }

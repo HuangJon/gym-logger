@@ -10,6 +10,10 @@
 .bk-msg { font-size: 11px; color: var(--good); margin-top: 4px; }
 .bk-msg:empty { display: none; }
 .bk-msg.error { color: var(--danger); }
+.bk-restore { margin-top: 8px; font-size: 12px; color: var(--fg2); }
+.bk-restore summary { cursor: pointer; font-size: 11px; color: var(--fg3); }
+.bk-hint { font-size: 11px; color: var(--fg3); margin: 6px 0; line-height: 1.4; }
+.snap-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0; border-top: 1px solid var(--border); font-size: 12px; }
 
 /* ── session list ── */
 .history-entry { overflow: hidden; margin-bottom: 12px; }
@@ -32,6 +36,7 @@
 .history-ex { color: var(--fg2); }
 .history-right { display: flex; gap: 6px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
 .history-wt { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--fg); white-space: nowrap; }
+.history-target { grid-column: 1 / -1; font-size: 10px; color: var(--fg3); }
 .history-note { grid-column: 1 / -1; font-size: 11px; color: var(--fg3); padding-bottom: 2px; font-style: italic; }
 .edit-icon { font-size: 10px; color: var(--fg3); }
 
@@ -42,7 +47,7 @@
 .hedit-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
 .hedit-label { font-size: 11px; color: var(--fg2); min-width: 44px; }
 .hedit-input {
-  width: 64px; text-align: center; background: var(--card); border: 1px solid var(--input-border); border-radius: 6px;
+  width: 56px; text-align: center; background: var(--card); border: 1px solid var(--input-border); border-radius: 6px;
   padding: 4px 6px; font-family: var(--font); font-size: 13px; font-weight: 700; color: var(--fg); outline: none;
 }
 .hedit-input:focus, .hedit-note:focus { border-color: var(--fg2); }
