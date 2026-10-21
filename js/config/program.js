@@ -1,0 +1,66 @@
+/**
+ * The training program. This is the file to edit when the program changes.
+ *
+ * Exercise fields
+ *   id             stable key used in saved logs — never change it once you've logged the exercise
+ *   name           display name; exercises with the same name share "last time" and Trends across sessions
+ *   detail         sets × reps text shown under the name
+ *   reps           [low, high] target rep range for double progression
+ *   defaultWeight  starting weight before anything is logged (optional)
+ *   unit           'lbs' (default) or 'kg'
+ *   bw             true for bodyweight exercises (no weight box)
+ *   tag / warn     optional small labels on the card
+ *
+ * Removing an exercise from the program? Move it to RETIRED so old logs still show up.
+ */
+
+export const PREHAB = {
+  title: 'Every Session — Prehab',
+  sets: '2×10 each',
+  exercises: ['Straight arm pulls', 'External rotation', 'Internal rotation', 'Face pulls'],
+};
+
+export const SESSIONS = {
+  1: [
+    { id: 's1-incline',  name: 'Incline DB Press',          detail: '2×6–12',               reps: [6, 12],  defaultWeight: 50 },
+    { id: 's1-deadlift', name: 'Deadlift',                  detail: '2×5–8 · 2–3 min rest', reps: [5, 8],   defaultWeight: 185 },
+    { id: 's1-lateral',  name: 'Cable Lateral Raises',      detail: '2×12–15',              reps: [12, 15], defaultWeight: 5, tag: 'circuit' },
+    { id: 's1-crunches', name: 'Cable Crunches',            detail: '2×10–15',              reps: [10, 15], unit: 'kg', tag: 'circuit' },
+    { id: 's1-pulldown', name: 'Single Arm Cable Pulldown', detail: '2×8–12',               reps: [8, 12] },
+  ],
+  2: [
+    { id: 's2-ohpress',   name: 'DB Shoulder Press',    detail: '2×6–10',         reps: [6, 10], warn: '⚠ zero soreness first' },
+    { id: 's2-rows',      name: 'Bent Over Rows',       detail: '2×6–12',         reps: [6, 12] },
+    { id: 's2-lateral',   name: 'Cable Lateral Raises', detail: '2×12–15',        reps: [12, 15], defaultWeight: 5, tag: 'circuit' },
+    { id: 's2-pallof',    name: 'Pallof Press',         detail: '2×5 × 5s holds', reps: [5, 5], unit: 'kg', tag: 'circuit' },
+    { id: 's2-legraiser', name: 'Hanging Leg Raises',   detail: '2×8–12',         reps: [8, 12], bw: true },
+  ],
+  3: [
+    { id: 's3-incline',  name: 'Incline DB Press',       detail: '2×6–12',                   reps: [6, 12],  defaultWeight: 50 },
+    { id: 's3-bss',      name: 'Bulgarian Split Squats', detail: '2×5–8',                    reps: [5, 8],   defaultWeight: 15 },
+    { id: 's3-lateral',  name: 'Cable Lateral Raises',   detail: '2×12–15',                  reps: [12, 15], defaultWeight: 5, tag: 'circuit' },
+    { id: 's3-crunches', name: 'Cable Crunches',         detail: '2×10–15',                  reps: [10, 15], unit: 'kg', tag: 'circuit' },
+    { id: 's3-abwheel',  name: 'Ab Wheel',               detail: '2×8–10 · if feeling good', reps: [8, 10],  bw: true },
+  ],
+};
+
+/** Exercises from earlier programs: not in today's workout, but their logs still show in History and Trends. */
+export const RETIRED = [
+  { id: 's2-dips',    name: 'Dips',                detail: 'old program · 3×6–12', reps: [6, 12], bw: true },
+  { id: 's2-oldrows', name: 'Rows (elbow to hip)', detail: 'old program · 3×6–12', reps: [6, 12] },
+];
+
+/** Double progression: how much to add once you hit the top of the rep range (in the exercise's unit). */
+export const INCREMENTS = {
+  'Incline DB Press': 2.5, 'Bent Over Rows': 2.5, 'Cable Lateral Raises': 2.5, 'Cable Crunches': 2.5,
+  'Deadlift': 5, 'Bulgarian Split Squats': 5, 'DB Shoulder Press': 5,
+};
+export const DEFAULT_INCREMENT = 2.5;
+
+export const SESSION_LABELS = { 1: 'Session 1', 2: 'Session 2', 3: 'Session 3' };
+export const SESSION_COLORS = { 1: 'var(--s1)', 2: 'var(--s2)', 3: 'var(--s3)' };
+
+/** A "Last time" older than this many days gets an "ease back in" note. */
+export const STALE_AFTER_DAYS = 14;
+/** Target sessions per week (dashed line on the weekly chart). */
+export const WEEKLY_GOAL = 3;

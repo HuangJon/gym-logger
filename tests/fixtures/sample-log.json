@@ -1,0 +1,40 @@
+{
+  "app": "lifting-log",
+  "format": 1,
+  "entries": [
+    { "id": "f1", "session": 1, "date": "2026-04-06", "ts": 1, "program": "old", "entries": {
+      "s1-incline":  { "status": "complete", "weight": 45, "unit": "lbs", "reps": 8, "note": "" },
+      "s1-deadlift": { "status": "complete", "weight": 165, "unit": "lbs", "reps": 6, "note": "used the light bar" },
+      "s1-lateral":  { "status": "complete", "weight": 5, "unit": "lbs", "reps": 12, "note": "" },
+      "s1-crunches": { "status": "complete", "weight": 40, "unit": "kg", "reps": 11, "note": "" } } },
+    { "id": "f2", "session": 2, "date": "2026-04-08", "ts": 2, "program": "old", "entries": {
+      "s2-dips":      { "status": "complete", "reps": 7, "note": "" },
+      "s2-oldrows":   { "status": "complete", "weight": 30, "unit": "lbs", "reps": 8, "note": "" },
+      "s2-lateral":   { "status": "complete", "weight": 5, "unit": "lbs", "reps": 13, "note": "" },
+      "s2-pallof":    { "status": "complete", "weight": 20, "unit": "kg", "reps": 5, "note": "" },
+      "s2-legraiser": { "status": "complete", "reps": 8, "note": "" } } },
+    { "id": "f3", "session": 3, "date": "2026-04-10", "ts": 3, "program": "old", "entries": {
+      "s3-incline":  { "status": "complete", "weight": 45, "unit": "lbs", "reps": 10, "note": "" },
+      "s3-bss":      { "status": "complete", "reps": 9, "note": "bodyweight" },
+      "s3-lateral":  { "status": "complete", "weight": 5, "unit": "lbs", "reps": 14, "note": "" },
+      "s3-crunches": { "status": "complete", "weight": 40, "unit": "kg", "reps": 13, "note": "" },
+      "s3-abwheel":  { "status": "complete", "reps": 8, "note": "" } } },
+    { "id": "f4", "session": 1, "date": "2026-04-20", "ts": 4, "program": "old", "entries": {
+      "s1-incline":  { "status": "complete", "weight": 45, "unit": "lbs", "reps": 12, "note": "" },
+      "s1-deadlift": { "status": "complete", "weight": 175, "unit": "lbs", "reps": 6, "note": "" },
+      "s1-lateral":  { "status": "complete", "weight": 7.5, "unit": "lbs", "reps": 9, "note": "" },
+      "s1-crunches": { "status": "complete", "weight": 45, "unit": "kg", "reps": 10, "note": "" } } },
+    { "id": "f5", "session": 2, "date": "2026-04-22", "ts": 5, "program": "old", "entries": {
+      "s2-dips":      { "status": "skip", "note": "skipped (sore)" },
+      "s2-oldrows":   { "status": "complete", "weight": 30, "unit": "lbs", "reps": 10, "note": "" },
+      "s2-lateral":   { "status": "complete", "weight": 7.5, "unit": "lbs", "reps": 10, "note": "" },
+      "s2-pallof":    { "status": "complete", "weight": 22.5, "unit": "kg", "reps": 5, "note": "" },
+      "s2-legraiser": { "status": "complete", "reps": 9, "note": "" } } },
+    { "id": "f6", "session": 3, "date": "2026-05-04", "ts": 6, "program": "old", "note": "tweaked shoulder", "entries": {
+      "s3-incline":  { "status": "partial", "weight": 47.5, "unit": "lbs", "note": "reps not recorded" },
+      "s3-bss":      { "status": "partial", "reps": 10, "note": "2×10 bodyweight" },
+      "s3-lateral":  { "status": "complete", "weight": 7.5, "unit": "lbs", "reps": 11, "note": "" },
+      "s3-crunches": { "status": "complete", "weight": 45, "unit": "kg", "reps": 12, "note": "" },
+      "s3-abwheel":  { "status": "complete", "reps": 9, "note": "" } } }
+  ]
+}
