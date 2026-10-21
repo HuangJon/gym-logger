@@ -6,6 +6,7 @@
  *   name           display name; exercises with the same name share "last time" and Trends across sessions
  *   detail         sets × reps text shown under the name
  *   reps           [low, high] target rep range for double progression
+ *   sets           number of working sets (defaults to DEFAULT_SETS)
  *   defaultWeight  starting weight before anything is logged (optional)
  *   unit           'lbs' (default) or 'kg'
  *   bw             true for bodyweight exercises (no weight box)
@@ -52,10 +53,13 @@ export const RETIRED = [
 
 /** Double progression: how much to add once you hit the top of the rep range (in the exercise's unit). */
 export const INCREMENTS = {
-  'Incline DB Press': 2.5, 'Bent Over Rows': 2.5, 'Cable Lateral Raises': 2.5, 'Cable Crunches': 2.5,
+  'Incline DB Press': 5, 'Bent Over Rows': 2.5, 'Cable Lateral Raises': 2.5, 'Cable Crunches': 2.5,
   'Deadlift': 5, 'Bulgarian Split Squats': 5, 'DB Shoulder Press': 5,
 };
 export const DEFAULT_INCREMENT = 2.5;
+
+/** Working sets per exercise unless an exercise sets its own `sets`. Change to 3 when the program moves to 3 sets. */
+export const DEFAULT_SETS = 2;
 
 export const SESSION_LABELS = { 1: 'Session 1', 2: 'Session 2', 3: 'Session 3' };
 export const SESSION_COLORS = { 1: 'var(--s1)', 2: 'var(--s2)', 3: 'var(--s3)' };

@@ -1,9 +1,9 @@
 /** History tab: backup card, list of saved sessions, inline editing, date change, delete. */
 import { SESSION_LABELS, SESSION_COLORS } from '../config/program.js';
-import { exercisesForSession, findExercise, unitOf, repRangeText } from '../core/exercises.js';
+import { exercisesForSession, findExercise, unitOf, repRangeText, setsOf } from '../core/exercises.js';
 import { todayISO, formatLong, agoText } from '../core/dates.js';
 import { hasValue, parseWeight, parseReps } from '../core/numbers.js';
-import { STATUS, normalizeEntry, statusCounts, byNewest } from '../core/records.js';
+import { STATUS, normalizeEntry, statusCounts, byNewest, setsOfEntry, meetsTarget, lowestSet } from '../core/records.js';
 import { updateEntry, setSessionDate, deleteSession, mergeSessions } from '../core/log.js';
 import { createBackup, parseBackup, backupStatus, markBackedUp, deliverFile } from '../data/backup.js';
 import { esc, delegate, autoResize, confirmTap, flash } from './dom.js';
@@ -12,7 +12,7 @@ const EDIT_STATUSES = [[STATUS.COMPLETE, '✓ Done'], [STATUS.PARTIAL, '~ Partia
 
 export function createHistoryView({ root, repo, storage }) {
   const $ = sel => root.querySelector(sel);
-  const ui = { list: $('#history-list'), backupCard: $('#backup-card'), backupStatus: $('#backup-status'), backupMsg: $('#backup-msg') };
+  const ui = { list: $('#history-list'), backupCard: $('#backup-card'), backupStatus: $('#backup-status'), backupMsg: $('#backup-msg'), snapshots: $('#snapshot-list') };
 
   let expanded = null;   // Set of open session ids; null → open the newest
   let editing = null;    // { sessionId, exerciseId, status } while editing one exercise
@@ -59,7 +59,8 @@ export function createHistoryView({ root, repo, storage }) {
     const e = normalizeEntry(s.entries?.[ex.id]);
     const isEditing = editing?.sessionId === s.id && editing.exerciseId === ex.id;
     const unit = e.unit || unitOf(ex);
-    const parts = [!ex.bw && hasValue(e.weight) && `${e.weight} ${unit}`, hasValue(e.reps) && `${e.reps} reps`].filter(Boolean);
+    const sets = e.sets?.length ? e.sets.map(r => (r === 0 ? '–' : r)).join(', ') : (hasValue(e.reps) ? String(e.reps) : '');
+    const parts = [!ex.bw && hasValue(e.weight) && `${e.weight} ${unit}`, sets && `${sets} reps`].filter(Boolean);
     if (ex.bw && !parts.length && (e.status === STATUS.COMPLETE || e.status === STATUS.PARTIAL)) parts.push('bodyweight');
     const right = e.status === STATUS.SKIP
       ? '<span class="badge badge-skip">skipped</span>'
@@ -71,9 +72,15 @@ export function createHistoryView({ root, repo, storage }) {
       <div class="history-row${dim ? ' dim' : ''}${isEditing ? ' editing' : ''}" data-action="edit" data-ex="${ex.id}">
         <span class="history-ex">${esc(ex.name)}</span>
         <span class="history-right">${right}<span class="edit-icon">✎</span></span>
+        ${e.target && e.status !== STATUS.SKIP ? `<div class="history-target">target ${targetText(ex, e.target, unit)}</div>` : ''}
         ${e.note ? `<div class="history-note">↳ ${esc(e.note)}</div>` : ''}
       </div>
       ${isEditing ? editor(ex, e) : ''}`;
+  }
+
+  function targetText(ex, t, unit) {
+    const weight = !ex.bw && hasValue(t.weight) ? `${t.weight} ${unit} × ` : '';
+    return `${weight}${t.reps}${weight ? '' : ' reps'} × ${t.sets} sets`;
   }
 
   function editor(ex, e) {
@@ -86,13 +93,13 @@ export function createHistoryView({ root, repo, storage }) {
           ${ex.bw ? '' : `<div class="hedit-row"><span class="hedit-label">Weight</span>
             <input class="hedit-input" id="hedit-weight" type="number" inputmode="decimal" step="any" value="${hasValue(e.weight) ? e.weight : ''}" placeholder="—">
             <span class="hedit-unit">${e.unit || unitOf(ex)}</span></div>`}
-          <div class="hedit-row"><span class="hedit-label">Reps</span>
-            <input class="hedit-input" id="hedit-reps" type="number" inputmode="numeric" value="${hasValue(e.reps) ? e.reps : ''}" placeholder="—">
-            <span class="hedit-unit">${ex.reps ? `/ ${repRangeText(ex.reps)}` : ''}</span></div>
+          <div class="hedit-row"><span class="hedit-label">Sets</span>
+            ${editorSets(ex, e).map((r, i) => `<input class="hedit-input hedit-set" id="hedit-set-${i}" type="number" inputmode="numeric" min="0" value="${hasValue(r) ? r : ''}" placeholder="—" aria-label="Set ${i + 1} reps">`).join('')}
+            <span class="hedit-unit">${ex.reps ? `reps · ${repRangeText(ex.reps)}` : 'reps'}</span></div>
         </div>
         <div class="hedit-row" style="align-items:flex-start"><span class="hedit-label" style="padding-top:5px">Note</span>
           <textarea class="hedit-note" id="hedit-note" rows="1" data-action="autosize">${esc(e.note)}</textarea></div>
-        <div class="hedit-hint">Nothing selected = saved as “not recorded”.</div>
+        <div class="hedit-hint">Nothing selected = saved as “not recorded”. Blank set = not done.${e.target ? ` Done below the target saves as partial.` : ''}</div>
         <div class="hedit-actions">
           <button type="button" class="hedit-save" data-action="edit-save">Save</button>
           <button type="button" class="hedit-cancel" data-action="edit-cancel">Cancel</button>
@@ -101,10 +108,38 @@ export function createHistoryView({ root, repo, storage }) {
       </div>`;
   }
 
+  /** Set boxes for the editor: what was logged, or the reps from older logs repeated for each set. */
+  function editorSets(ex, e) {
+    const count = Math.max(e.sets?.length || 0, e.target?.sets || 0, setsOf(ex));
+    const sets = setsOfEntry(e, count);
+    return Array.from({ length: count }, (_, i) => sets[i] ?? '');
+  }
+
   function renderBackupCard() {
     const { last, stale } = backupStatus(storage, repo.sessions.length, todayISO());
     ui.backupStatus.textContent = `· your log is saved on this phone · last backup: ${last ? agoText(last, todayISO()) : 'never'}`;
     ui.backupCard.classList.toggle('stale', stale);
+    const snaps = repo.snapshots();
+    ui.snapshots.innerHTML = snaps.length
+      ? snaps.map((snap, i) => `<div class="snap-row"><span>${esc(formatSaved(snap.savedAt))} · ${snap.count} session${snap.count === 1 ? '' : 's'}</span>
+          <button type="button" class="btn-small" data-action="restore" data-i="${i}">Restore</button></div>`).join('')
+      : '<p class="bk-hint">No earlier copies yet — one is kept each time you save.</p>';
+  }
+
+  const formatSaved = iso => new Date(iso).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+  async function restore(btn) {
+    if (!confirmTap(btn, 'Tap again')) return;
+    const when = formatSaved(repo.snapshots()[Number(btn.dataset.i)]?.savedAt);
+    try {
+      await repo.restoreSnapshot(Number(btn.dataset.i));
+      expanded = null;
+      editing = null;
+      render();
+      flash(ui.backupMsg, `Restored the copy from ${when}. Your previous log was kept as a copy.`, { ms: 0 });
+    } catch (err) {
+      flash(ui.backupMsg, err.message || 'Restore failed.', { error: true, ms: 0 });
+    }
   }
 
   // ── actions ─────────────────────────────────────────────
@@ -135,13 +170,19 @@ export function createHistoryView({ root, repo, storage }) {
 
   async function saveEdit() {
     const ex = findExercise(editing.exerciseId);
+    const record = repo.sessions.find(s => s.id === editing.sessionId);
+    const previous = normalizeEntry(record?.entries?.[editing.exerciseId]);
     const weight = parseWeight($('#hedit-weight')?.value ?? '');
-    const reps = parseReps($('#hedit-reps').value);
+    const typed = [...$('#hedit-panel').querySelectorAll('.hedit-set')].map(input => parseReps(input.value));
+    const anySet = typed.some(r => hasValue(r) && r !== null);
     const entry = { status: editing.status || STATUS.UNRECORDED, note: $('#hedit-note').value.trim() };
     if (entry.status !== STATUS.SKIP) {
       if (!ex.bw && weight !== null) { entry.weight = weight; entry.unit = unitOf(ex); }
-      if (hasValue(reps) && reps !== null) entry.reps = reps;
+      if (anySet) { entry.sets = typed.map(r => (hasValue(r) && r !== null ? r : 0)); entry.reps = lowestSet(entry.sets) ?? undefined; }
     }
+    if (previous.target) entry.target = previous.target;
+    // "Done" that falls short of the target is a partial — keeps next time's target honest
+    if (entry.status === STATUS.COMPLETE && previous.target && !meetsTarget({ weight: entry.weight, sets: entry.sets }, previous.target)) entry.status = STATUS.PARTIAL;
     try {
       await repo.commit(updateEntry(repo.sessions, editing.sessionId, editing.exerciseId, entry));
     } catch (err) {
@@ -207,6 +248,7 @@ export function createHistoryView({ root, repo, storage }) {
     'edit-cancel': () => { editing = null; render(); },
     'delete': remove,
     'export': exportBackup,
+    'restore': restore,
   });
   delegate(root, 'input', { 'autosize': autoResize });
   delegate(root, 'change', { 'entry-date': changeDate, 'import': importBackup });

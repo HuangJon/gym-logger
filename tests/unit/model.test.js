@@ -1,11 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { findExercise, sessionExercises, exercisesForSession, unitOf, incrementOf, repRangeText, allExercises } from '../../js/core/exercises.js';
-import { normalizeEntry, buildSessionRecord, statusCounts, byNewest } from '../../js/core/records.js';
+import { normalizeEntry, buildSessionRecord, statusCounts, byNewest, meetsTarget, setsOfEntry, lowestSet } from '../../js/core/records.js';
 import { addSession, updateEntry, setSessionDate, deleteSession, mergeSessions } from '../../js/core/log.js';
 import { migrateLog, SCHEMA_VERSION } from '../../js/core/migrate.js';
 import { SESSIONS, RETIRED } from '../../js/config/program.js';
 import { session, done, skipped } from '../helpers.js';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures');
 
 // ── program / exercises ──
 test('program: every exercise id is unique and has a rep range', () => {
@@ -55,30 +60,58 @@ test('normalizeEntry upgrades early shapes and drops junk', () => {
   assert.deepEqual(normalizeEntry(null), { status: 'unrecorded', note: '' });
 });
 
-test('buildSessionRecord: status rules', () => {
-  const planned = ex => ({ 's1-incline': 50, 's1-deadlift': 185, 's1-lateral': 5 })[ex.id] ?? null;
+test('normalizeEntry keeps per-set reps, the target, and fields it does not know', () => {
+  const e = normalizeEntry({ status: 'partial', weight: 50, unit: 'lbs', sets: [9, 8, 0], target: { weight: 50, reps: 9, sets: 3 }, rpe: 8 });
+  assert.deepEqual(e, { rpe: 8, status: 'partial', note: '', weight: 50, unit: 'lbs', sets: [9, 8, 0], reps: 8, target: { reps: 9, sets: 3, weight: 50 } });
+  assert.deepEqual(normalizeEntry({ status: 'skip', sets: [5], target: { reps: 5, sets: 2 } }), { status: 'skip', note: '', target: { reps: 5, sets: 2 } });
+});
+
+test('setsOfEntry / lowestSet / meetsTarget', () => {
+  assert.deepEqual(setsOfEntry({ sets: [9, 8] }, 2), [9, 8]);
+  assert.deepEqual(setsOfEntry({ reps: 8 }, 3), [8, 8, 8]);   // older logs: one reps value for every set
+  assert.deepEqual(setsOfEntry({}, 2), []);
+  assert.equal(lowestSet([9, 0, 7]), 7);
+  assert.equal(lowestSet([0, 0]), null);
+  const t = { weight: 50, reps: 9, sets: 2 };
+  assert.ok(meetsTarget({ weight: 50, sets: [9, 9] }, t));
+  assert.ok(meetsTarget({ weight: 55, sets: [10, 9] }, t));
+  assert.ok(!meetsTarget({ weight: 50, sets: [9, 8] }, t));
+  assert.ok(!meetsTarget({ weight: 45, sets: [9, 9] }, t));
+  assert.ok(!meetsTarget({ weight: 50, sets: [9] }, t));
+  assert.ok(meetsTarget({ sets: [9, 9] }, { reps: 9, sets: 2 }));   // bodyweight
+});
+
+test('buildSessionRecord: Done = hit target unless something fell short; skip and unmarked rules', () => {
+  const targets = { 's1-incline': { weight: 50, reps: 9, sets: 2 }, 's1-deadlift': { weight: 185, reps: 6, sets: 2 },
+                    's1-lateral': { weight: 7.5, reps: 12, sets: 2 }, 's1-crunches': { weight: 55, reps: 11, sets: 2 }, 's1-pulldown': { weight: null, reps: 8, sets: 2 } };
   const rec = buildSessionRecord({
-    sessionNum: 1, date: '2026-10-21', now: 123, plannedWeight: planned,
+    sessionNum: 1, date: '2026-10-21', now: 123, targetOf: ex => targets[ex.id],
     scratch: {
-      's1-incline': { status: 'complete', reps: 9, note: ' felt solid ' },   // planned weight used
-      's1-deadlift': { status: 'partial', weight: 187.5, reps: 6 },          // typed weight used
-      's1-lateral': { status: 'skip', reps: 12, weight: 7 },                 // skip drops weight/reps
-      's1-pulldown': { weight: 45 },                                         // unmarked keeps what you typed
+      's1-incline': { status: 'complete', note: ' felt solid ' },              // untouched → hit target exactly
+      's1-deadlift': { status: 'complete', sets: [6, 5] },                     // short on set 2 → partial
+      's1-lateral': { status: 'skip', sets: [12, 12], weight: 10 },            // skip drops weight/sets
+      's1-pulldown': { status: 'complete', weight: 45 },                       // no target weight, weight typed
+      's1-crunches': { weight: 57.5 },                                         // unmarked keeps what you typed
     },
   });
   assert.equal(rec.id, '123');
-  assert.equal(rec.session, 1);
-  assert.deepEqual(rec.entries['s1-incline'], { status: 'complete', note: 'felt solid', weight: 50, unit: 'lbs', reps: 9 });
-  assert.deepEqual(rec.entries['s1-deadlift'], { status: 'partial', note: '', weight: 187.5, unit: 'lbs', reps: 6 });
-  assert.deepEqual(rec.entries['s1-lateral'], { status: 'skip', note: '' });
-  assert.deepEqual(rec.entries['s1-pulldown'], { status: 'unrecorded', note: '', weight: 45, unit: 'lbs' });
-  assert.deepEqual(rec.entries['s1-crunches'], { status: 'unrecorded', note: '' });   // untouched: no planned weight added
-  assert.equal(Object.keys(rec.entries).length, SESSIONS[1].length);
+  assert.deepEqual(rec.entries['s1-incline'], { status: 'complete', note: 'felt solid', weight: 50, unit: 'lbs', sets: [9, 9], reps: 9, target: { reps: 9, sets: 2, weight: 50 } });
+  assert.deepEqual(rec.entries['s1-deadlift'], { status: 'partial', note: '', weight: 185, unit: 'lbs', sets: [6, 5], reps: 5, target: { reps: 6, sets: 2, weight: 185 } });
+  assert.deepEqual(rec.entries['s1-lateral'], { status: 'skip', note: '', target: { reps: 12, sets: 2, weight: 7.5 } });
+  assert.deepEqual(rec.entries['s1-pulldown'], { status: 'complete', note: '', weight: 45, unit: 'lbs', sets: [8, 8], reps: 8, target: { reps: 8, sets: 2 } });
+  assert.deepEqual(rec.entries['s1-crunches'], { status: 'unrecorded', note: '', weight: 57.5, unit: 'kg' });
 });
 
-test('buildSessionRecord: bodyweight exercises never get a weight', () => {
-  const rec = buildSessionRecord({ sessionNum: 2, date: '2026-10-21', now: 1, plannedWeight: () => 99, scratch: { 's2-legraiser': { status: 'complete', reps: 10 } } });
-  assert.deepEqual(rec.entries['s2-legraiser'], { status: 'complete', note: '', reps: 10 });
+test('buildSessionRecord: lighter than target or a set not done → partial; bodyweight never gets a weight', () => {
+  const rec = buildSessionRecord({
+    sessionNum: 1, date: '2026-10-21', now: 1, targetOf: () => ({ weight: 50, reps: 6, sets: 2 }),
+    scratch: { 's1-incline': { status: 'complete', weight: 45 }, 's1-deadlift': { status: 'complete', sets: [6, 0] } },
+  });
+  assert.equal(rec.entries['s1-incline'].status, 'partial');
+  assert.equal(rec.entries['s1-deadlift'].status, 'partial');
+  assert.equal(rec.entries['s1-deadlift'].reps, 6);   // lowest set actually done
+  const bw = buildSessionRecord({ sessionNum: 2, date: '2026-10-21', now: 1, targetOf: () => ({ weight: null, reps: 9, sets: 2 }), scratch: { 's2-legraiser': { status: 'complete' } } });
+  assert.deepEqual(bw.entries['s2-legraiser'], { status: 'complete', note: '', sets: [9, 9], reps: 9, target: { reps: 9, sets: 2 } });
 });
 
 test('statusCounts and byNewest', () => {
@@ -130,6 +163,24 @@ test('migrateLog skips unreadable sessions and rejects non-logs', () => {
   assert.equal(r.skipped, 2);
   assert.ok(r.sessions[0].id);   // missing ids get generated
   assert.throws(() => migrateLog({ hello: 1 }));
+});
+
+test('every past save format still loads (fixtures are permanent — never edit them)', () => {
+  const load = name => JSON.parse(readFileSync(join(FIXTURES, name), 'utf8'));
+  const v1 = migrateLog(load('schema-v1.json'));
+  assert.equal(v1.skipped, 0);
+  assert.equal(v1.sessions.length, 3);
+  assert.deepEqual(v1.sessions[0].entries['s1-deadlift'], { status: 'skip', note: 'back tight' });
+  assert.deepEqual(v1.sessions[1].entries['s3-bss'], { status: 'complete', note: '', weight: 15, unit: 'lbs', reps: 7 });
+  assert.equal(v1.sessions[2].program, 'old');
+  const v2 = migrateLog(load('schema-v2.json'));
+  assert.equal(v2.sessions[0].note, 'tweaked shoulder');
+  assert.equal(v2.sessions[0].entries['s1-crunches'].unit, 'kg');
+  const v3 = migrateLog(load('schema-v3.json'));
+  assert.deepEqual(v3.sessions[0].entries['s1-incline'].sets, [9, 8]);
+  assert.deepEqual(v3.sessions[0].entries['s1-incline'].target, { reps: 9, sets: 2, weight: 50 });
+  assert.equal(v3.sessions[0].futureField, 'kept');   // unknown fields survive
+  assert.equal(v3.sessions[0].entries['s1-incline'].rpe, 8);
 });
 
 test('retired exercises are not in the current program', () => {

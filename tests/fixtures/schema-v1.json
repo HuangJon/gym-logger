@@ -1,0 +1,11 @@
+{ "app": "lifting-log", "format": 1, "entries": [
+  { "id": "a", "session": 1, "date": "2026-10-10", "ts": 1, "entries": {
+    "s1-incline": { "status": "complete", "weight": 50, "unit": "lbs", "reps": 10, "note": "" },
+    "s1-deadlift": { "skipped": true, "note": "back tight" } } },
+  { "id": "b", "session": 3, "date": "2026-10-14", "ts": 2, "entries": {
+    "s3-incline": { "unrecorded": true },
+    "s3-bss": { "weight": 15, "unit": "lbs", "note": "", "reps": 7 } } },
+  { "id": "c", "session": "2", "date": "2026-04-21", "ts": 3, "program": "old", "entries": {
+    "s2-dips": { "status": "complete", "reps": 8, "note": "" },
+    "s2-pallof": { "status": "complete", "weight": 23, "unit": "kg", "reps": 5, "note": "" } } }
+], "weights": {} }

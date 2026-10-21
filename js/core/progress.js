@@ -1,13 +1,13 @@
-/** Double-progression logic: "last time", the weight to pre-fill, and what to do next. */
-import { hasValue } from './numbers.js';
-import { normalizeEntry, DID_IT, byNewest } from './records.js';
-import { exercisesForSession, incrementOf, unitOf } from './exercises.js';
+/** Double-progression logic: "last time", today's target, and the − / + steps. */
+import { hasValue, round2 } from './numbers.js';
+import { normalizeEntry, DID_IT, STATUS, byNewest, setsOfEntry, lowestSet } from './records.js';
+import { exercisesForSession, incrementOf, setsOf } from './exercises.js';
 
 /**
  * Most recent time this lift was actually done (complete or partial, with a weight or reps),
  * on or before `beforeDate`. Matched by name, so the same lift in different sessions shares
  * a history. Skipped and unrecorded sessions are passed over.
- * @returns {{status, weight?, unit?, reps?, note, date, session} | null}
+ * @returns {object|null} the entry plus { date, session }
  */
 export function lastPerformance(sessions, ex, beforeDate) {
   if (!ex) return null;
@@ -22,42 +22,63 @@ export function lastPerformance(sessions, ex, beforeDate) {
   return null;
 }
 
-/** Weight to show on the card: what you typed this session → last logged weight → program default. */
-export function plannedWeight(sessions, ex, { typed, beforeDate } = {}) {
-  if (!ex || ex.bw) return null;
-  if (typed !== undefined) return typed;
-  const last = lastPerformance(sessions, ex, beforeDate);
-  if (last && hasValue(last.weight)) return last.weight;
-  return ex.defaultWeight ?? null;
-}
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 /**
- * Reps to aim for today, by double progression:
- *   nothing logged yet → bottom of the range
- *   heavier than last time → bottom of the range
- *   lighter than last time → at least what you did last time
- *   same weight → one more than last time, capped at the top of the range
- * @returns {number|null} null when the exercise has no rep range
+ * Today's target by double progression. The target is always inside the rep range.
+ *   first time               → default weight × bottom of range
+ *   hit target, all sets at the top of the range → add the increment, back to the bottom
+ *   hit target                → same weight, one more rep (capped at the top)
+ *   below the range last time → same weight, aim for the bottom of the range
+ *   weighted lift done at bodyweight last time → program weight, bottom of the range
+ *   missed target (partial)   → the same target again — no increase until you hit it
+ * @returns {{ weight: number|null, reps: number, sets: number, reason: 'first'|'bump'|'more'|'low'|'repeat'|'top'|'bodyweight' } | null}
  */
-export function suggestedReps(ex, last, weight) {
+export function computeTarget(ex, last) {
   if (!ex?.reps) return null;
-  const [lo, hi] = ex.reps;
-  if (!last || !hasValue(last.reps)) return lo;
-  const comparable = !ex.bw && hasValue(last.weight) && hasValue(weight);
-  if (comparable && weight > last.weight) return lo;
-  if (comparable && weight < last.weight) return Math.min(hi, Math.max(lo, last.reps));
-  return Math.min(hi, last.reps + 1);
+  const [lo, hi] = ex.reps, sets = setsOf(ex);
+  const defaultWeight = ex.bw ? null : (ex.defaultWeight ?? null);
+  if (!last) return { weight: defaultWeight, reps: lo, sets, reason: 'first' };
+
+  // a weighted lift done at bodyweight last time → start at the program weight, bottom of the range
+  if (!ex.bw && !hasValue(last.weight) && !hasValue(last.target?.weight)) return { weight: defaultWeight, reps: lo, sets, reason: 'bodyweight' };
+  const lastWeight = ex.bw ? null : (hasValue(last.weight) ? last.weight : defaultWeight);
+  const lowest = lowestSet(setsOfEntry(last, sets));
+  if (last.status === STATUS.PARTIAL) {
+    if (last.target) return { weight: ex.bw ? null : (last.target.weight ?? lastWeight), reps: clamp(last.target.reps, lo, hi), sets, reason: 'repeat' };
+    return { weight: lastWeight, reps: clamp(lowest ?? lo, lo, hi), sets, reason: 'repeat' };   // older logs without a target
+  }
+  if (lowest === null) return { weight: lastWeight, reps: lo, sets, reason: 'first' };
+  if (lowest >= hi) {
+    if (ex.bw || !hasValue(lastWeight)) return { weight: lastWeight, reps: hi, sets, reason: 'top' };
+    return { weight: round2(lastWeight + incrementOf(ex)), reps: lo, sets, reason: 'bump' };
+  }
+  if (lowest < lo) return { weight: lastWeight, reps: lo, sets, reason: 'low' };
+  return { weight: lastWeight, reps: Math.min(hi, lowest + 1), sets, reason: 'more' };
+}
+
+/** One-line explanation of where today's target came from. */
+export function targetReason(ex, target, last, unit) {
+  if (!target) return '';
+  switch (target.reason) {
+    case 'bump':   return `↑ +${incrementOf(ex)} ${unit} — you hit ${ex.reps[1]} last time`;
+    case 'more':   return 'same weight, one more rep';
+    case 'bodyweight': return 'last time was bodyweight — starting at the program weight';
+    case 'low':    return 'below range last time — aim for the bottom of the range (or go lighter)';
+    case 'repeat': return 'same target — not hit last time';
+    case 'top':    return ex.bw ? 'top of range — add a harder variation or a set' : 'top of range';
+    default:       return last ? '' : 'first time — find a weight you can do with good form';
+  }
 }
 
 /** Weight after a − / + tap: moves by the exercise's increment, never below one increment. */
 export function stepWeight(ex, weight, direction) {
   const inc = incrementOf(ex);
-  const next = Math.round((Number(weight) + direction * inc) * 100) / 100;
-  return Math.max(inc, next);
+  return Math.max(inc, round2(Number(weight) + direction * inc));
 }
 
-/** Reps after a − / + tap: whole numbers, never below 0. */
-export const stepReps = (reps, direction) => Math.max(0, Number(reps) + direction);
+/** Reps for one set after a − / + tap: from 0 (set not done) up to the top of the rep range. */
+export const stepReps = (reps, direction, range) => clamp(Number(reps) + direction, 0, range[1]);
 
 /** Where a rep count sits in the target range: 'top' | 'mid' | 'low' | 'none'. */
 export function repZone(reps, range) {
@@ -67,22 +88,14 @@ export function repZone(reps, range) {
   return 'low';
 }
 
-/** Badge next to the reps box while you log. `suggested` is shown as the aim until reps are entered. */
-export function repsBadge(reps, range, suggested = null) {
-  switch (repZone(reps, range)) {
-    case 'top': return { cls: 'prog-bump', label: '↑ bump weight next session' };
-    case 'mid': return { cls: 'prog-grind', label: '✓ keep grinding' };
-    case 'low': return { cls: 'prog-low', label: '↓ too heavy — drop weight' };
-    default:    return { cls: 'prog-empty', label: suggested != null ? `aim for ${suggested}` : 'log reps' };
-  }
-}
-
-/** Advice under "Last time", based on what you did last time. Empty string when there's nothing to say. */
-export function nextStepHint(ex, last) {
-  if (!ex || !last) return '';
-  if (!ex.bw && !hasValue(last.weight)) return 'was bodyweight last time';
-  if (!ex.reps || !hasValue(last.reps)) return '';
-  const zone = repZone(last.reps, ex.reps);
-  if (ex.bw) return { top: '↑ top of range: add a harder variation or a set', mid: 'chase one more rep', low: 'build back up' }[zone];
-  return { top: `↑ add ${incrementOf(ex)} ${last.unit || unitOf(ex)} today`, mid: 'same weight, chase more reps', low: '↓ consider dropping weight' }[zone];
+/** Live badge while logging: on target, or what falls short. */
+export function attemptBadge({ weight, sets }, target) {
+  if (!target) return { cls: 'prog-empty', label: '' };
+  const missedSets = sets.filter(r => r === 0).length;
+  const short = sets.slice(0, target.sets).filter(r => r > 0 && r < target.reps).length;
+  if (hasValue(target.weight) && hasValue(weight) && weight < target.weight) return { cls: 'prog-low', label: 'lighter than target → partial' };
+  if (missedSets) return { cls: 'prog-low', label: `${missedSets} set${missedSets > 1 ? 's' : ''} not done → partial` };
+  if (short) return { cls: 'prog-low', label: 'below target → partial' };
+  if (sets.length && sets.every(r => r >= target.reps)) return { cls: 'prog-bump', label: '✓ on target' };
+  return { cls: 'prog-empty', label: '' };
 }

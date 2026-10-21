@@ -136,7 +136,7 @@ export function createTrendsView({ root, repo }) {
     const mode = !weighted ? 'reps' : state.mode;
     const { points, by } = groupPoints(shown, mode, grouping);
     const target = series.reps ? ` · target ${repRangeText(series.reps)}` : '';
-    const tip = p => `${formatShort(p.date)}: ${[hasValue(p.weight) && `${p.weight} ${p.unit || unit}`, hasValue(p.reps) && `${p.reps} reps`].filter(Boolean).join(' × ')}` +
+    const tip = p => `${formatShort(p.date)}: ${[hasValue(p.weight) && `${p.weight} ${p.unit || unit}`, hasValue(p.reps) && `${p.sets?.length ? p.sets.join(', ') : p.reps} reps`].filter(Boolean).join(' × ')}` +
       `${mode === 'e1rm' && p.e1rm ? ` → est. 1RM ${p.e1rm}` : ''}${p.status === STATUS.PARTIAL ? ' (partial)' : ''}${p.n > 1 ? ` — best of ${p.n} sessions, ${p.bucketLabel}` : ''}`;
     const zone = p => repZone(p.reps, series.reps);
 

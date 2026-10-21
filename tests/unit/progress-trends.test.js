@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { findExercise } from '../../js/core/exercises.js';
-import { lastPerformance, plannedWeight, repZone, repsBadge, nextStepHint, suggestedReps, stepWeight, stepReps } from '../../js/core/progress.js';
+import { lastPerformance, computeTarget, targetReason, repZone, attemptBadge, stepWeight, stepReps } from '../../js/core/progress.js';
 import { liftSeries, isWeighted, inRange, groupingFor, groupPoints, changeOverWindows, weeklyCounts, summaryStats } from '../../js/core/trends.js';
 import { session, done, partial, skipped, unrecorded } from '../helpers.js';
 
@@ -30,72 +30,82 @@ test('lastPerformance: walks back past skipped/unrecorded, respects the date cut
   assert.equal(lastPerformance([], deadlift), null);
 });
 
-test('plannedWeight: typed → last logged → default → none; bodyweight → null', () => {
-  const log = [session('2026-10-01', 1, { 's1-incline': done(52.5, 8) })];
-  assert.equal(plannedWeight(log, incline1, { typed: 55 }), 55);
-  assert.equal(plannedWeight(log, incline1), 52.5);
-  assert.equal(plannedWeight([], incline1), 50);
-  assert.equal(plannedWeight([], pulldown), null);
-  assert.equal(plannedWeight(log, abwheel), null);
+// ── targets (double progression) ──
+const last = (weight, sets, status = 'complete', target) => ({ status, weight, unit: 'lbs', sets, reps: Math.min(...sets.filter(r => r > 0)), ...(target ? { target } : {}) });
+
+test('computeTarget: first time uses the default weight and the bottom of the range', () => {
+  assert.deepEqual(computeTarget(incline1, null), { weight: 50, reps: 6, sets: 2, reason: 'first' });
+  assert.deepEqual(computeTarget(pulldown, null), { weight: null, reps: 8, sets: 2, reason: 'first' });
+  assert.deepEqual(computeTarget(abwheel, null), { weight: null, reps: 8, sets: 2, reason: 'first' });
 });
 
-// ── progression ──
-test('repZone / repsBadge', () => {
+test('computeTarget: hit the target → one more rep, same weight', () => {
+  assert.deepEqual(computeTarget(incline1, last(50, [8, 8])), { weight: 50, reps: 9, sets: 2, reason: 'more' });
+  assert.deepEqual(computeTarget(incline1, last(50, [9, 8])), { weight: 50, reps: 9, sets: 2, reason: 'more' });   // goes by the lowest set
+});
+
+test('computeTarget: every set at the top of the range → add the increment, back to the bottom', () => {
+  assert.deepEqual(computeTarget(incline1, last(50, [12, 12])), { weight: 55, reps: 6, sets: 2, reason: 'bump' });   // incline +5
+  assert.deepEqual(computeTarget(deadlift, last(185, [8, 8])), { weight: 190, reps: 5, sets: 2, reason: 'bump' });
+  assert.equal(computeTarget(incline1, last(50, [12, 11])).reason, 'more');   // one set short of the top → no bump
+});
+
+test('computeTarget: a partial repeats the same target — no increase', () => {
+  const t = { weight: 50, reps: 9, sets: 2 };
+  assert.deepEqual(computeTarget(incline1, last(50, [9, 6], 'partial', t)), { weight: 50, reps: 9, sets: 2, reason: 'repeat' });
+  assert.deepEqual(computeTarget(incline1, last(45, [12, 12], 'partial', { weight: 50, reps: 6, sets: 2 })), { weight: 50, reps: 6, sets: 2, reason: 'repeat' });
+  assert.deepEqual(computeTarget(incline1, { status: 'partial', weight: 50, unit: 'lbs' }), { weight: 50, reps: 6, sets: 2, reason: 'repeat' });   // old log, no reps
+});
+
+test('computeTarget: always inside the rep range', () => {
+  assert.deepEqual(computeTarget(incline1, last(50, [4, 4])), { weight: 50, reps: 6, sets: 2, reason: 'low' });
+  assert.equal(computeTarget(abwheel, { status: 'complete', reps: 10 }).reps, 10);   // bodyweight at the top stays at the top
+  assert.equal(computeTarget(abwheel, { status: 'complete', reps: 10 }).reason, 'top');
+  assert.deepEqual(computeTarget(bss, { status: 'partial', reps: 10, sets: [10, 10] }), { weight: 15, reps: 5, sets: 2, reason: 'bodyweight' });   // last time bodyweight → program weight
+  for (const ex of [incline1, deadlift, abwheel, bss]) for (const r of [0, 1, 5, 9, 20]) {
+    const t = computeTarget(ex, { status: 'complete', weight: 50, reps: r });
+    assert.ok(t.reps >= ex.reps[0] && t.reps <= ex.reps[1], `${ex.id} ${r} → ${t.reps}`);
+  }
+});
+
+test('computeTarget: older logs with one reps value count it for every set', () => {
+  assert.deepEqual(computeTarget(incline1, { status: 'complete', weight: 50, unit: 'lbs', reps: 8 }), { weight: 50, reps: 9, sets: 2, reason: 'more' });
+});
+
+test('targetReason', () => {
+  assert.match(targetReason(incline1, computeTarget(incline1, last(50, [12, 12])), {}, 'lbs'), /\+5 lbs/);
+  assert.match(targetReason(incline1, { reason: 'repeat' }, {}, 'lbs'), /not hit last time/);
+  assert.match(targetReason(incline1, { reason: 'low' }, {}, 'lbs'), /below range/);
+  assert.match(targetReason(incline1, { reason: 'first' }, null, 'lbs'), /first time/);
+  assert.equal(targetReason(incline1, null), '');
+});
+
+test('stepWeight / stepReps', () => {
+  assert.equal(stepWeight(incline1, 50, 1), 55);
+  assert.equal(stepWeight(findExercise('s1-lateral'), 5, -1), 2.5);
+  assert.equal(stepWeight(findExercise('s1-lateral'), 2.5, -1), 2.5);    // never below one increment
+  assert.equal(stepWeight(findExercise('s1-lateral'), 0, 1), 2.5);       // nothing logged → + starts from 0
+  assert.equal(stepWeight(findExercise('s1-lateral'), 3, 1), 5.5);
+  assert.equal(stepReps(8, 1, [6, 12]), 9);
+  assert.equal(stepReps(12, 1, [6, 12]), 12);   // stops at the top of the range
+  assert.equal(stepReps(1, -1, [6, 12]), 0);    // down to 0 = set not done
+  assert.equal(stepReps(0, -1, [6, 12]), 0);
+});
+
+test('attemptBadge explains what falls short', () => {
+  const t = { weight: 50, reps: 9, sets: 2 };
+  assert.match(attemptBadge({ weight: 50, sets: [9, 9] }, t).label, /on target/);
+  assert.match(attemptBadge({ weight: 50, sets: [9, 7] }, t).label, /below target/);
+  assert.match(attemptBadge({ weight: 50, sets: [9, 0] }, t).label, /1 set not done/);
+  assert.match(attemptBadge({ weight: 45, sets: [9, 9] }, t).label, /lighter/);
+  assert.equal(attemptBadge({ weight: 50, sets: [9, 9] }, null).label, '');
+});
+
+test('repZone', () => {
   assert.equal(repZone(12, [6, 12]), 'top');
   assert.equal(repZone(8, [6, 12]), 'mid');
   assert.equal(repZone(4, [6, 12]), 'low');
   assert.equal(repZone('', [6, 12]), 'none');
-  assert.match(repsBadge(12, [6, 12]).label, /bump/);
-  assert.match(repsBadge(9, [6, 12]).label, /keep grinding/);
-  assert.match(repsBadge(4, [6, 12]).label, /too heavy/);
-  assert.equal(repsBadge('', [6, 12]).cls, 'prog-empty');
-});
-
-test('nextStepHint covers every case', () => {
-  assert.equal(nextStepHint(incline1, { weight: 50, unit: 'lbs', reps: 12 }), '↑ add 2.5 lbs today');
-  assert.equal(nextStepHint(deadlift, { weight: 185, unit: 'lbs', reps: 8 }), '↑ add 5 lbs today');
-  assert.equal(nextStepHint(incline1, { weight: 50, reps: 8 }), 'same weight, chase more reps');
-  assert.equal(nextStepHint(incline1, { weight: 50, reps: 4 }), '↓ consider dropping weight');
-  assert.equal(nextStepHint(bss, { reps: 10 }), 'was bodyweight last time');
-  assert.equal(nextStepHint(abwheel, { reps: 10 }), '↑ top of range: add a harder variation or a set');
-  assert.equal(nextStepHint(abwheel, { reps: 9 }), 'chase one more rep');
-  assert.equal(nextStepHint(abwheel, { reps: 3 }), 'build back up');
-  assert.equal(nextStepHint(incline1, { weight: 50 }), '');
-  assert.equal(nextStepHint(incline1, null), '');
-  assert.equal(nextStepHint(findExercise('s1-crunches'), { weight: 55, unit: 'kg', reps: 15 }), '↑ add 2.5 kg today');
-});
-
-test('suggestedReps follows double progression', () => {
-  assert.equal(suggestedReps(incline1, null, 50), 6);                                 // nothing logged → bottom of range
-  assert.equal(suggestedReps(incline1, { weight: 50, reps: 8 }, 50), 9);              // same weight → one more
-  assert.equal(suggestedReps(incline1, { weight: 50, reps: 12 }, 50), 12);            // capped at the top
-  assert.equal(suggestedReps(incline1, { weight: 50, reps: 12 }, 52.5), 6);           // heavier → bottom of range
-  assert.equal(suggestedReps(incline1, { weight: 52.5, reps: 4 }, 50), 6);            // lighter → at least the bottom
-  assert.equal(suggestedReps(incline1, { weight: 52.5, reps: 9 }, 50), 9);            // lighter → at least last time
-  assert.equal(suggestedReps(incline1, { weight: 50, reps: 4 }, 50), 5);              // below range, same weight → one more
-  assert.equal(suggestedReps(abwheel, { reps: 9 }, null), 10);                        // bodyweight
-  assert.equal(suggestedReps(bss, { reps: 10 }, 15), 8);                              // last time bodyweight → +1, capped
-  assert.equal(suggestedReps(findExercise('s2-pallof'), { weight: 27, reps: 5 }, 27), 5);
-  assert.equal(suggestedReps(incline1, { weight: 50 }, 50), 6);                       // no reps recorded last time
-  assert.equal(suggestedReps({ id: 'x' }, null, 1), null);                            // no rep range
-});
-
-test('stepWeight uses the exercise increment and never goes below one increment', () => {
-  assert.equal(stepWeight(incline1, 50, 1), 52.5);
-  assert.equal(stepWeight(incline1, 50, -1), 47.5);
-  assert.equal(stepWeight(deadlift, 185, 1), 190);
-  assert.equal(stepWeight(incline1, 2.5, -1), 2.5);
-  assert.equal(stepWeight(findExercise('s1-lateral'), 3, 1), 5.5);   // off-increment weights still step cleanly
-});
-
-test('stepReps', () => {
-  assert.equal(stepReps(8, 1), 9);
-  assert.equal(stepReps(0, -1), 0);
-});
-
-test('repsBadge shows the aim until reps are entered', () => {
-  assert.equal(repsBadge('', [6, 12], 9).label, 'aim for 9');
-  assert.equal(repsBadge(9, [6, 12], 9).cls, 'prog-grind');
 });
 
 // ── trends ──

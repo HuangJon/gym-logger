@@ -1,5 +1,5 @@
 /** Lookups over the program definition. */
-import { SESSIONS, RETIRED, INCREMENTS, DEFAULT_INCREMENT } from '../config/program.js';
+import { SESSIONS, RETIRED, INCREMENTS, DEFAULT_INCREMENT, DEFAULT_SETS } from '../config/program.js';
 
 const sessionOf = id => Number(String(id).match(/^s(\d)/)?.[1]) || null;
 
@@ -15,6 +15,7 @@ export const allExercises = () => [...CURRENT, ...OLD];
 
 export const unitOf = ex => ex?.unit || 'lbs';
 export const incrementOf = ex => INCREMENTS[ex?.name] ?? DEFAULT_INCREMENT;
+export const setsOf = ex => ex?.sets ?? DEFAULT_SETS;
 export const repRangeText = ([lo, hi]) => (lo === hi ? `${lo}` : `${lo}–${hi}`);
 
 /**

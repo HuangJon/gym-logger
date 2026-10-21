@@ -4,7 +4,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createMemoryStorage, createLocalStorage } from '../../js/data/storage.js';
-import { createRepository } from '../../js/data/repository.js';
+import { createRepository, trimSnapshots, ReadOnlyError } from '../../js/data/repository.js';
 import { createBackup, parseBackup, backupStatus, markBackedUp } from '../../js/data/backup.js';
 import { SCHEMA_VERSION } from '../../js/core/migrate.js';
 import { makeDemoSessions } from '../../js/dev/demo.js';
@@ -63,9 +63,54 @@ test('repository: loads older formats and rewrites them in the current schema', 
   assert.equal(storage.dump().log.schemaVersion, SCHEMA_VERSION);
 });
 
-test('repository: unreadable saved data loads as empty instead of crashing', () => {
-  const repo = createRepository(createMemoryStorage({ log: { nonsense: true } }));
+test('repository: unreadable saved data loads as empty, and the original is kept aside', () => {
+  const storage = createMemoryStorage({ log: { nonsense: true } });
+  const repo = createRepository(storage);
   assert.deepEqual(repo.load(), []);
+  assert.ok(Object.keys(storage.dump()).some(k => k.startsWith('unreadable-')));
+});
+
+test('repository: keeps the previous log before each save (newest 3) and can restore it', async () => {
+  let t = 0;
+  const storage = createMemoryStorage();
+  const repo = createRepository(storage, { now: () => `T${++t}` });
+  repo.load();
+  const a = session('2026-10-01', 1, {}, { id: 'a' }), b = session('2026-10-02', 1, {}, { id: 'b' });
+  await repo.commit([a]);                        // nothing to keep yet
+  assert.deepEqual(repo.snapshots(), []);
+  await repo.commit([b, a]);
+  await repo.commit([a]);                        // oops, deleted b
+  assert.deepEqual(repo.snapshots().map(s => s.count), [2, 1]);
+  await repo.restoreSnapshot(0);
+  assert.deepEqual(repo.sessions.map(s => s.id), ['b', 'a']);
+  assert.equal(repo.snapshots()[0].count, 1);    // the log you restored over was kept too, so the restore can be undone
+  for (let i = 0; i < 5; i++) await repo.commit([a]);
+  assert.equal(repo.snapshots().length, 3);
+});
+
+test('trimSnapshots respects the count and the size budget', () => {
+  const snap = n => ({ savedAt: 'T', sessions: Array.from({ length: n }, (_, i) => ({ id: String(i) })) });
+  assert.equal(trimSnapshots([snap(1), snap(1), snap(1), snap(1)], 3).length, 3);
+  assert.equal(trimSnapshots([snap(500), snap(500)], 3, 8000).length, 1);   // over budget → keep only the newest
+});
+
+test('repository: copies an older format aside before upgrading it', () => {
+  const old = { entries: [{ id: 'x', session: 1, date: '2026-10-01', entries: {} }] };
+  const storage = createMemoryStorage({ log: old });
+  createRepository(storage).load();
+  assert.deepEqual(storage.dump()['pre-upgrade-v1'], old);
+  assert.equal(storage.dump().log.schemaVersion, SCHEMA_VERSION);
+});
+
+test('repository: a log from a newer version is read-only (never overwritten)', async () => {
+  const newer = { schemaVersion: SCHEMA_VERSION + 1, sessions: [{ id: 'x', session: 1, date: '2026-10-01', entries: {}, newThing: true }] };
+  const storage = createMemoryStorage({ log: newer });
+  const repo = createRepository(storage);
+  repo.load();
+  assert.equal(repo.readOnly, true);
+  assert.equal(repo.sessions.length, 1);
+  await assert.rejects(repo.commit([]), ReadOnlyError);
+  assert.deepEqual(storage.dump().log, newer);
 });
 
 // ── backup ──
