@@ -5,7 +5,7 @@ import { todayISO, isISODate, formatShort, agoText, daysBetween } from '../core/
 import { hasValue, parseWeight, parseReps } from '../core/numbers.js';
 import { STATUS, buildSessionRecord } from '../core/records.js';
 import { addSession } from '../core/log.js';
-import { lastPerformance, plannedWeight, repsBadge, nextStepHint } from '../core/progress.js';
+import { lastPerformance, plannedWeight, repsBadge, nextStepHint, suggestedReps, stepWeight, stepReps } from '../core/progress.js';
 import { esc, delegate, autoResize, flash } from './dom.js';
 
 const STATUS_BUTTONS = [[STATUS.COMPLETE, '✓ Done'], [STATUS.PARTIAL, '~ Partial'], [STATUS.SKIP, '✕ Skip']];
@@ -27,6 +27,9 @@ export function createWorkoutView({ root, repo, onSaved }) {
 
   const entryFor = id => (scratch[id] ||= {});
   const planned = (ex, date = active?.date) => plannedWeight(repo.sessions, ex, { typed: scratch[ex.id]?.weight, beforeDate: date });
+  const lastFor = ex => lastPerformance(repo.sessions, ex, active.date);
+  /** Reps to aim for today (shown greyed in the reps box until confirmed). */
+  const suggestionFor = ex => suggestedReps(ex, lastFor(ex), planned(ex));
 
   // ── picker ──────────────────────────────────────────────
   function resetPicker() {
@@ -105,9 +108,10 @@ export function createWorkoutView({ root, repo, onSaved }) {
             <div class="ex-detail">${esc(ex.detail)}</div>
             ${tags ? `<div class="ex-tags">${tags}</div>` : ''}
           </div>
-          <div>${ex.bw ? '<span class="weight-bw">bodyweight</span>' : `<div class="weight-box" id="wb-${ex.id}">${weightBoxInner(ex)}</div>`}</div>
+          <div>${ex.bw ? '<span class="weight-bw">bodyweight</span>' : ''}</div>
         </div>
         ${lastTimeRow(ex)}
+        ${ex.bw ? '' : `<div class="ex-row weight-line"><span class="row-label">Weight</span><div class="weight-box" id="wb-${ex.id}">${weightBoxInner(ex)}</div></div>`}
         ${repsRow(ex, sc)}
         <div class="ex-row status-row">
           <span class="status-label">Mark:</span>
@@ -122,13 +126,16 @@ export function createWorkoutView({ root, repo, onSaved }) {
 
   function weightBoxInner(ex) {
     const w = planned(ex);
-    return w != null
-      ? `<div class="weight-row"><span class="weight-val" id="wv-${ex.id}" tabindex="0" role="button" data-action="edit-weight">${w}</span><span class="weight-unit">${unitOf(ex)}</span></div>`
-      : `<div class="weight-row"><span class="weight-placeholder" id="wp-${ex.id}" tabindex="0" role="button" data-action="edit-weight">log weight</span></div>`;
+    if (w == null) return `<div class="weight-row"><span class="weight-placeholder" id="wp-${ex.id}" tabindex="0" role="button" data-action="edit-weight">log weight</span></div>`;
+    return `<div class="weight-row">
+      <button type="button" class="stepper" data-action="weight-step" data-dir="-1" aria-label="Less weight">−</button>
+      <span class="weight-val" id="wv-${ex.id}" tabindex="0" role="button" data-action="edit-weight">${w}</span><span class="weight-unit">${unitOf(ex)}</span>
+      <button type="button" class="stepper" data-action="weight-step" data-dir="1" aria-label="More weight">+</button>
+    </div>`;
   }
 
   function lastTimeRow(ex) {
-    const last = lastPerformance(repo.sessions, ex, active.date);
+    const last = lastFor(ex);
     if (!last) return '<div class="ex-row last-row"><span class="last-label">Last time</span><span class="last-none">no previous log</span></div>';
     const unit = last.unit || unitOf(ex);
     const value = [!ex.bw && hasValue(last.weight) && `${last.weight} ${unit}`, hasValue(last.reps) && `${last.reps} reps`].filter(Boolean).join(' × ');
@@ -146,15 +153,31 @@ export function createWorkoutView({ root, repo, onSaved }) {
   function repsRow(ex, sc) {
     if (!ex.reps) return '';
     const reps = sc.reps ?? '';
-    const badge = repsBadge(reps, ex.reps);
+    const suggested = suggestionFor(ex);
+    const badge = repsBadge(reps, ex.reps, suggested);
     return `<div class="ex-row reps-row"${sc.status === STATUS.SKIP ? ' hidden' : ''}>
       <div class="reps-left">
-        <span class="reps-label">Reps hit:</span>
-        <input class="reps-input" type="number" inputmode="numeric" min="0" max="99" placeholder="–" id="reps-${ex.id}" value="${esc(reps)}" data-action="reps">
-        <span class="reps-target">/ ${repRangeText(ex.reps)} reps</span>
+        <span class="row-label">Reps</span>
+        <button type="button" class="stepper" data-action="reps-step" data-dir="-1" aria-label="One less rep">−</button>
+        <input class="reps-input" type="number" inputmode="numeric" min="0" max="99" placeholder="${suggested ?? '–'}" id="reps-${ex.id}" value="${esc(reps)}" data-action="reps" aria-label="${esc(ex.name)} reps">
+        <button type="button" class="stepper" data-action="reps-step" data-dir="1" aria-label="One more rep">+</button>
+        <span class="reps-target">/ ${repRangeText(ex.reps)}</span>
       </div>
       <span class="prog-badge ${badge.cls}" id="pb-${ex.id}">${badge.label}</span>
     </div>`;
+  }
+
+  /** Sync the reps box + badge with `scratch` (after a stepper, Done, or a weight change). */
+  function refreshReps(exId) {
+    const ex = findExercise(exId), input = ui.exercises.querySelector(`#reps-${exId}`);
+    if (!ex?.reps || !input) return;
+    const reps = scratch[exId]?.reps ?? '', suggested = suggestionFor(ex);
+    input.value = reps;
+    input.placeholder = suggested ?? '–';
+    const badge = repsBadge(reps, ex.reps, suggested);
+    const el = ui.exercises.querySelector(`#pb-${exId}`);
+    el.className = `prog-badge ${badge.cls}`;
+    el.textContent = badge.label;
   }
 
   // ── editing ─────────────────────────────────────────────
@@ -184,18 +207,38 @@ export function createWorkoutView({ root, repo, onSaved }) {
   }
 
   function setStatus(card, value) {
-    const exId = card.dataset.ex, sc = entryFor(exId);
+    const exId = card.dataset.ex, sc = entryFor(exId), ex = findExercise(exId);
     sc.status = sc.status === value ? '' : value;   // tap again to clear
+    // Done with no reps entered = you hit the suggested reps
+    if (sc.status === STATUS.COMPLETE && !hasValue(sc.reps)) {
+      const suggested = suggestionFor(ex);
+      if (suggested != null) { sc.reps = suggested; refreshReps(exId); }
+    }
     card.classList.toggle('is-skipped', sc.status === STATUS.SKIP);
     card.querySelectorAll('.status-btn').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.status === sc.status)));
     const reps = card.querySelector('.reps-row');
     if (reps) reps.hidden = sc.status === STATUS.SKIP;
   }
 
+  function stepWeightBy(exId, direction) {
+    const ex = findExercise(exId), current = planned(ex);
+    if (current == null) return;
+    entryFor(exId).weight = stepWeight(ex, current, direction);
+    refreshWeightBox(exId);
+    refreshReps(exId);   // a heavier weight changes the suggested reps
+  }
+
+  function stepRepsBy(exId, direction) {
+    const sc = entryFor(exId);
+    const base = hasValue(sc.reps) ? sc.reps : (suggestionFor(findExercise(exId)) ?? 0);
+    sc.reps = stepReps(base, direction);
+    refreshReps(exId);
+  }
+
   function setReps(input) {
-    const exId = input.closest('[data-ex]').dataset.ex, reps = parseReps(input.value);
+    const exId = input.closest('[data-ex]').dataset.ex, ex = findExercise(exId), reps = parseReps(input.value);
     entryFor(exId).reps = reps === null ? '' : reps;
-    const badge = repsBadge(entryFor(exId).reps, findExercise(exId).reps);
+    const badge = repsBadge(entryFor(exId).reps, ex.reps, suggestionFor(ex));
     const el = ui.exercises.querySelector(`#pb-${exId}`);
     el.className = `prog-badge ${badge.cls}`;
     el.textContent = badge.label;
@@ -249,6 +292,8 @@ export function createWorkoutView({ root, repo, onSaved }) {
     'discard': endSession,
     'keep': el => el.closest('.discard-bar').remove(),
     'edit-weight': el => startWeightEdit(el.closest('[data-ex]').dataset.ex),
+    'weight-step': el => stepWeightBy(el.closest('[data-ex]').dataset.ex, Number(el.dataset.dir)),
+    'reps-step': el => stepRepsBy(el.closest('[data-ex]').dataset.ex, Number(el.dataset.dir)),
     'status': el => setStatus(el.closest('[data-ex]'), el.dataset.status),
     'complete': complete,
   });
