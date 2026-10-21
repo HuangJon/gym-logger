@@ -91,7 +91,7 @@ export function createTrendsView({ root, repo }) {
     const tags = series.retired ? '<span class="pill-muted">old program</span>'
       : [...series.sessions].sort().map(n => `<span class="trend-sess" style="color:${SESSION_COLORS[n]}">S${n}</span>`).join('');
     const head = `<div class="trend-head"><span class="trend-name">${esc(series.name)}</span>${tags}</div>`;
-    const last = series.points.at(-1);
+    const last = series.points[series.points.length - 1];
     if (!last) return `<div class="card trend-card empty">${head}<div class="trend-empty">Not logged yet</div></div>`;
 
     const weighted = isWeighted(series);
