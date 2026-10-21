@@ -65,8 +65,10 @@
 .ex-row { border-top: 1px solid var(--border); padding: 7px 14px; }
 
 /* weight */
-.weight-box { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
-.weight-row { display: flex; align-items: baseline; gap: 3px; }
+.weight-line { display: flex; align-items: center; gap: 8px; }
+.row-label { font-size: 11px; color: var(--fg2); min-width: 44px; }
+.weight-box { display: flex; align-items: center; }
+.weight-row { display: flex; align-items: center; gap: 6px; min-height: 36px; }   /* same height with or without steppers, so taps never shift */
 .weight-val {
   font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 46px; text-align: right;
   cursor: pointer; border-bottom: 1.5px solid transparent; outline: none;
@@ -89,10 +91,22 @@
 .last-hint { font-size: 10px; font-weight: 600; color: var(--fg2); width: 100%; }
 .last-stale { font-size: 10px; font-weight: 600; color: var(--amber); width: 100%; }
 
+/* − / + steppers (weight and reps) — 36px so they're easy to hit with a thumb */
+.stepper {
+  width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%;
+  border: 1px solid var(--input-border); background: var(--input-bg); color: var(--fg);
+  font-size: 18px; font-weight: 600; line-height: 1; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  touch-action: manipulation;   /* no double-tap zoom when tapping quickly */
+}
+.stepper:active { background: var(--border); }
+.weight-row .stepper { align-self: center; }
+.weight-row .weight-val { min-width: 44px; text-align: center; }
+
 /* reps */
-.reps-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.reps-left { display: flex; align-items: center; gap: 8px; }
-.reps-label { font-size: 11px; color: var(--fg2); }
+.reps-row { display: flex; align-items: center; justify-content: space-between; gap: 8px 10px; flex-wrap: wrap; }
+.reps-left { display: flex; align-items: center; gap: 6px; }
+.reps-input::placeholder { color: var(--fg3); font-weight: 600; }
 .reps-input {
   width: 44px; text-align: center; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 6px;
   padding: 4px 6px; font-family: var(--font); font-size: 13px; font-weight: 700; color: var(--fg); outline: none;

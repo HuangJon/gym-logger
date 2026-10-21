@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { findExercise } from '../../js/core/exercises.js';
-import { lastPerformance, plannedWeight, repZone, repsBadge, nextStepHint } from '../../js/core/progress.js';
+import { lastPerformance, plannedWeight, repZone, repsBadge, nextStepHint, suggestedReps, stepWeight, stepReps } from '../../js/core/progress.js';
 import { liftSeries, isWeighted, inRange, groupingFor, groupPoints, changeOverWindows, weeklyCounts, summaryStats } from '../../js/core/trends.js';
 import { session, done, partial, skipped, unrecorded } from '../helpers.js';
 
@@ -63,6 +63,39 @@ test('nextStepHint covers every case', () => {
   assert.equal(nextStepHint(incline1, { weight: 50 }), '');
   assert.equal(nextStepHint(incline1, null), '');
   assert.equal(nextStepHint(findExercise('s1-crunches'), { weight: 55, unit: 'kg', reps: 15 }), '↑ add 2.5 kg today');
+});
+
+test('suggestedReps follows double progression', () => {
+  assert.equal(suggestedReps(incline1, null, 50), 6);                                 // nothing logged → bottom of range
+  assert.equal(suggestedReps(incline1, { weight: 50, reps: 8 }, 50), 9);              // same weight → one more
+  assert.equal(suggestedReps(incline1, { weight: 50, reps: 12 }, 50), 12);            // capped at the top
+  assert.equal(suggestedReps(incline1, { weight: 50, reps: 12 }, 52.5), 6);           // heavier → bottom of range
+  assert.equal(suggestedReps(incline1, { weight: 52.5, reps: 4 }, 50), 6);            // lighter → at least the bottom
+  assert.equal(suggestedReps(incline1, { weight: 52.5, reps: 9 }, 50), 9);            // lighter → at least last time
+  assert.equal(suggestedReps(incline1, { weight: 50, reps: 4 }, 50), 5);              // below range, same weight → one more
+  assert.equal(suggestedReps(abwheel, { reps: 9 }, null), 10);                        // bodyweight
+  assert.equal(suggestedReps(bss, { reps: 10 }, 15), 8);                              // last time bodyweight → +1, capped
+  assert.equal(suggestedReps(findExercise('s2-pallof'), { weight: 27, reps: 5 }, 27), 5);
+  assert.equal(suggestedReps(incline1, { weight: 50 }, 50), 6);                       // no reps recorded last time
+  assert.equal(suggestedReps({ id: 'x' }, null, 1), null);                            // no rep range
+});
+
+test('stepWeight uses the exercise increment and never goes below one increment', () => {
+  assert.equal(stepWeight(incline1, 50, 1), 52.5);
+  assert.equal(stepWeight(incline1, 50, -1), 47.5);
+  assert.equal(stepWeight(deadlift, 185, 1), 190);
+  assert.equal(stepWeight(incline1, 2.5, -1), 2.5);
+  assert.equal(stepWeight(findExercise('s1-lateral'), 3, 1), 5.5);   // off-increment weights still step cleanly
+});
+
+test('stepReps', () => {
+  assert.equal(stepReps(8, 1), 9);
+  assert.equal(stepReps(0, -1), 0);
+});
+
+test('repsBadge shows the aim until reps are entered', () => {
+  assert.equal(repsBadge('', [6, 12], 9).label, 'aim for 9');
+  assert.equal(repsBadge(9, [6, 12], 9).cls, 'prog-grind');
 });
 
 // ── trends ──

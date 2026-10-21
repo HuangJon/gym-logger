@@ -31,6 +31,34 @@ export function plannedWeight(sessions, ex, { typed, beforeDate } = {}) {
   return ex.defaultWeight ?? null;
 }
 
+/**
+ * Reps to aim for today, by double progression:
+ *   nothing logged yet → bottom of the range
+ *   heavier than last time → bottom of the range
+ *   lighter than last time → at least what you did last time
+ *   same weight → one more than last time, capped at the top of the range
+ * @returns {number|null} null when the exercise has no rep range
+ */
+export function suggestedReps(ex, last, weight) {
+  if (!ex?.reps) return null;
+  const [lo, hi] = ex.reps;
+  if (!last || !hasValue(last.reps)) return lo;
+  const comparable = !ex.bw && hasValue(last.weight) && hasValue(weight);
+  if (comparable && weight > last.weight) return lo;
+  if (comparable && weight < last.weight) return Math.min(hi, Math.max(lo, last.reps));
+  return Math.min(hi, last.reps + 1);
+}
+
+/** Weight after a − / + tap: moves by the exercise's increment, never below one increment. */
+export function stepWeight(ex, weight, direction) {
+  const inc = incrementOf(ex);
+  const next = Math.round((Number(weight) + direction * inc) * 100) / 100;
+  return Math.max(inc, next);
+}
+
+/** Reps after a − / + tap: whole numbers, never below 0. */
+export const stepReps = (reps, direction) => Math.max(0, Number(reps) + direction);
+
 /** Where a rep count sits in the target range: 'top' | 'mid' | 'low' | 'none'. */
 export function repZone(reps, range) {
   if (!hasValue(reps) || !range) return 'none';
@@ -39,13 +67,13 @@ export function repZone(reps, range) {
   return 'low';
 }
 
-/** Badge next to the reps box while you log. */
-export function repsBadge(reps, range) {
+/** Badge next to the reps box while you log. `suggested` is shown as the aim until reps are entered. */
+export function repsBadge(reps, range, suggested = null) {
   switch (repZone(reps, range)) {
     case 'top': return { cls: 'prog-bump', label: '↑ bump weight next session' };
     case 'mid': return { cls: 'prog-grind', label: '✓ keep grinding' };
     case 'low': return { cls: 'prog-low', label: '↓ too heavy — drop weight' };
-    default:    return { cls: 'prog-empty', label: 'log reps' };
+    default:    return { cls: 'prog-empty', label: suggested != null ? `aim for ${suggested}` : 'log reps' };
   }
 }
 

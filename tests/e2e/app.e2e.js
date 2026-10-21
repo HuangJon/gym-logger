@@ -108,6 +108,29 @@ try {
   check('phone: type weight then tap notes → note kept', (await page.inputValue('#note-s1-incline')) === 'felt solid');
   check('phone: inputs are 16px (no iPhone zoom)', await page.$eval('#reps-s1-incline', el => getComputedStyle(el).fontSize) === '16px');
 
+  // steppers + suggested reps
+  check('reps: suggestion shown greyed (last 6 at 45 → aim 7)', (await page.getAttribute('#reps-s1-deadlift', 'placeholder')) === '7' && (await page.inputValue('#reps-s1-deadlift')) === '' && (await text('#pb-s1-deadlift')) === 'aim for 7');
+  await page.tap('#card-s1-deadlift [data-action="weight-step"][data-dir="1"]');
+  check('weight +: steps by the lift increment (deadlift 5)', (await text('#wv-s1-deadlift')) === '182.5');
+  check('weight +: heavier than last time → aim for bottom of range', (await page.getAttribute('#reps-s1-deadlift', 'placeholder')) === '5');
+  await page.tap('#card-s1-deadlift [data-action="weight-step"][data-dir="-1"]');
+  await page.tap('#card-s1-deadlift [data-action="weight-step"][data-dir="-1"]');
+  check('weight −: steps down', (await text('#wv-s1-deadlift')) === '172.5');
+  await page.tap('#card-s1-deadlift [data-action="weight-step"][data-dir="1"]');
+  check('weight: back to 177.5', (await text('#wv-s1-deadlift')) === '177.5');
+  await page.tap('#card-s1-crunches [data-action="reps-step"][data-dir="-1"]');
+  check('reps −: starts from the suggestion (aim 13 → 12 = last time)', (await page.inputValue('#reps-s1-crunches')) === '12');
+  await page.tap('#card-s1-crunches [data-action="reps-step"][data-dir="1"]');
+  await page.tap('#card-s1-crunches [data-action="reps-step"][data-dir="1"]');
+  check('reps +: adds one each tap', (await page.inputValue('#reps-s1-crunches')) === '14');
+  await page.fill('#reps-s1-crunches', '');
+  await page.tap('#card-s1-pulldown .status-btn[data-status="complete"]');
+  await page.tap('#card-s1-pulldown .status-btn[data-status="complete"]');
+  check('Done with no reps → accepts the suggestion', (await page.inputValue('#reps-s1-pulldown')) === '8');
+  await page.tap('#card-s1-lateral .status-btn[data-status="partial"]');
+  check('Partial does not fill in the suggestion', (await page.inputValue('#reps-s1-lateral')) === '');
+  await page.tap('#card-s1-lateral .status-btn[data-status="partial"]');
+
   await page.fill('#reps-s1-incline', '12');
   check('reps: top of range → bump badge', (await text('#pb-s1-incline')).includes('bump'));
   await page.fill('#reps-s1-incline', '4');
@@ -139,7 +162,7 @@ try {
   check('saved: partial with typed weight', E['s1-deadlift']?.status === 'partial' && E['s1-deadlift'].weight === 177.5 && E['s1-deadlift'].reps === 6);
   check('saved: skip keeps note only', E['s1-lateral']?.status === 'skip' && E['s1-lateral'].weight === undefined && E['s1-lateral'].note.includes('shoulder'));
   check('saved: untouched → not recorded', E['s1-crunches']?.status === 'unrecorded' && E['s1-crunches'].weight === undefined);
-  check('saved: kg unit kept per exercise', E['s1-pulldown']?.unit === 'lbs');
+  check('saved: Done accepted suggested reps', E['s1-pulldown']?.reps === 8 && E['s1-pulldown']?.unit === 'lbs', JSON.stringify(E['s1-pulldown']));
   check('complete: picker resets to today', (await page.inputValue('#pick-date')) === TODAY);
   check('complete: switches to History', await page.locator('#tab-history.active').count() === 1);
 
