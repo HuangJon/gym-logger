@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lifting Log</title>
+  <meta name="description" content="Gym lifting log with double-progression tracking.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Lifting">
+  <meta name="theme-color" content="#f5f5f4" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f0f0f" media="(prefers-color-scheme: dark)">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/workout.css">
+  <link rel="stylesheet" href="css/history.css">
+  <link rel="stylesheet" href="css/trends.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <nav class="tab-bar" role="tablist">
+    <button class="tab-btn active" data-tab="workout" role="tab" aria-selected="true">Workout</button>
+    <button class="tab-btn" data-tab="history" role="tab" aria-selected="false">History</button>
+    <button class="tab-btn" data-tab="trends" role="tab" aria-selected="false">Trends</button>
+  </nav>
+
+  <!-- WORKOUT -->
+  <main class="tab-pane active" id="tab-workout" role="tabpanel">
+    <section id="picker-panel">
+      <div class="card picker">
+        <div class="picker-field">
+          <label for="pick-date">Date</label>
+          <input type="date" id="pick-date" data-action="pick-date">
+        </div>
+        <div class="picker-field">
+          <label for="pick-session">Session</label>
+          <select id="pick-session" data-action="pick-session">
+            <option value="">choose…</option>
+            <option value="1">Session 1</option>
+            <option value="2">Session 2</option>
+            <option value="3">Session 3</option>
+          </select>
+        </div>
+        <button type="button" class="btn-primary" id="start-btn" data-action="start" disabled>Start Session</button>
+      </div>
+      <div id="session-preview-area"></div>
+      <div class="picker-hint" id="picker-hint">Pick a date and session above to begin.</div>
+    </section>
+
+    <section id="session-panel" hidden>
+      <div class="card session-active" id="session-header"></div>
+      <div class="card prehab" id="prehab"></div>
+      <div id="exercise-area"></div>
+      <button type="button" class="complete-btn" id="complete-btn" data-action="complete">Complete Session</button>
+      <div class="complete-hint">Unmarked exercises are logged as “not recorded”.</div>
+      <div class="status-msg" id="status" role="status"></div>
+    </section>
+  </main>
+
+  <!-- HISTORY -->
+  <section class="tab-pane" id="tab-history" role="tabpanel">
+    <div class="card backup-card" id="backup-card">
+      <div class="bk-row">
+        <div class="bk-text"><b>Backup</b> <span id="backup-status"></span></div>
+        <div class="bk-actions">
+          <button type="button" class="btn-small" data-action="export">Export</button>
+          <label class="btn-small">Import<input type="file" id="import-file" accept=".json,application/json" data-action="import" hidden></label>
+        </div>
+      </div>
+      <div class="bk-msg" id="backup-msg" role="status"></div>
+    </div>
+    <div id="history-list"></div>
+  </section>
+
+  <!-- TRENDS -->
+  <section class="tab-pane" id="tab-trends" role="tabpanel">
+    <div id="trends-area"></div>
+  </section>
+</body>
+</html>

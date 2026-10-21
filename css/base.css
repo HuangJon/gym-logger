@@ -1,0 +1,76 @@
+/* Reset, page layout, tabs and small shared components (pills, badges, segmented control). */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+[hidden] { display: none !important; }
+
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font); font-size: 14px; line-height: 1.4;
+  max-width: 600px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+button { font-family: var(--font); }
+
+/* ── tabs ── */
+.tab-bar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  display: flex; gap: 2px; padding: 10px 0 0; margin-bottom: 16px;
+  background: var(--bg); border-bottom: 1.5px solid var(--tab-border);
+}
+.tab-btn {
+  padding: 7px 18px; border-radius: 8px 8px 0 0;
+  border: 1.5px solid transparent; border-bottom: none;
+  background: none; color: var(--fg2); font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.tab-btn.active { background: var(--card); color: var(--fg); border-color: var(--tab-border); margin-bottom: -1.5px; padding-bottom: 8px; }
+.tab-pane { display: none; padding-bottom: 32px; }
+.tab-pane.active { display: block; }
+
+/* ── cards ── */
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); }
+.empty-state { text-align: center; color: var(--fg2); padding: 48px 16px; font-size: 13px; }
+.section-divider {
+  font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--fg3); padding: 6px 0 8px; border-bottom: 1px solid var(--border); margin-bottom: 10px;
+}
+
+/* ── status badges & pills ── */
+.badge { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 20px; white-space: nowrap; }
+.badge-skip    { background: var(--bad-bg); color: var(--bad); }
+.badge-partial { background: var(--mid-bg); color: var(--mid); }
+.badge-unrec   { background: var(--input-bg); color: var(--fg3); font-style: italic; border: 1px dashed var(--input-border); }
+.pill-muted {
+  display: inline-block; vertical-align: middle; white-space: nowrap;
+  font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  padding: 1px 6px; border-radius: 20px; background: var(--input-bg); color: var(--fg3); border: 1px dashed var(--input-border);
+}
+
+/* ── Done / Partial / Skip toggle (Workout + History) ── */
+.status-row { display: flex; align-items: center; gap: 6px; }
+.status-label { font-size: 11px; color: var(--fg2); margin-right: 2px; }
+.status-btn {
+  font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px;
+  border: 1.5px solid var(--border); background: none; color: var(--fg3); cursor: pointer;
+}
+.status-btn[aria-pressed="true"][data-status="complete"] { background: var(--good-bg); border-color: var(--good-line); color: var(--good); }
+.status-btn[aria-pressed="true"][data-status="partial"]  { background: var(--mid-bg);  border-color: var(--mid-line);  color: var(--mid); }
+.status-btn[aria-pressed="true"][data-status="skip"]     { background: var(--bad-bg);  border-color: var(--bad-line);  color: var(--bad); }
+
+/* ── segmented control (Trends) ── */
+.seg { display: inline-flex; background: var(--input-bg); border: 1px solid var(--border); border-radius: 9px; padding: 2px; }
+.seg button { font-size: 11px; font-weight: 600; padding: 5px 7px; border: none; border-radius: 7px; background: none; color: var(--fg2); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--card); color: var(--fg); box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
+
+/* ── small buttons ── */
+.btn-small {
+  font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 8px;
+  border: 1px solid var(--input-border); background: var(--bg); color: var(--fg); cursor: pointer; white-space: nowrap;
+}
+.btn-confirm { border-color: var(--danger) !important; color: var(--danger) !important; }
+
+/* iPhone zooms into any text box smaller than 16px — keep them at 16px on touch screens */
+@media (pointer: coarse) {
+  input, select, textarea { font-size: 16px !important; }
+  .reps-input { width: 52px; }
+}
