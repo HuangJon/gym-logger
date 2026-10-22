@@ -1,7 +1,7 @@
 /** Trends insights: training calendar, target hit rate, progress / PRs per lift. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calendarWeeks, targetHitRate, liftProgress, pct } from '../../js/core/insights.js';
+import { calendarWeeks, targetHitRate, liftProgress, pickOneUsage, pct } from '../../js/core/insights.js';
 import { session, done, partial } from '../helpers.js';
 
 const withTarget = (entry, target) => ({ ...entry, target });
@@ -54,7 +54,7 @@ test('progress: best set, PRs, last progressed, status', () => {
   const sets = (w, ...reps) => ({ ...done(w, Math.min(...reps)), sets: reps.map(r => ({ weight: w, reps: r })) });
   const log = [
     s('2026-09-01', sets(185, 6, 6)),
-    s('2026-09-05', sets(185, 7, 6)),          // rep PR at 185 (7)
+    s('2026-09-05', sets(185, 7, 6)),          // +1 rep: progress, but not a PR (needs +2 or the top of the range)
     s('2026-09-09', sets(190, 5, 5)),          // heaviest
     s('2026-09-13', sets(190, 5, 5)),
     { ...s('2026-09-17', sets(170, 5)), deload: true },   // ignored
@@ -68,7 +68,7 @@ test('progress: best set, PRs, last progressed, status', () => {
   assert.equal(dl.lastProgress, '2026-09-09');
   assert.equal(dl.sinceProgress, 4);
   assert.equal(dl.status, 'stalled');
-  assert.deepEqual(prs.filter(p => p.name === 'Deadlift').map(p => [p.date, p.kind]), [['2026-09-09', 'weight'], ['2026-09-05', 'reps']]);
+  assert.deepEqual(prs.filter(p => p.name === 'Deadlift').map(p => [p.date, p.kind]), [['2026-09-09', 'weight']]);
   // maintain sessions don't count against you
   const maintained = log.map((x, i) => (i >= 5 ? { ...x, maintain: true } : x));
   assert.equal(liftProgress(maintained, '2026-10-01').lifts.find(l => l.name === 'Deadlift').status, 'holding');
@@ -82,4 +82,44 @@ test('progress: best set, PRs, last progressed, status', () => {
   assert.deepEqual(r.prs.map(p => p.text), ['rep PR: 10 reps']);
   const top = [...bw, session('2026-09-09', 2, { 's2-legraiser': done(null, 12) })];
   assert.equal(liftProgress(top, '2026-09-10').lifts.find(l => l.name === 'Hanging Leg Raises').status, 'top');
+});
+
+test('progress: est. strength trend, start → now, sparkline, recent PRs, attention order', () => {
+  const s = (date, n, id, entry) => session(date, n, { [id]: entry });
+  const log = [
+    s('2026-07-01', 1, 's1-deadlift', done(175, 5)),
+    s('2026-08-20', 1, 's1-deadlift', done(185, 5)),   // baseline: last one on or before Aug 27 (8 weeks before Oct 22)
+    s('2026-09-10', 1, 's1-deadlift', done(185, 8)),   // top of range → rep PR
+    s('2026-10-15', 1, 's1-deadlift', done(195, 6)),   // heaviest
+    s('2026-07-01', 2, 's2-legraiser', done(null, 8)),
+    s('2026-10-20', 2, 's2-legraiser', done(null, 9)),
+    ...[1, 5, 9, 13, 17].map(d => s(`2026-10-${String(d).padStart(2, '0')}`, 2, 's2-rows', done(40, 8))),
+  ];
+  const { lifts, prs, recentPrs } = liftProgress(log, '2026-10-22');
+  const dl = lifts.find(l => l.name === 'Deadlift');
+  assert.equal(dl.strength, 234);                                   // 195 × (1 + 6/30)
+  assert.deepEqual([dl.trend.metric, dl.trend.pct, dl.trend.since, dl.trend.weeks], ['e1rm', 8, '2026-08-20', 8]);   // 216 → 234
+  assert.deepEqual(dl.startNow, { from: 175, to: 195, since: '2026-07-01' });
+  assert.deepEqual(dl.spark, [204, 216, 234.5, 234]);
+  assert.deepEqual(dl.workouts, [1]);
+  assert.deepEqual(prs.filter(p => p.name === 'Deadlift').map(p => p.kind), ['weight', 'reps', 'weight']);
+  assert.deepEqual(recentPrs.map(p => [p.name, p.date]), [['Deadlift', '2026-10-15']]);   // older ones aren't "recent"
+  const lr = lifts.find(l => l.name === 'Hanging Leg Raises');
+  assert.deepEqual([lr.trend.metric, lr.trend.delta, lr.trend.short], ['reps', 1, false]);
+  assert.ok(!prs.some(p => p.name === 'Hanging Leg Raises'));       // +1 rep isn't a PR
+  // stalled lifts come first
+  assert.equal(lifts[0].name, 'Bent Over Rows');
+  assert.equal(lifts[0].status, 'stalled');
+});
+
+test('pick one: how often crunches vs ab wheel vs both', () => {
+  const log = [
+    session('2026-10-01', 3, { 's3-crunches': done(45, 12) }),
+    session('2026-10-05', 3, { 's3-abwheel': done(null, 8) }),
+    session('2026-10-08', 3, { 's3-crunches': done(45, 12), 's3-abwheel': done(null, 8) }),
+    session('2026-10-12', 3, { 's3-incline': done(50, 8) }),          // no abs: left out
+    session('2026-10-13', 1, { 's1-crunches': done(45, 12) }),        // Workout A: left out
+  ];
+  assert.deepEqual(pickOneUsage(log, 'core'), { names: ['Cable Crunches', 'Ab Wheel'], counts: { 'Cable Crunches': 1, 'Ab Wheel': 1 }, both: 1, total: 3, session: 3 });
+  assert.equal(pickOneUsage([], 'core'), null);
 });

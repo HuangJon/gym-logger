@@ -7,15 +7,17 @@ import { STATUS, formatSets } from '../core/records.js';
 import { repZone } from '../core/progress.js';
 import { liftSeries, isWeighted, inRange, groupingFor, groupPoints, changeOverWindows, CHANGE_WINDOWS, weeklyCounts, summaryStats } from '../core/trends.js';
 import { makeDemoSessions, makeDemoClimbs } from '../dev/demo.js';
-import { calendarWeeks, targetHitRate, liftProgress, pct, MIN_COMPARE } from '../core/insights.js';
+import { calendarWeeks, targetHitRate, liftProgress, pickOneUsage, PROGRESS, pct, MIN_COMPARE } from '../core/insights.js';
 import { esc, delegate, tipAttrs, showTip } from './dom.js';
-import { lineChart, weeklyBarsChart, percentBarsChart } from './charts.js';
+import { lineChart, weeklyBarsChart, percentBarsChart, sparkline } from './charts.js';
 
 const RANGE_BUTTONS = [['1m', '1M'], ['3m', '3M'], ['1y', '1Y'], ['all', 'All'], ['custom', 'Custom']];
 const MODE_BUTTONS = [['weight', 'Weight×reps'], ['e1rm', 'Strength']];
 const RANGE_NAMES = { '1m': 'the last month', '3m': 'the last 3 months', '1y': 'the last year', all: 'any range' };
 const STALE_DAYS = 14;
 const RECENT_COUNT = 6;
+const SORT_KEY = 'liftlog:progressSort';
+function readSort() { try { return localStorage.getItem(SORT_KEY) === 'workout' ? 'workout' : 'attention'; } catch { return 'attention'; } }
 
 export function createTrendsView({ root, repo }) {
   const area = root.querySelector('#trends-area');
@@ -24,6 +26,7 @@ export function createTrendsView({ root, repo }) {
     mode: 'weight',     // 'weight' (weight line + reps labels) | 'e1rm' (estimated 1-rep max)
     custom: null,       // { from, to } for the Custom range
     demo: false,        // preview with generated sample data (never saved)
+    progressSort: readSort(),   // 'attention' | 'workout' (remembered on this phone)
   };
 
   function render() {
@@ -111,22 +114,58 @@ export function createTrendsView({ root, repo }) {
 
   // ── progress per lift ───────────────────────────────────
   const STATUS_LABEL = { progressing: 'progressing', holding: 'holding', stalled: 'stalled', idle: 'not done lately', new: 'just started', top: 'top of range' };
+  const fmtNum = v => String(round2(v));
+  const monthDay = iso => new Date(`${iso}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });   // "Apr 19"
+  function progressRow(l, today) {
+    const u = l.unit;
+    const trend = l.trend
+      ? (l.trend.metric === 'e1rm'
+        ? `<span class="pg-trend ${l.trend.pct > 0 ? 'up' : l.trend.pct < 0 ? 'down' : ''}"${tipAttrs(`Estimated 1-rep max went from ${fmtNum(l.trend.from)} to ${fmtNum(l.trend.to)} ${u} since ${formatShort(l.trend.since)}. It combines weight and reps (weight × (1 + reps/30)), so more reps at the same weight counts too.`)}>${l.trend.pct > 0 ? '+' : ''}${l.trend.pct}% in ${l.trend.weeks} wk${l.trend.weeks === 1 ? '' : 's'}</span>`
+        : `<span class="pg-trend ${l.trend.delta > 0 ? 'up' : l.trend.delta < 0 ? 'down' : ''}">${signed(l.trend.delta)} rep${Math.abs(l.trend.delta) === 1 ? '' : 's'} in ${l.trend.weeks} wk${l.trend.weeks === 1 ? '' : 's'}</span>`)
+      : '';
+    const strength = l.strength === null ? '' : l.weighted
+      ? `<span class="pg-est"${tipAttrs('Estimated 1-rep max from your best set last time — a single number that goes up whether you add weight or reps. You never need to test it.')}>est. max <b>${fmtNum(l.strength)} ${esc(u)}</b></span>`
+      : `<span class="pg-est">last <b>${l.strength} reps</b></span>`;
+    const startNow = l.startNow && l.startNow.from !== l.startNow.to
+      ? `${fmtNum(l.startNow.from)} → <b>${fmtNum(l.startNow.to)}</b> ${l.weighted ? esc(u) : 'reps'} since ${monthDay(l.startNow.since)}`
+      : l.startNow ? `same ${l.weighted ? 'weight' : 'reps'} since ${monthDay(l.startNow.since)}` : '';
+    const best = l.best ? (l.weighted && hasValue(l.best.weight) ? `${l.best.weight} ${u} × ${l.best.reps}` : `${l.best.reps} reps`) : '';
+    const moved = l.status === 'idle' ? `last done ${agoText(l.lastDate, today)}`
+      : l.lastProgress ? `last up ${agoText(l.lastProgress, today)}` : (l.sessions > 1 ? 'no progress yet' : '');
+    const extra = l.status === 'stalled' ? `${l.sinceProgress} sessions without progress` : l.status === 'top' ? 'try a harder variation' : '';
+    const letters = l.workouts.map(n => SESSION_LETTERS[n]).join(' · ');
+    const detail = [startNow, best && `best <b>${esc(best)}</b>`, esc(moved), esc(extra)].filter(Boolean).join(' · ');
+    return `<div class="pg-row">
+        <span class="pg-name">${esc(l.name)}</span>${letters ? `<span class="pg-letters">${letters}</span>` : ''}<span class="pg-status s-${l.status}">${STATUS_LABEL[l.status]}</span>
+        <span class="pg-line"><span class="pg-spark s-${l.status}">${sparkline(l.spark)}</span>${strength}${trend}</span>
+        ${detail ? `<span class="pg-detail">${detail}</span>` : ''}
+      </div>`;
+  }
+
   function progressCard(sessions, today) {
-    const { lifts, prs } = liftProgress(sessions, today);
+    const { lifts, recentPrs } = liftProgress(sessions, today);
     if (!lifts.length) return '';
-    const recentPrs = prs.slice(0, 5).map(p => `<li><b>${esc(p.name)}</b> · ${esc(p.text)} <span class="trend-ago">${esc(formatShort(p.date))}</span></li>`).join('');
-    const rows = lifts.map(l => {
-      const best = l.best ? (l.weighted && hasValue(l.best.weight) ? `${l.best.weight} ${l.unit} × ${l.best.reps}` : `${l.best.reps} reps`) : '–';
-      const moved = l.status === 'idle' ? `last done ${agoText(l.lastDate, today)}`
-        : l.lastProgress ? `last up ${formatShort(l.lastProgress)} · ${agoText(l.lastProgress, today)}` : (l.sessions > 1 ? 'no progress yet' : '');
-      const extra = l.status === 'stalled' ? ` · ${l.sinceProgress} sessions without progress` : l.status === 'top' ? ' · try a harder variation' : '';
-      return `<div class="pg-row"><span class="pg-name">${esc(l.name)}</span><span class="pg-status s-${l.status}">${STATUS_LABEL[l.status]}</span>
-        <span class="pg-detail">best <b>${esc(best)}</b>${moved ? ` · ${esc(moved)}` : ''}${esc(extra)}</span></div>`;
-    }).join('');
+    const prs = recentPrs.length
+      ? `<ul>${recentPrs.slice(0, 6).map(p => `<li><b>${esc(p.name)}</b> · ${esc(p.text)} <span class="trend-ago">${esc(formatShort(p.date))}</span></li>`).join('')}</ul>`
+      : `<div class="pg-none">None in the last ${PROGRESS.prRecentDays / 7} weeks.</div>`;
+    let list;
+    if (state.progressSort === 'workout') {
+      list = Object.keys(SESSION_LABELS).map(Number).map(n => {
+        const here = lifts.filter(l => l.workouts[0] === n);
+        return here.length ? `<div class="pg-group">${esc(SESSION_LABELS[n])}</div>${here.map(l => progressRow(l, today)).join('')}` : '';
+      }).join('') + (lifts.some(l => !l.workouts.length) ? lifts.filter(l => !l.workouts.length).map(l => progressRow(l, today)).join('') : '');
+    } else {
+      list = lifts.map(l => progressRow(l, today)).join('');
+    }
+    const abs = pickOneUsage(sessions, 'core');
+    const absLine = abs ? `<div class="pg-abs"><span class="pg-sub">${esc(SESSION_LABELS[abs.session])} abs · last ${abs.total}</span>
+      ${abs.names.map(n => `${esc(n)} <b>${abs.counts[n]}</b>`).join(' · ')} · both <b>${abs.both}</b></div>` : '';
     return `<div class="card trend-card">
       <div class="trend-head"><span class="trend-name">Progress per lift</span><span class="trend-sub">deloads left out · maintain days don't count against you</span></div>
-      ${recentPrs ? `<div class="pg-prs"><div class="pg-sub">Recent PRs</div><ul>${recentPrs}</ul></div>` : ''}
-      <div class="pg-list">${rows}</div>
+      <div class="pg-prs"><div class="pg-sub">PRs · last ${PROGRESS.prRecentDays / 7} weeks</div>${prs}</div>
+      <div class="pg-sort">${segmented(state.progressSort, [['attention', 'Needs attention'], ['workout', 'By workout']], 'progress-sort')}</div>
+      <div class="pg-list">${list}</div>
+      ${absLine}
     </div>`;
   }
 
@@ -257,6 +296,7 @@ export function createTrendsView({ root, repo }) {
   delegate(root, 'click', {
     'range': el => setRange(el.dataset.value),
     'mode': el => { state.mode = el.dataset.value; render(); },
+    'progress-sort': el => { state.progressSort = el.dataset.value; try { localStorage.setItem(SORT_KEY, state.progressSort); } catch { /* not saved — fine */ } render(); },
     'demo': () => { state.demo = !state.demo; render(); },
     'tip': el => showTip(el, '.trend-card'),
   });

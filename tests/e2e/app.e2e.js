@@ -474,6 +474,14 @@ try {
   check('trends: target hit rate card', (await hitCard.innerText()).includes('%') && await hitCard.locator('svg').count() === 1);
   const pgCard = page.locator('.trend-card', { has: page.locator('.trend-name', { hasText: 'Progress per lift' }) });
   check('trends: progress per lift with statuses', await pgCard.locator('.pg-row').count() >= 5 && (await pgCard.innerText()).includes('best'));
+  check('progress: est. max, trend and sparkline on weighted lifts', (await pgCard.innerText()).includes('est. max') && /[+−-]?\d+% in \d+ wks?/.test(await pgCard.innerText()) && await pgCard.locator('.pg-spark svg').count() >= 3 && /since [A-Z][a-z]{2} \d+/.test(await pgCard.innerText()));
+  check('progress: PRs only from the last 4 weeks (test log is from spring)', (await pgCard.locator('.pg-prs').innerText()).includes('None in the last 4 weeks'));
+  check('progress: needs-attention order first', (await pgCard.locator('.pg-sort button[aria-pressed="true"]').innerText()).includes('Needs attention') && await pgCard.locator('.pg-group').count() === 0);
+  await pgCard.locator('.pg-sort button[data-value="workout"]').tap();
+  const pgCard2 = page.locator('.trend-card', { has: page.locator('.trend-name', { hasText: 'Progress per lift' }) });
+  check('progress: by workout groups under A/B/C and is remembered', (await pgCard2.locator('.pg-group').allTextContents()).join('|') === 'Workout A|Workout B|Workout C' && await page.evaluate(() => localStorage.getItem('liftlog:progressSort')) === 'workout');
+  check('progress: crunches vs ab wheel tally', /Workout C abs · last \d+/i.test(await pgCard2.locator('.pg-abs').innerText()));
+  await pgCard2.locator('.pg-sort button[data-value="attention"]').tap();
   await calCard.locator('.cal-day.lift[data-action="tip"]').last().tap();
   check('trends: tap a calendar day → details (phones have no hover)', /Workout [ABC]/.test(await calCard.locator('.tip-line').innerText()));
   check('trends: calendar labels a single workout A/B/C', /^([ABC]|×\d)$/.test((await calCard.locator('.cal-day.lift b').last().innerText()).trim()));

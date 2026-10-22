@@ -99,3 +99,14 @@ export function weeklyBarsChart(weeks, goal) {
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="sessions per week">
     <line x1="0" x2="${W}" y1="${barTop(goal)}" y2="${barTop(goal)}" class="chart-grid chart-target"/>${bars}</svg>`;
 }
+
+/** Tiny trend line (no axes) for a list of values, oldest first. Colored by the parent's `color`. */
+export function sparkline(values, { width = 64, height = 18 } = {}) {
+  if (values.length < 2) return '';
+  const min = Math.min(...values), max = Math.max(...values), span = max - min || 1, pad = 2;
+  const pts = values.map((v, i) => [pad + (i / (values.length - 1)) * (width - 2 * pad), height - pad - ((v - min) / span) * (height - 2 * pad)]);
+  const [lx, ly] = pts[pts.length - 1];
+  return `<svg class="spark" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true">
+    <polyline points="${pts.map(([x, y]) => `${round2(x)},${round2(y)}`).join(' ')}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${round2(lx)}" cy="${round2(ly)}" r="2" fill="currentColor"/></svg>`;
+}
