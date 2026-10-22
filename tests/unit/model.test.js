@@ -34,7 +34,7 @@ test('sessionExercises / unitOf / incrementOf / repRangeText', () => {
   assert.equal(unitOf(findExercise('s1-crunches')), 'kg');
   assert.equal(unitOf(findExercise('s1-incline')), 'lbs');
   assert.equal(incrementOf(findExercise('s1-deadlift')), 5);
-  assert.equal(incrementOf(findExercise('s1-pulldown')), 2.5);   // default
+  assert.equal(incrementOf(findExercise('s3-pulldown')), 2.5);   // default
   assert.equal(repRangeText([6, 12]), '6–12');
   assert.equal(repRangeText([5, 5]), '5');
 });
@@ -93,14 +93,14 @@ test('meetsTarget: enough sets, each at least the target weight and reps', () =>
 
 test('buildSessionRecord: only logged sets count; complete/partial from the target', () => {
   const targets = { 's1-incline': { weight: 50, reps: 9, sets: 2 }, 's1-deadlift': { weight: 185, reps: 6, sets: 2 },
-                    's1-lateral': { weight: 7.5, reps: 12, sets: 2 }, 's1-crunches': { weight: 55, reps: 11, sets: 2 }, 's1-pulldown': { weight: null, reps: 8, sets: 2 } };
+                    's1-lateral': { weight: 7.5, reps: 12, sets: 2 }, 's1-crunches': { weight: 55, reps: 11, sets: 2 }, };
+  const pulldownTarget = { weight: null, reps: 8, sets: 2 };
   const rec = buildSessionRecord({
     sessionNum: 1, date: '2026-10-21', now: 123, targetOf: ex => targets[ex.id],
     scratch: {
       's1-incline': { done: [{ weight: 50, reps: 9 }, { weight: 50, reps: 9 }], note: ' felt solid ' },
       's1-deadlift': { done: [{ weight: 185, reps: 6 }] },                        // one of two sets → partial
       's1-lateral': { skipped: true, done: [{ weight: 7.5, reps: 12 }] },         // skip drops sets
-      's1-pulldown': { done: [{ weight: 45, reps: 8 }, { weight: 45, reps: 8 }] },
       's1-crunches': { note: 'cable busy' },                                      // nothing logged
     },
   });
@@ -108,8 +108,12 @@ test('buildSessionRecord: only logged sets count; complete/partial from the targ
   assert.deepEqual(rec.entries['s1-incline'], { status: 'complete', note: 'felt solid', sets: [{ weight: 50, reps: 9 }, { weight: 50, reps: 9 }], weight: 50, unit: 'lbs', reps: 9, target: { reps: 9, sets: 2, weight: 50 } });
   assert.deepEqual(rec.entries['s1-deadlift'], { status: 'partial', note: '', sets: [{ weight: 185, reps: 6 }], weight: 185, unit: 'lbs', reps: 6, target: { reps: 6, sets: 2, weight: 185 } });
   assert.deepEqual(rec.entries['s1-lateral'], { status: 'skip', note: '', target: { reps: 12, sets: 2, weight: 7.5 } });
-  assert.deepEqual(rec.entries['s1-pulldown'], { status: 'complete', note: '', sets: [{ weight: 45, reps: 8 }, { weight: 45, reps: 8 }], weight: 45, unit: 'kg', reps: 8, target: { reps: 8, sets: 2 } });
   assert.deepEqual(rec.entries['s1-crunches'], { status: 'unrecorded', note: 'cable busy' });
+  // a first-time lift with no weight target; unit from the program (pulldown is in kg, in Workout C now)
+  const c = buildSessionRecord({ sessionNum: 3, date: '2026-10-21', now: 124, targetOf: ex => (ex.id === 's3-pulldown' ? pulldownTarget : null),
+    scratch: { 's3-pulldown': { done: [{ weight: 45, reps: 8 }, { weight: 45, reps: 8 }] } } });
+  assert.deepEqual(c.entries['s3-pulldown'], { status: 'complete', note: '', sets: [{ weight: 45, reps: 8 }, { weight: 45, reps: 8 }], weight: 45, unit: 'kg', reps: 8, target: { reps: 8, sets: 2 } });
+  assert.equal('s1-pulldown' in rec.entries, false, 'pulldown is no longer in Workout A');
 });
 
 test('buildSessionRecord: drop sets, lighter weight, bodyweight', () => {
@@ -214,4 +218,19 @@ test('rotation: the next workout after the most recent session; when each was la
   assert.equal(lastDoneOf(log, 1), '2026-10-08');
   assert.equal(lastDoneOf(log, 3), '2026-10-05');
   assert.equal(lastDoneOf([], 2), null);
+});
+
+test('pick-one slots: crunches or ab wheel count as one in Workout C', async () => {
+  const { slotCounts } = await import('../../js/core/records.js');
+  const { exerciseSlots, sessionExercises, pickOneOthers, findExercise } = await import('../../js/core/exercises.js');
+  assert.equal(exerciseSlots(sessionExercises(3)).length, 5, '6 exercises, 5 slots');
+  assert.deepEqual(pickOneOthers(findExercise('s3-crunches')).map(e => e.id), ['s3-abwheel']);
+  assert.deepEqual(pickOneOthers(findExercise('s1-crunches')), []);
+  const only = session('2026-10-21', 3, { 's3-incline': done(50, 8), 's3-crunches': done(45, 10) });
+  assert.deepEqual(slotCounts(only), { done: 2, total: 5 });
+  const both = session('2026-10-21', 3, { 's3-crunches': done(45, 10), 's3-abwheel': done(null, 8) });
+  assert.deepEqual(slotCounts(both), { done: 1, total: 5 });
+  // an old Workout A that logged pulldown still shows it
+  const oldA = session('2026-10-01', 1, { 's1-pulldown': done(25, 8, 'kg') });
+  assert.deepEqual(slotCounts(oldA), { done: 1, total: 5 });
 });

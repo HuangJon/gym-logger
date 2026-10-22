@@ -101,12 +101,11 @@ try {
   await pickWorkout(1);
   check('picker: preview shows today\'s targets', (await text('#session-preview-area')).includes('175 lbs × 7 × 2 sets'));
   await page.tap('#start-btn');
-  check('workout: Workout A has 5 exercises', await page.locator('.ex-card').count() === 5);
+  check('workout: Workout A has 4 exercises', await page.locator('.ex-card').count() === 4);
   check('target: partial last time → same target again', (await text('#card-s1-incline .target-row')).includes('47.5 lbs × 6 × 3 sets') && (await text('#card-s1-incline .target-row')).includes('not hit last time'));
   check('target: hit last time → one more rep', (await text('#card-s1-deadlift .target-row')).includes('175 lbs × 7 × 2 sets') && (await text('#card-s1-deadlift .target-row')).includes('one more rep'));
   check('target: in the (wide) range last time → one more rep', (await text('#card-s1-lateral .target-row')).includes('7.5 lbs × 12 × 2 sets') && (await text('#card-s1-lateral .target-row')).includes('one more rep'));
   check('target: kg lift', (await text('#card-s1-crunches .target-row')).includes('45 kg × 13 × 2 sets'));
-  check('target: first time starts at the estimated weight (cable, kg)', (await text('#card-s1-pulldown .target-row')).includes('25 kg × 8 × 2 sets'));
   check('last: shows last time', (await text('#card-s1-deadlift .last-row')).includes('175 lbs × 6 reps') && (await text('#card-s1-deadlift .last-row')).includes('Apr 20'));
   check('set 1 open, pre-filled with the target', (await text('#wv-s1-deadlift')) === '175' && (await page.inputValue('#reps-s1-deadlift')) === '7' && (await text('#card-s1-deadlift .set-title')) === 'Set 1');
   check('tabs: set 1 current, set 2 locked', JSON.stringify(await tabState('s1-deadlift')) === '["current","locked"]');
@@ -146,7 +145,7 @@ try {
   await page.tap('#card-s1-deadlift [data-action="reps-step"][data-dir="-1"]');
   await log('s1-deadlift');
   check('all sets logged → the lift collapses to one line', await page.locator('#card-s1-deadlift.is-collapsed').count() === 1 && (await summary('s1-deadlift')) === '177.5 lbs × 7, 6' && (await text('#card-s1-deadlift .exc-icon')) === '~');
-  check('header counts finished lifts', (await text('#session-progress')) === '1 of 5 lifts done');
+  check('header counts finished lifts', (await text('#session-progress')) === '1 of 4 lifts done');
   await expand('s1-deadlift');
   check('tap to reopen: sets panel minimized', await page.locator('#setlog-s1-deadlift.is-collapsed').count() === 1);
   check('verdict: partial — below target', (await text('#setlog-s1-deadlift .setlog-verdict')).includes('below target'));
@@ -169,10 +168,6 @@ try {
   check('remove a set', (await summary('s1-deadlift')) === '177.5 lbs × 7, 6' && await page.locator('#setlog-s1-deadlift.is-collapsed').count() === 1);
 
   // first-time lift: weight from nothing; type then tap Log right away (phone)
-  await page.tap('#wv-s1-pulldown'); await page.fill('#inp-s1-pulldown', '45');
-  await log('s1-pulldown');
-  check('phone: type weight then tap Log → logged with that weight', (await summary('s1-pulldown')) === '45 kg × 8');
-  await log('s1-pulldown');
 
   // phone: type weight then tap into notes
   await page.tap('#wv-s1-incline'); await page.fill('#inp-s1-incline', '50');
@@ -231,7 +226,6 @@ try {
   check('saved: short of target = partial, each set kept', E['s1-deadlift']?.status === 'partial' && JSON.stringify(E['s1-deadlift'].sets) === '[{"weight":177.5,"reps":7},{"weight":177.5,"reps":6}]', JSON.stringify(E['s1-deadlift']));
   check('saved: skip keeps note only', E['s1-lateral']?.status === 'skip' && E['s1-lateral'].sets === undefined && E['s1-lateral'].note.includes('shoulder'));
   check('saved: nothing logged → not recorded', E['s1-crunches']?.status === 'unrecorded' && E['s1-crunches'].sets === undefined);
-  check('saved: first-time lift', E['s1-pulldown']?.status === 'complete' && JSON.stringify(E['s1-pulldown'].sets) === '[{"weight":45,"reps":8},{"weight":45,"reps":8}]', JSON.stringify(E['s1-pulldown']));
   check('complete: picker resets to today', (await page.inputValue('#pick-date')) === TODAY);
   check('complete: switches to History', await page.locator('#tab-history.active').count() === 1);
 
@@ -307,7 +301,7 @@ try {
   await page.tap('#climb-area [data-intensity="hard"]'); await wait(150);
   await page.fill('#pick-date', '2026-05-07'); await page.dispatchEvent('#pick-date', 'change');
   await page.tap('#start-btn');
-  check('climbing: hard climb yesterday → nudge to deload pulling lifts', (await text('.briefing')).includes('Hard climb yesterday — Deadlift and Single Arm Cable Pulldown') && (await text('.briefing')).includes('Last Workout A'));
+  check('climbing: hard climb yesterday → nudge to deload pulling lifts', (await text('.briefing')).includes('Hard climb yesterday — Deadlift leans') && (await text('.briefing')).includes('Last Workout A'));
   await page.tap('#session-climb [data-intensity="easy"]'); await wait(150);
   check('climbing: log after lifting, from the workout', (await climbsSaved()) === '[["2026-05-06","hard"],["2026-05-07","easy"]]' && (await text('#session-climb')).includes('Climbing on Thu, May 7 too?'));
   await page.tap('#session-climb [data-intensity="none"]'); await wait(150);
@@ -327,7 +321,7 @@ try {
   check('deload: next normal session builds on the session before the deload', (await text('#card-s1-deadlift .target-row')).includes('175 lbs × 7 × 2 sets') && (await text('#card-s1-deadlift .last-row')).includes('deload since'));
   // deload mid-session, or just one lift
   await page.tap('#session-header [data-mode="deload"]');
-  check('mid-session deload: targets switch to deload', (await text('#card-s1-deadlift .target-row')).includes('half the sets') && (await text('#card-s1-incline .target-row')).includes('half the sets') && await page.locator('.ex-card.is-deload').count() === 5);
+  check('mid-session deload: targets switch to deload', (await text('#card-s1-deadlift .target-row')).includes('half the sets') && (await text('#card-s1-incline .target-row')).includes('half the sets') && await page.locator('.ex-card.is-deload').count() === 4);
   await page.tap('#card-s1-incline [data-action="lift-mode"][data-mode="deload"]');
   check('deload session: keep one lift normal', !(await text('#card-s1-incline .target-row')).includes('half the sets') && (await page.getAttribute('#card-s1-incline [data-mode="deload"]', 'aria-pressed')) === 'false');
   await page.tap('#session-header [data-mode="normal"]');
@@ -337,9 +331,9 @@ try {
   await page.tap('#card-s1-deadlift [data-action="lift-mode"][data-mode="deload"]');
   // maintain: whole session, or one lift
   await page.tap('#session-header [data-mode="maintain"]');
-  check('maintain: target = last time (deadlift 177.5 × 6 × 2 sets)', (await text('#card-s1-deadlift .target-row')).includes('177.5 lbs × 6 × 2 sets') && (await text('#card-s1-deadlift .target-row')).includes('maintain — same as last time') && await page.locator('.ex-card.is-maintain').count() === 5);
+  check('maintain: target = last time (deadlift 177.5 × 6 × 2 sets)', (await text('#card-s1-deadlift .target-row')).includes('177.5 lbs × 6 × 2 sets') && (await text('#card-s1-deadlift .target-row')).includes('maintain — same as last time') && await page.locator('.ex-card.is-maintain').count() === 4);
   await page.tap('#card-s1-deadlift [data-action="lift-mode"][data-mode="deload"]');
-  check('maintain session: deload one lift instead', await page.locator('.ex-card.is-maintain').count() === 4 && (await text('#card-s1-deadlift .target-row')).includes('half the sets'));
+  check('maintain session: deload one lift instead', await page.locator('.ex-card.is-maintain').count() === 3 && (await text('#card-s1-deadlift .target-row')).includes('half the sets'));
   await page.tap('#session-header [data-mode="normal"]');
   await page.tap('#card-s1-incline [data-action="lift-mode"][data-mode="maintain"]');
   check('maintain just one lift', await page.locator('.ex-card.is-maintain').count() === 1 && (await page.getAttribute('#card-s1-incline [data-mode="maintain"]', 'aria-pressed')) === 'true');
@@ -379,7 +373,7 @@ try {
   const oct20 = page.locator('.history-entry', { has: page.locator('.history-title', { hasText: 'May 4, 2026' }) }).filter({ hasText: 'Workout A' });
   if (!(await oct20.locator('.history-body').isVisible())) await oct20.locator('.history-hdr').tap();
   check('history: note shown as text, not HTML', (await oct20.innerText()).includes('<b>shoulder</b> & "tired"'));
-  check('history: header date · session · done count', (await oct20.locator('.history-hdr').innerText()).replace(/\s+/g, ' ').includes('Workout A · 3/5 done'));
+  check('history: header date · session · done count', (await oct20.locator('.history-hdr').innerText()).replace(/\s+/g, ' ').includes('Workout A · 2/4 done'));
   check('history: actual next to target', (await oct20.locator('.history-row[data-ex="s1-deadlift"]').innerText()).replace(/\s+/g, ' ').includes('177.5 lbs × 7, 6') && (await oct20.locator('.history-row[data-ex="s1-deadlift"]').innerText()).includes('target 175 lbs × 7 × 2 sets'));
   await oct20.locator('.history-row[data-ex="s1-crunches"]').tap();
   await page.tap('#hedit-panel .status-btn[data-status="complete"]');
@@ -387,7 +381,7 @@ try {
   await page.tap('#hedit-panel [data-action="edit-save"]'); await wait(150);
   let e = (await mySession())[0].entries['s1-crunches'];
   check('history edit: each set saved with the exercise unit', e.status === 'complete' && JSON.stringify(e.sets) === '[{"weight":42.5,"reps":11},{"weight":42.5,"reps":11}]' && e.unit === 'kg', JSON.stringify(e));
-  check('history edit: header count updates', (await oct20.locator('.history-hdr').innerText()).includes('4/5 done'));
+  check('history edit: header count updates', (await oct20.locator('.history-hdr').innerText()).includes('3/4 done'));
 
   const apr22 = page.locator('.history-entry', { has: page.locator('.history-title', { hasText: 'Apr 22, 2026' }) });
   await apr22.locator('.history-hdr').tap();
@@ -515,6 +509,15 @@ try {
   // ── failed save on Complete ─────────────────────────────
   await tab('workout');
   await pickWorkout(3); await page.tap('#start-btn');
+  check('Workout C: 6 lifts, crunches or ab wheel counts once', await page.locator('.ex-card').count() === 6 && (await text('#session-progress')) === '0 of 5 lifts done');
+  check('target: first time starts at the estimated weight (cable, kg)', (await text('#card-s3-pulldown .target-row')).includes('25 kg × 8 × 2 sets'));
+  await page.tap('#wv-s3-pulldown'); await page.fill('#inp-s3-pulldown', '45');
+  await log('s3-pulldown');
+  check('phone: type weight then tap Log → logged with that weight', (await summary('s3-pulldown')) === '45 kg × 8');
+  await log('s3-pulldown');
+  check('pick one: crunches say "or Ab Wheel"', (await text('#card-s3-crunches .ex-tags')).includes('or Ab Wheel'));
+  await log('s3-crunches'); await log('s3-crunches');
+  check('pick one: after crunches, ab wheel is optional', (await text('#card-s3-abwheel .ex-tags')).includes('optional — you did Cable Crunches') && (await text('#session-progress')) === '2 of 5 lifts done');
   await log('s3-incline');
   const n1 = (await savedLog()).sessions.length;
   await failWrites(true); await page.tap('#complete-btn'); await wait(300); await failWrites(false);
