@@ -138,7 +138,7 @@ export function createTrendsView({ root, repo }) {
     const { points, by } = groupPoints(shown, mode, grouping);
     const target = series.reps ? ` · target ${repRangeText(series.reps)}` : '';
     const tip = p => `${formatShort(p.date)}: ${p.sets?.length ? formatSets(p.sets, weighted ? (p.unit || unit) : '') : [hasValue(p.weight) && `${p.weight} ${p.unit || unit}`, hasValue(p.reps) && `${p.reps} reps`].filter(Boolean).join(' × ')}` +
-      `${mode === 'e1rm' && p.e1rm ? ` → est. 1RM ${p.e1rm}` : ''}${p.status === STATUS.PARTIAL ? ' (partial)' : ''}${p.deload ? ' (deload)' : ''}${p.n > 1 ? ` — best of ${p.n} sessions, ${p.bucketLabel}` : ''}`;
+      `${mode === 'e1rm' && p.e1rm ? ` → est. 1RM ${p.e1rm}` : ''}${p.status === STATUS.PARTIAL ? ' (partial)' : ''}${p.deload ? ' (deload)' : ''}${p.maintain ? ' (maintain)' : ''}${p.n > 1 ? ` — best of ${p.n} sessions, ${p.bucketLabel}` : ''}`;
     const zone = p => repZone(p.reps, series.reps);
 
     let legend, svg;

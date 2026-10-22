@@ -18,6 +18,7 @@
   --deload: #0e7490; --deload-bg: #ecfeff; --deload-line: #06b6d4;
   --climb: #9a3412; --climb-bg: #fff1e6; --climb-line: #ea580c;
   --on-fill: #fff;   /* text on a solid colored button */
+  --maintain: #4338ca; --maintain-bg: #eef2ff; --maintain-line: #6366f1;
 
   --radius: 12px;
   --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
@@ -37,5 +38,6 @@
     --deload: #67e8f9; --deload-bg: #06262c; --deload-line: #22d3ee;
     --climb: #fdba74; --climb-bg: #2a1406; --climb-line: #fb923c;
     --on-fill: #111;
+    --maintain: #a5b4fc; --maintain-bg: #191b3a; --maintain-line: #818cf8;
   }
 }

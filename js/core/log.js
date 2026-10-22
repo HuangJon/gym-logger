@@ -3,7 +3,7 @@
  * mutates its input, so a failed save can't leave the app in a half-changed state.
  */
 import { isISODate } from './dates.js';
-import { normalizeEntry } from './records.js';
+import { normalizeEntry, sessionModeFields, MODE } from './records.js';
 
 export const addSession = (sessions, record) => [record, ...sessions];
 
@@ -15,13 +15,15 @@ export function setSessionDate(sessions, sessionId, date) {
   return sessions.map(s => s.id === sessionId ? { ...s, date } : s);
 }
 
-/** Mark or unmark a session as a deload (deloads don't move progression). */
-export const setSessionDeload = (sessions, sessionId, deload) =>
+/** Set a session's mode: normal, maintain or deload (deloads don't move progression). */
+export const setSessionMode = (sessions, sessionId, mode) =>
   sessions.map(s => {
     if (s.id !== sessionId) return s;
-    const { deload: _old, ...rest } = s;
-    return deload ? { ...rest, deload: true } : rest;
+    const { deload: _d, maintain: _m, ...rest } = s;
+    return { ...rest, ...sessionModeFields(mode) };
   });
+/** Older name: mark or unmark a session as a deload. */
+export const setSessionDeload = (sessions, sessionId, deload) => setSessionMode(sessions, sessionId, deload ? MODE.DELOAD : MODE.NORMAL);
 
 export const deleteSession = (sessions, sessionId) => sessions.filter(s => s.id !== sessionId);
 

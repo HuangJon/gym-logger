@@ -184,7 +184,10 @@
   display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
   margin: -6px 0 14px; padding: 8px 14px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--border);
 }
-.deload-row.is-on { border-color: var(--deload-line); background: var(--deload-bg); }
+.deload-row.mode-deload { border-color: var(--deload-line); background: var(--deload-bg); }
+.deload-row.mode-maintain { border-color: var(--maintain-line); background: var(--maintain-bg); }
+.mode-how { width: 100%; font-size: 11px; color: var(--fg2); }
+.deload-row.mode-maintain .mode-how { color: var(--maintain); }
 .deload-week { font-size: 11px; color: var(--fg2); }
 .deload-week-on { font-weight: 600; color: var(--deload); }
 .deload-often {
@@ -258,3 +261,8 @@
 .deload-style button { font-size: 12px; padding: 6px 12px; min-height: 32px; touch-action: manipulation; }
 .deload-style button[aria-pressed="true"] { background: var(--deload-line); color: var(--on-fill); }
 .deload-how { font-size: 11px; color: var(--deload); }
+
+/* maintain */
+.ex-card.is-maintain .ex-header { background: var(--maintain-bg); }
+.ex-card .maintain-btn[aria-pressed="true"] { border-color: var(--maintain-line); color: var(--maintain); background: var(--maintain-bg); }
+.ex-card .status-row { flex-wrap: wrap; }

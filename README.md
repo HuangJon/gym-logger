@@ -5,7 +5,7 @@ A gym lifting log for a 3-session program with **double progression** (hit the t
 - **Workout** — pick a date and session; each exercise shows today's **target** (weight × reps × sets — tap it to adjust) and what you did last time. Log **one set at a time**: weight and reps start at the target, adjust with − / +, tap **Log set**. The set collapses into a ✓ tab and the next one opens pre-filled with what you just did. Tap a ✓ tab to fix a set, **+** to add one, or **Skip** the exercise.
 - **Unfinished workouts are kept** — what you've logged is saved as you go, so closing the app mid-workout loses nothing; reopen and carry on. **Discard workout** (two taps) throws it away.
 - **Rest timer** (optional, off by default) — turn it on in the session header; after each logged set a countdown runs at the bottom (90 s, circuit lifts — laterals and ab work — 45 s; −15 / +15 / ✕). It beeps and vibrates where the phone allows — only while the app is open.
-- **Deloads** — flip **Deload session** before starting (or the **Deload** switch mid-session if you're feeling weak), or **Deload week…** to keep it on for 7 days. **↓ Deload this lift** on a card deloads just that lift (or keeps one lift normal in a deload session) — useful when one area is beat up, e.g. pulling muscles after hard climbing. The app also suggests a deload week when you've trained a while without a break (see below). Deload sessions are tagged in History (where you can also mark or unmark one) and shown as hollow teal dots in Trends.
+- **Normal | Maintain | Deload** — pick a mode for the whole session (before starting or mid-session), or tap **↓ Deload** / **= Maintain** on a card for just that lift. **Maintain** repeats last time's numbers (an off day — hitting them counts as done, not a miss); **Deload** is planned recovery. **Deload week…** keeps Deload on for 7 days.
 - **Climbing days** — a **None | Easy | Hard** switch under the session picker (any date) and at the end of a workout (since you climb after lifting). In **History** you can log a climbing day for any date (rest days with no gym too) and switch easy/hard on any session. Climbing days also show as ▲ on the weekly chart in Trends. A hard climb the day before brings up a reminder to deload pulling lifts if you're beat up, and 4+ hard days in two weeks brings the deload suggestion a week earlier.
 - **Last time's note** shows on each card, so "grip slipped" is in front of you next session.
 - **Updates** — when a new version is installed while the app is open, a banner offers a one-tap refresh (a workout in progress is kept).
@@ -32,7 +32,7 @@ Common guidance is a deload every 4–8 weeks, lasting about a week. Because cli
 
 A gap of 7+ days or a deload resets the count. "Not now" hides the suggestion for a week.
 
-Deloading **too often** is a signal too: turning on a deload when you've already had another deload in the last 6 weeks shows a note that it often points to hard climbing, short sleep, or targets rising too fast. All of these numbers are in `DELOAD` in `config/program.js`.
+Choosing **Maintain** often is a fatigue signal as well: picking it for the 4th time in 4 weeks (since your last deload) shows a warning, and 4 maintain sessions in 4 weeks triggers the deload suggestion. Deloading **too often** is a signal too: turning on a deload when you've already had another deload in the last 6 weeks shows a note that it often points to hard climbing, short sleep, or targets rising too fast. All of these numbers are in `DELOAD` in `config/program.js`.
 
 ## lbs or kg
 

@@ -7,7 +7,7 @@
  */
 import { DELOAD } from '../config/program.js';
 import { daysBetween, addDays, isISODate } from './dates.js';
-import { byOldest, STATUS } from './records.js';
+import { byOldest, STATUS, MODE, sessionMode } from './records.js';
 import { sessionNumbers, sessionExercises } from './exercises.js';
 import { performances } from './progress.js';
 import { hardClimbsRecent } from './climbs.js';
@@ -46,7 +46,7 @@ export function stalledLifts(sessions, today) {
  * @returns {{ suggest: boolean, weeks: number, stalled: string[], hardClimbs: number, why: string }}
  */
 export function deloadAdvice(sessions, today, settings = {}, climbs = []) {
-  const none = { suggest: false, weeks: 0, stalled: [], hardClimbs: 0, why: '' };
+  const none = { suggest: false, weeks: 0, stalled: [], hardClimbs: 0, why: '' };   // see maintainCount for the Maintain signal
   if (deloadWeekActive(settings, today)) return none;
   if (isISODate(settings.deloadSnoozedUntil) && today <= settings.deloadSnoozedUntil) return none;
   const start = blockStart(sessions, today);
@@ -55,13 +55,30 @@ export function deloadAdvice(sessions, today, settings = {}, climbs = []) {
   const stalled = stalledLifts(sessions, today);
   const hardClimbs = hardClimbsRecent(climbs, today);
   const early = hardClimbs >= DELOAD.hardClimbs ? 1 : 0;
-  const suggest = weeks >= DELOAD.alwaysAfterWeeks - early || (weeks >= DELOAD.suggestAfterWeeks - early && stalled.length >= DELOAD.stalledLifts);
+  const maintains = maintainCount(sessions, today);
+  const tired = maintains >= DELOAD.maintainSessions;
+  const suggest = tired || weeks >= DELOAD.alwaysAfterWeeks - early || (weeks >= DELOAD.suggestAfterWeeks - early && stalled.length >= DELOAD.stalledLifts);
   if (!suggest) return { ...none, weeks, stalled, hardClimbs };
   const parts = [`${weeks} weeks of training since your last break or deload`];
+  if (tired) parts.push(`${maintains} maintain sessions in the last ${DELOAD.maintainWindowDays / 7} weeks — a sign you're running low`);
   if (stalled.length) parts.push(`${listNames(stalled)} missed target ${stalled.length === 1 ? 'its' : 'their'} last 2 times`);
   if (early) parts.push(`${hardClimbs} hard climbing days in the last 2 weeks`);
   return { suggest, weeks, stalled, hardClimbs, why: parts.join('; ') };
 }
+
+/**
+ * Maintain sessions (whole session on Maintain) in the last DELOAD.maintainWindowDays, counted
+ * since your last deload. Choosing Maintain a lot is a fatigue signal. Pass `plannedDate` to count
+ * one you're about to start.
+ */
+export function maintainCount(sessions, today, plannedDate = null) {
+  const from = addDays(today, -DELOAD.maintainWindowDays + 1);
+  const recent = sessions.filter(s => s.date >= from && s.date <= today);
+  const lastDeload = recent.filter(s => sessionMode(s) === MODE.DELOAD).map(s => s.date).sort().pop() ?? '';
+  const n = recent.filter(s => sessionMode(s) === MODE.MAINTAIN && s.date > lastDeload).length;
+  return n + (plannedDate ? 1 : 0);
+}
+export const maintainOften = (sessions, today, plannedDate = null) => maintainCount(sessions, today, plannedDate) >= DELOAD.maintainSessions;
 
 /**
  * Are deloads coming too often? Counts separate deload stretches (deload sessions more than 10 days

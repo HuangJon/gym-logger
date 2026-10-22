@@ -98,6 +98,18 @@ button { font-family: var(--font); }
 .climb-seg button[data-intensity="easy"][aria-pressed="true"] { background: var(--good-line); color: var(--on-fill); }
 .climb-seg button[data-intensity="hard"][aria-pressed="true"] { background: var(--climb-line); color: var(--on-fill); }
 
+.maintain-tag {
+  display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  padding: 1px 7px; border-radius: 20px; background: var(--maintain-bg); color: var(--maintain); vertical-align: 1px;
+}
+/* Normal | Maintain | Deload */
+.mode-seg button { font-size: 12px; padding: 6px 12px; min-height: 32px; touch-action: manipulation; white-space: nowrap; }
+.mode-seg button[data-mode="maintain"] { color: var(--maintain); }
+.mode-seg button[data-mode="deload"] { color: var(--deload); }
+.mode-seg button[data-mode="normal"][aria-pressed="true"] { background: var(--card); color: var(--fg); }
+.mode-seg button[data-mode="maintain"][aria-pressed="true"] { background: var(--maintain-line); color: var(--on-fill); }
+.mode-seg button[data-mode="deload"][aria-pressed="true"] { background: var(--deload-line); color: var(--on-fill); }
+
 /* iPhone zooms into any text box smaller than 16px — keep them at 16px on touch screens */
 @media (pointer: coarse) {
   input, select, textarea { font-size: 16px !important; }

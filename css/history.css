@@ -88,3 +88,4 @@
   border-radius: var(--radius); background: var(--card); border: 1px solid var(--border); font-size: 13px; font-weight: 600;
 }
 .climb-adder .hc-what { flex: 1; min-width: 150px; }
+.entry-mode-msg { font-size: 11px; color: var(--fg3); }
