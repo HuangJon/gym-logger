@@ -102,7 +102,7 @@ try {
   check('picker: preview shows today\'s targets', (await text('#session-preview-area')).includes('175 lbs × 7 × 2 sets'));
   await page.tap('#start-btn');
   check('workout: Workout A has 5 exercises', await page.locator('.ex-card').count() === 5);
-  check('target: partial last time → same target again', (await text('#card-s1-incline .target-row')).includes('47.5 lbs × 6 × 2 sets') && (await text('#card-s1-incline .target-row')).includes('not hit last time'));
+  check('target: partial last time → same target again', (await text('#card-s1-incline .target-row')).includes('47.5 lbs × 6 × 3 sets') && (await text('#card-s1-incline .target-row')).includes('not hit last time'));
   check('target: hit last time → one more rep', (await text('#card-s1-deadlift .target-row')).includes('175 lbs × 7 × 2 sets') && (await text('#card-s1-deadlift .target-row')).includes('one more rep'));
   check('target: in the (wide) range last time → one more rep', (await text('#card-s1-lateral .target-row')).includes('7.5 lbs × 12 × 2 sets') && (await text('#card-s1-lateral .target-row')).includes('one more rep'));
   check('target: kg lift', (await text('#card-s1-crunches .target-row')).includes('45 kg × 13 × 2 sets'));
@@ -178,7 +178,7 @@ try {
   await page.tap('#wv-s1-incline'); await page.fill('#inp-s1-incline', '50');
   await page.tap('#note-s1-incline'); await page.keyboard.type('felt solid');
   check('phone: type weight then tap notes → note kept', (await page.inputValue('#note-s1-incline')) === 'felt solid' && (await text('#wv-s1-incline')) === '50');
-  await log('s1-incline'); await log('s1-incline');
+  await log('s1-incline'); await log('s1-incline'); await log('s1-incline');   // incline is 3 sets
   check('target hit → collapses with ✓', await page.locator('#card-s1-incline.is-collapsed.is-hit').count() === 1 && (await text('#card-s1-incline .exc-icon')) === '✓');
 
   // target pop-out
@@ -213,7 +213,7 @@ try {
   check('no Done/Partial buttons — status comes from the logged sets', await page.locator('#card-s1-incline .status-btn[data-status="complete"], #card-s1-incline .status-btn[data-status="partial"]').count() === 0);
 
   await page.fill('#active-date', '2026-10-20'); await page.dispatchEvent('#active-date', 'change');
-  check('date change mid-session keeps everything', (await text('#card-s1-incline .exc-note')).includes('felt solid') && (await summary('s1-deadlift')) === '177.5 lbs × 7, 6' && (await summary('s1-incline')) === '50 lbs × 6, 6');
+  check('date change mid-session keeps everything', (await text('#card-s1-incline .exc-note')).includes('felt solid') && (await summary('s1-deadlift')) === '177.5 lbs × 7, 6' && (await summary('s1-incline')) === '50 lbs × 6, 6, 6');
   check('date change updates "last time" age', (await text('#card-s1-deadlift .last-row')).includes('6 months ago'));
   check('ease back: 6 months off → ~10% lighter, bottom of range', (await text('#card-s1-deadlift .target-row')).includes('155 lbs × 5 × 2 sets') && (await text('#card-s1-deadlift .target-row')).includes('days since last time'));
   await page.fill('#active-date', SESSION_DATE); await page.dispatchEvent('#active-date', 'change');
@@ -227,7 +227,7 @@ try {
   const saved = await mySession();
   check('complete: double tap saves once', saved.length === 1, `${saved.length}`);
   const E = saved[0]?.entries || {};
-  check('saved: target hit = complete, sets + target stored', JSON.stringify(E['s1-incline']) === JSON.stringify({ status: 'complete', note: 'felt solid', sets: [{ weight: 50, reps: 6 }, { weight: 50, reps: 6 }], weight: 50, unit: 'lbs', reps: 6, target: { reps: 6, sets: 2, weight: 47.5 } }), JSON.stringify(E['s1-incline']));
+  check('saved: target hit = complete, sets + target stored', JSON.stringify(E['s1-incline']) === JSON.stringify({ status: 'complete', note: 'felt solid', sets: [{ weight: 50, reps: 6 }, { weight: 50, reps: 6 }, { weight: 50, reps: 6 }], weight: 50, unit: 'lbs', reps: 6, target: { reps: 6, sets: 3, weight: 47.5 } }), JSON.stringify(E['s1-incline']));
   check('saved: short of target = partial, each set kept', E['s1-deadlift']?.status === 'partial' && JSON.stringify(E['s1-deadlift'].sets) === '[{"weight":177.5,"reps":7},{"weight":177.5,"reps":6}]', JSON.stringify(E['s1-deadlift']));
   check('saved: skip keeps note only', E['s1-lateral']?.status === 'skip' && E['s1-lateral'].sets === undefined && E['s1-lateral'].note.includes('shoulder'));
   check('saved: nothing logged → not recorded', E['s1-crunches']?.status === 'unrecorded' && E['s1-crunches'].sets === undefined);
@@ -239,7 +239,7 @@ try {
   await tab('workout');
   await page.fill('#pick-date', '2026-05-05'); await page.dispatchEvent('#pick-date', 'change'); await pickWorkout(1); await page.tap('#start-btn');
   check('next time: after a partial the target repeats (no increase)', (await text('#card-s1-deadlift .target-row')).includes('175 lbs × 7 × 2 sets'));
-  check('next time: after hitting it, one more rep', (await text('#card-s1-incline .target-row')).includes('50 lbs × 7 × 2 sets'));
+  check('next time: after hitting it, one more rep', (await text('#card-s1-incline .target-row')).includes('50 lbs × 7 × 3 sets'));
   check('last note: shown on the card next time', (await text('#card-s1-incline .last-row')).includes('“felt solid”'));
 
   // ── unfinished workout: survives closing the app ───────

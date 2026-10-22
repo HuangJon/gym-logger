@@ -43,7 +43,7 @@ test('computeTarget: deload styles — fewer sets (default) or lighter', () => {
   const bss = findExercise('s3-bss');
   const bssLast = { ...done(15, 8), date: '2026-10-01' };
   const fb = computeTarget(bss, bssLast, { ...opts, deloadStyle: 'lighter' });
-  assert.deepEqual(fb, { weight: 15, reps: 5, sets: 1, reason: 'deload', style: 'sets', fallback: true });
+  assert.deepEqual(fb, { weight: 15, reps: 5, sets: 2, reason: 'deload', style: 'sets', fallback: true }, '3 sets → 2');
   assert.match(targetReason(bss, fb, bssLast, 'lbs'), /half the sets.*too light to drop a step/);
   // bodyweight: half the sets either way
   for (const style of ['sets', 'lighter']) {

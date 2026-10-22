@@ -25,22 +25,22 @@ export const PREHAB = {
 
 export const SESSIONS = {
   1: [
-    { id: 's1-incline',  name: 'Incline DB Press',          detail: '2×6–12',               reps: [6, 12],  defaultWeight: 50 },
+    { id: 's1-incline',  name: 'Incline DB Press',          detail: '3×6–12',               reps: [6, 12],  defaultWeight: 50, sets: 3 },
     { id: 's1-deadlift', name: 'Deadlift',                  detail: '2×5–8',               reps: [5, 8],   defaultWeight: 185, climb: true },
     { id: 's1-lateral',  name: 'Cable Lateral Raises',      detail: '2×8–15',               reps: [8, 15],  defaultWeight: 5, tag: 'circuit' },
     { id: 's1-crunches', name: 'Cable Crunches',            detail: '2×10–15',              reps: [10, 15], defaultWeight: 45, unit: 'kg', tag: 'circuit' },
     { id: 's1-pulldown', name: 'Single Arm Cable Pulldown', detail: '2×8–12',               reps: [8, 12],  defaultWeight: 25, unit: 'kg', climb: true },
   ],
   2: [
-    { id: 's2-ohpress',   name: 'DB Shoulder Press',    detail: '2×6–10',         reps: [6, 10], defaultWeight: 30, warn: '⚠ zero soreness first' },
+    { id: 's2-ohpress',   name: 'DB Shoulder Press',    detail: '3×6–12',         reps: [6, 12], defaultWeight: 30, sets: 3, warn: '⚠ zero soreness first' },
     { id: 's2-rows',      name: 'Bent Over Rows',       detail: '2×6–12',         reps: [6, 12], defaultWeight: 35, climb: true },
     { id: 's2-lateral',   name: 'Cable Lateral Raises', detail: '2×8–15',         reps: [8, 15],  defaultWeight: 5, tag: 'circuit' },
     { id: 's2-pallof',    name: 'Pallof Press',         detail: '2×5 × 5s holds', reps: [5, 5], defaultWeight: 20, unit: 'kg', tag: 'circuit' },
     { id: 's2-legraiser', name: 'Hanging Leg Raises',   detail: '2×8–12',         reps: [8, 12], bw: true, tag: 'circuit', climb: true },
   ],
   3: [
-    { id: 's3-incline',  name: 'Incline DB Press',       detail: '2×6–12',                   reps: [6, 12],  defaultWeight: 50 },
-    { id: 's3-bss',      name: 'Bulgarian Split Squats', detail: '2×5–10',                   reps: [5, 10],   defaultWeight: 15 },
+    { id: 's3-incline',  name: 'Incline DB Press',       detail: '3×6–12',                   reps: [6, 12],  defaultWeight: 50, sets: 3 },
+    { id: 's3-bss',      name: 'Bulgarian Split Squats', detail: '3×5–10',                   reps: [5, 10],   defaultWeight: 15, sets: 3 },
     { id: 's3-lateral',  name: 'Cable Lateral Raises',   detail: '2×8–15',                   reps: [8, 15],  defaultWeight: 5, tag: 'circuit' },
     { id: 's3-crunches', name: 'Cable Crunches',         detail: '2×10–15',                  reps: [10, 15], defaultWeight: 45, unit: 'kg', tag: 'circuit' },
     { id: 's3-abwheel',  name: 'Ab Wheel',               detail: '2×8–10 · if feeling good', reps: [8, 10],  bw: true, tag: 'circuit' },
@@ -55,12 +55,15 @@ export const RETIRED = [
 
 /** Double progression: how much to add once you hit the top of the rep range (in the exercise's unit). */
 export const INCREMENTS = {
-  'Incline DB Press': 5, 'Bent Over Rows': 2.5, 'Cable Lateral Raises': 2.5, 'Cable Crunches': 2.5,
+  'Incline DB Press': 5, 'Bent Over Rows': 5, 'Cable Lateral Raises': 2.5, 'Cable Crunches': 2.5,
   'Deadlift': 5, 'Bulgarian Split Squats': 5, 'DB Shoulder Press': 5,
 };
 export const DEFAULT_INCREMENT = 2.5;
 
-/** Working sets per exercise unless an exercise sets its own `sets`. Change to 3 when the program moves to 3 sets. */
+/**
+ * Working sets per exercise unless an exercise sets its own `sets`. The pressing lifts and split squats
+ * use 3 (climbing doesn't load them); pulling lifts stay at 2 because climbing already adds a lot of pulling.
+ */
 export const DEFAULT_SETS = 2;
 
 /** The three workouts, done in rotation A → B → C. (Saved logs refer to them as session 1 / 2 / 3.) */
