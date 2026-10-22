@@ -25,6 +25,7 @@ test('lighterWeight: ~10% down to the lift step, never a huge cut on light weigh
   assert.equal(lighterWeight(lateral, 15, 0.9), 12.5);
   assert.equal(lighterWeight(lateral, 5, 0.9), 5);          // 2.5 would be a 50% cut
   assert.equal(lighterWeight(lateral, 12.5, 0.9), 10);
+  assert.equal(lighterWeight(lateral, 7, 0.9), 7, 'off-step weight: never rounds up past it');
   assert.equal(lighterWeight(deadlift, null, 0.9), null);
 });
 
@@ -246,4 +247,28 @@ test('missedStreak: same target missed in a row (going lighter or hitting it end
   assert.equal(missedStreak([...sessions.slice(1), hit], deadlift, '2026-09-20'), 2);
   const lighter = session('2026-09-18', 1, { 's1-deadlift': { status: 'partial', weight: 165, unit: 'lbs', sets: [{ weight: 165, reps: 8 }], target: t } });
   assert.equal(missedStreak([...sessions, lighter], deadlift, '2026-09-20'), 0);
+});
+
+test('per-lift deload: saved on the entry, skipped by progression; opting out of a deload session counts', () => {
+  const targetOf = ex => ({ weight: 100, reps: 5, sets: 1 });
+  const scratch = {
+    's1-deadlift': { done: [{ weight: 165, reps: 5 }], deload: true },
+    's1-incline': { done: [{ weight: 50, reps: 8 }] },
+  };
+  const rec = buildSessionRecord({ sessionNum: 1, date: '2026-10-10', scratch, targetOf, now: 1 });
+  assert.equal(rec.deload, undefined);
+  assert.equal(rec.entries['s1-deadlift'].deload, true);
+  assert.equal('deload' in rec.entries['s1-incline'], false);
+  const earlier = session('2026-10-01', 1, { 's1-deadlift': done(185, 7), 's1-incline': done(45, 8) });
+  const migrated = migrateLog({ schemaVersion: 3, sessions: [earlier, rec] }).sessions;
+  assert.equal(lastPerformance(migrated, deadlift, '2026-10-12').weight, 185, 'deloaded lift skipped');
+  assert.equal(lastPerformance(migrated, incline, '2026-10-12').weight, 50, 'normal lift in the same session counts');
+
+  // deload session, but deadlift kept normal
+  const rec2 = buildSessionRecord({ sessionNum: 1, date: '2026-10-12', scratch: { 's1-deadlift': { done: [{ weight: 190, reps: 5 }], deload: false }, 's1-incline': { done: [{ weight: 45, reps: 6 }] } }, targetOf, deload: true, now: 2 });
+  assert.equal(rec2.deload, true);
+  assert.equal(rec2.entries['s1-deadlift'].deload, false);
+  const all = migrateLog({ schemaVersion: 3, sessions: [earlier, rec, rec2] }).sessions;
+  assert.equal(lastPerformance(all, deadlift, '2026-10-14').weight, 190);
+  assert.equal(lastPerformance(all, incline, '2026-10-14').weight, 50);
 });

@@ -5,7 +5,7 @@ A gym lifting log for a 3-session program with **double progression** (hit the t
 - **Workout** — pick a date and session; each exercise shows today's **target** (weight × reps × sets — tap it to adjust) and what you did last time. Log **one set at a time**: weight and reps start at the target, adjust with − / +, tap **Log set**. The set collapses into a ✓ tab and the next one opens pre-filled with what you just did. Tap a ✓ tab to fix a set, **+** to add one, or **Skip** the exercise.
 - **Unfinished workouts are kept** — what you've logged is saved as you go, so closing the app mid-workout loses nothing; reopen and carry on. **Discard workout** (two taps) throws it away.
 - **Rest timer** (optional, off by default) — turn it on in the session header; after each logged set a countdown runs at the bottom (90 s, deadlift 150 s; −15 / +15 / ✕). It beeps and vibrates where the phone allows — only while the app is open.
-- **Deloads** — flip **Deload session** before starting, or **Deload week…** to keep it on for 7 days. The app also suggests a deload week when you've trained a while without a break (see below). Deload sessions are tagged in History (where you can also mark or unmark one) and shown as hollow teal dots in Trends.
+- **Deloads** — flip **Deload session** before starting (or the **Deload** switch mid-session if you're feeling weak), or **Deload week…** to keep it on for 7 days. **↓ Deload this lift** on a card deloads just that lift (or keeps one lift normal in a deload session) — useful when one area is beat up, e.g. pulling muscles after hard climbing. The app also suggests a deload week when you've trained a while without a break (see below). Deload sessions are tagged in History (where you can also mark or unmark one) and shown as hollow teal dots in Trends.
 - **History** — every session, editable after the fact (status, weight, reps, notes, date), plus **Export / Import** backups.
 - **Trends** — sessions per week, and for each lift: weight over time with reps on every dot, change over 1 month / 3 months / 1 year, and your last six sessions.
 
@@ -33,7 +33,7 @@ Deloading **too often** is a signal too: turning on a deload when you've already
 
 ## lbs or kg
 
-Each lift has a **lbs | kg** switch in its target pop-out (✎), so the numbers match the machine's labels. The choice is remembered per lift (on this device). Past entries keep the unit they were logged in; targets, "last time" and Trends convert them to the unit you use now. Starting weights for lifts you've never logged (`defaultWeight`) are rough estimates — adjust with ✎ after the first session.
+Each lift has a one-tap **lbs | kg** switch on its card, so the numbers match the machine's labels. The choice is remembered per lift (on this device). Past entries keep the unit they were logged in; targets, "last time" and Trends convert them to the unit you use now. Starting weights for lifts you've never logged (`defaultWeight`) are rough estimates — adjust with ✎ after the first session.
 
 Only logged sets are saved. An exercise is **complete** when its logged sets meet the target (enough sets, each at least the target weight and reps), otherwise **partial**; with no sets logged it's "not recorded". Each set keeps its own weight, so drop sets are recorded as they happened. History shows what you did next to the target.
 

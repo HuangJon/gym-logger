@@ -178,13 +178,12 @@ try {
   check('target pop-out closes', await page.locator('#card-s1-crunches .target-pop').count() === 0);
 
   // lbs / kg per lift
-  await page.tap('#card-s1-deadlift [data-action="target-open"]');
   await page.tap('#card-s1-deadlift [data-action="unit"][data-unit="kg"]');
+  check('units: one tap on the card', await page.locator('#card-s1-deadlift .target-pop').count() === 0);
   check('units: deadlift switched to kg — target and logged sets converted', (await text('#card-s1-deadlift .target-btn')).includes('80 kg × 7 × 2 sets') && (await summary('s1-deadlift')).startsWith('80.5 kg'));
   check('units: choice remembered', (await page.evaluate(() => JSON.parse(localStorage.getItem('liftlog:settings')).units)).Deadlift === 'kg');
   await page.tap('#card-s1-deadlift [data-action="unit"][data-unit="lbs"]');
   check('units: back to lbs', (await text('#card-s1-deadlift .target-btn')).includes('lbs') && (await page.evaluate(() => JSON.parse(localStorage.getItem('liftlog:settings')).units)).Deadlift === undefined);
-  await page.tap('#card-s1-deadlift [data-action="target-close"]');
 
   // skip
   await page.tap('#card-s1-lateral [data-action="skip"]');
@@ -272,6 +271,16 @@ try {
   check('deload: picker back to normal for the next session', !(await page.isChecked('#pick-deload')));
   await page.tap('#start-btn');
   check('deload: next normal session builds on the session before the deload', (await text('#card-s1-deadlift .target-row')).includes('175 lbs × 7 × 2 sets') && (await text('#card-s1-deadlift .last-row')).includes('deload since'));
+  // deload mid-session, or just one lift
+  await page.tap('#session-header .session-deload .switch-track');
+  check('mid-session deload: targets switch to deload', (await text('#card-s1-deadlift .target-row')).includes('half the sets') && (await text('#card-s1-incline .target-row')).includes('half the sets') && await page.locator('.ex-card.is-deload').count() === 5);
+  await page.tap('#card-s1-incline [data-action="lift-deload"]');
+  check('deload session: keep one lift normal', !(await text('#card-s1-incline .target-row')).includes('half the sets') && (await page.getAttribute('#card-s1-incline [data-action="lift-deload"]', 'aria-pressed')) === 'false');
+  await page.tap('#session-header .session-deload .switch-track');
+  check('mid-session deload off: all back to normal', await page.locator('.ex-card.is-deload').count() === 0 && (await text('#card-s1-deadlift .target-row')).includes('175 lbs × 7 × 2 sets'));
+  await page.tap('#card-s1-deadlift [data-action="lift-deload"]');
+  check('deload just one lift', (await text('#card-s1-deadlift .target-row')).includes('half the sets') && await page.locator('.ex-card.is-deload').count() === 1 && !(await page.isChecked('#session-deload')));
+  await page.tap('#card-s1-deadlift [data-action="lift-deload"]');
   await page.tap('.sa-change');
   check('nothing logged → "change" goes straight back', await page.locator('#picker-panel').isVisible());
   // too many deloads → a gentle warning

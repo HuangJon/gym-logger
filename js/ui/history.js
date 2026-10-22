@@ -71,7 +71,8 @@ export function createHistoryView({ root, repo, storage }) {
       ? '<span class="badge badge-skip">skipped</span>'
       : (parts.length ? `<span class="history-wt">${parts.join(' · ')}</span>` : '') +
         (e.status === STATUS.PARTIAL ? '<span class="badge badge-partial">partial</span>' : '') +
-        (e.status === STATUS.UNRECORDED ? '<span class="badge badge-unrec">not recorded</span>' : '');
+        (e.status === STATUS.UNRECORDED ? '<span class="badge badge-unrec">not recorded</span>' : '') +
+        (e.deload === true && !s.deload ? '<span class="deload-tag">deload</span>' : '');
     const dim = e.status === STATUS.SKIP || e.status === STATUS.UNRECORDED;
     return `
       <div class="history-row${dim ? ' dim' : ''}${isEditing ? ' editing' : ''}" data-action="edit" data-ex="${ex.id}">
@@ -185,6 +186,7 @@ export function createHistoryView({ root, repo, storage }) {
     const entry = { status: editing.status || STATUS.UNRECORDED, note: $('#hedit-note').value.trim() };
     if (entry.status !== STATUS.SKIP && sets.length) { entry.sets = sets; entry.unit = previous.unit || unitOf(ex); }   // weights are edited in the unit they were logged in
     if (previous.target) entry.target = previous.target;
+    if (typeof previous.deload === 'boolean') entry.deload = previous.deload;
     // "Done" that falls short of the target is a partial — keeps next time's target honest
     if (entry.status === STATUS.COMPLETE && previous.target && !meetsTarget(sets, previous.target)) entry.status = STATUS.PARTIAL;
     try {

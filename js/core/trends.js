@@ -1,7 +1,7 @@
 /** Data for the Trends tab: per-lift series, grouping for long ranges, change over time, weekly counts. */
 import { dayNum, daysBetween, weekStart, fromDayNum, formatShort } from './dates.js';
 import { hasValue, estimateOneRepMax } from './numbers.js';
-import { normalizeEntry, DID_IT, STATUS, byOldest } from './records.js';
+import { normalizeEntry, DID_IT, STATUS, byOldest, isDeloadEntry } from './records.js';
 import { allExercises, exercisesForSession, unitOf } from './exercises.js';
 import { inUnit } from './progress.js';
 
@@ -21,7 +21,7 @@ export function liftSeries(sessions) {
     for (const ex of exercisesForSession(record)) {
       const e = inUnit(normalizeEntry(record.entries?.[ex.id]), ex);   // charted in the unit you use now
       if (!DID_IT.has(e.status) || (!hasValue(e.weight) && !hasValue(e.reps))) continue;
-      const point = { date: record.date, ts: record.ts || 0, weight: e.weight, reps: e.reps, sets: e.sets, unit: e.unit, status: e.status, session: record.session, ...(record.deload ? { deload: true } : {}) };
+      const point = { date: record.date, ts: record.ts || 0, weight: e.weight, reps: e.reps, sets: e.sets, unit: e.unit, status: e.status, session: record.session, ...(isDeloadEntry(record, e) ? { deload: true } : {}) };
       if (hasValue(e.weight) && hasValue(e.reps)) point.e1rm = estimateOneRepMax(e.weight, e.reps);
       byName.get(ex.name).points.push(point);
     }
