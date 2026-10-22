@@ -47,7 +47,7 @@
 .hedit-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
 .hedit-label { font-size: 11px; color: var(--fg2); min-width: 44px; }
 .hedit-input {
-  width: 56px; text-align: center; background: var(--card); border: 1px solid var(--input-border); border-radius: 6px;
+  width: 60px; text-align: center; background: var(--card); border: 1px solid var(--input-border); border-radius: 6px;
   padding: 4px 6px; font-family: var(--font); font-size: 13px; font-weight: 700; color: var(--fg); outline: none;
 }
 .hedit-input:focus, .hedit-note:focus { border-color: var(--fg2); }

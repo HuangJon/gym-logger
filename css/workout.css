@@ -103,28 +103,56 @@
 }
 .stepper:active { background: var(--border); }
 
-/* weight + sets rows */
+/* weight / reps lines (inside the set panel) */
 .log-line { display: flex; align-items: center; gap: 8px; }
 .weight-box { display: flex; align-items: center; }
 .weight-row .weight-val { min-width: 44px; text-align: center; }
-.sets-line { align-items: flex-start; }
-.sets-line .row-label { padding-top: 10px; }
-.sets-box { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; flex: 1; min-width: 0; }
-.set-chips { display: flex; gap: 6px; }
-.set-chip {
-  min-width: 40px; height: 36px; padding: 0 8px; border-radius: 8px;
-  border: 1.5px solid var(--input-border); background: var(--input-bg); color: var(--fg);
-  font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; cursor: pointer; touch-action: manipulation;
+.reps-input {
+  width: 52px; height: 36px; text-align: center; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 8px;
+  font-family: var(--font); font-size: 18px; font-weight: 700; color: var(--fg); outline: none;
 }
-.set-chip[aria-pressed="true"] { border-color: var(--fg); background: var(--card); }
-.set-chip.not-done { color: var(--fg3); }
-.set-controls { display: flex; align-items: center; gap: 6px; }
-.set-label { font-size: 11px; color: var(--fg2); min-width: 34px; text-align: center; }
+.reps-input:focus { border-color: var(--fg2); }
 .reps-target { font-size: 11px; color: var(--fg3); }
 .prog-badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; letter-spacing: .03em; white-space: nowrap; }
+.prog-badge:empty { display: none; }
 .prog-bump  { background: var(--good-bg); color: var(--good); }
 .prog-low   { background: var(--bad-bg); color: var(--bad); }
 .prog-empty { background: var(--input-bg); color: var(--fg3); }
+
+/* target (tap to adjust) */
+.target-btn { background: none; border: none; padding: 0; font: inherit; color: var(--fg); text-align: left; cursor: pointer; flex: 1; min-width: 0; font-variant-numeric: tabular-nums; }
+.target-edit { font-size: 11px; color: var(--fg3); margin-left: 2px; }
+.target-btn[aria-expanded="true"] .target-edit { color: var(--fg); }
+.target-pop {
+  width: 100%; margin-top: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
+  background: var(--card); border: 1px solid var(--input-border); border-radius: 10px; box-shadow: 0 6px 18px rgba(0, 0, 0, .12);
+}
+.tp-row { display: flex; align-items: center; gap: 8px; }
+.tp-val { min-width: 44px; text-align: center; font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tp-suffix { font-size: 11px; color: var(--fg3); }
+.tp-actions { display: flex; justify-content: space-between; align-items: center; }
+
+/* set-by-set panel */
+.setlog { margin: 8px 10px; border: 1px solid var(--input-border); border-radius: 10px; overflow: hidden; }
+.setlog-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--input-bg); }
+.setlog-summary { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; }
+.setlog:not(.is-collapsed) .setlog-head { border-bottom: 1px solid var(--input-border); }
+.set-tabs { display: flex; gap: 4px; }
+.set-tab {
+  min-width: 30px; height: 30px; padding: 0 6px; border-radius: 8px; font-size: 12px; font-weight: 700;
+  border: 1.5px solid var(--input-border); background: var(--card); color: var(--fg3); cursor: pointer; touch-action: manipulation;
+}
+.set-tab.is-done { background: var(--good-bg); border-color: var(--good-line); color: var(--good); }
+.set-tab.is-current { border-color: var(--fg); color: var(--fg); box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--fg); }
+.set-tab:disabled { opacity: .45; cursor: default; }
+.set-tab.add { color: var(--fg2); }
+.setlog-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.set-title { font-size: 12px; font-weight: 700; color: var(--fg2); }
+.set-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.btn-log { min-height: 38px; padding: 8px 16px; border: none; border-radius: 9px; background: var(--fg); color: var(--bg); font-size: 13px; font-weight: 700; cursor: pointer; touch-action: manipulation; }
+.setlog-verdict { font-size: 11px; font-weight: 600; padding: 6px 10px; border-top: 1px solid var(--input-border); }
+.setlog-verdict.ok { color: var(--good); }
+.setlog-verdict.short { color: var(--amber); }
 
 /* notes */
 .note-row { display: flex; gap: 6px; align-items: flex-start; }

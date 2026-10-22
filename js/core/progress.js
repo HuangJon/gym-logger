@@ -1,6 +1,6 @@
 /** Double-progression logic: "last time", today's target, and the − / + steps. */
 import { hasValue, round2 } from './numbers.js';
-import { normalizeEntry, DID_IT, STATUS, byNewest, setsOfEntry, lowestSet } from './records.js';
+import { normalizeEntry, DID_IT, STATUS, byNewest, setsOfEntry, meetsTarget } from './records.js';
 import { exercisesForSession, incrementOf, setsOf } from './exercises.js';
 
 /**
@@ -43,7 +43,8 @@ export function computeTarget(ex, last) {
   // a weighted lift done at bodyweight last time → start at the program weight, bottom of the range
   if (!ex.bw && !hasValue(last.weight) && !hasValue(last.target?.weight)) return { weight: defaultWeight, reps: lo, sets, reason: 'bodyweight' };
   const lastWeight = ex.bw ? null : (hasValue(last.weight) ? last.weight : defaultWeight);
-  const lowest = lowestSet(setsOfEntry(last, sets));
+  const lastSets = setsOfEntry(last, sets);
+  const lowest = lastSets.length ? Math.min(...lastSets.map(x => x.reps)) : null;
   if (last.status === STATUS.PARTIAL) {
     if (last.target) return { weight: ex.bw ? null : (last.target.weight ?? lastWeight), reps: clamp(last.target.reps, lo, hi), sets, reason: 'repeat' };
     return { weight: lastWeight, reps: clamp(lowest ?? lo, lo, hi), sets, reason: 'repeat' };   // older logs without a target
@@ -77,8 +78,16 @@ export function stepWeight(ex, weight, direction) {
   return Math.max(inc, round2(Number(weight) + direction * inc));
 }
 
-/** Reps for one set after a − / + tap: from 0 (set not done) up to the top of the rep range. */
-export const stepReps = (reps, direction, range) => clamp(Number(reps) + direction, 0, range[1]);
+/** Reps after a − / + tap: from 1 up to the top of the rep range (type a number for anything else). */
+export const stepReps = (reps, direction, range) => clamp(Number(reps) + direction, 1, range[1]);
+
+/** Limits for editing a target in the pop-out. */
+export const TARGET_SETS_RANGE = [1, 6];
+export function stepTarget(ex, target, field, direction) {
+  if (field === 'weight') return { ...target, weight: stepWeight(ex, target.weight ?? 0, direction) };
+  if (field === 'reps') return { ...target, reps: clamp(target.reps + direction, ex.reps[0], ex.reps[1]) };
+  return { ...target, sets: clamp(target.sets + direction, ...TARGET_SETS_RANGE) };
+}
 
 /** Where a rep count sits in the target range: 'top' | 'mid' | 'low' | 'none'. */
 export function repZone(reps, range) {
@@ -88,14 +97,19 @@ export function repZone(reps, range) {
   return 'low';
 }
 
-/** Live badge while logging: on target, or what falls short. */
-export function attemptBadge({ weight, sets }, target) {
-  if (!target) return { cls: 'prog-empty', label: '' };
-  const missedSets = sets.filter(r => r === 0).length;
-  const short = sets.slice(0, target.sets).filter(r => r > 0 && r < target.reps).length;
-  if (hasValue(target.weight) && hasValue(weight) && weight < target.weight) return { cls: 'prog-low', label: 'lighter than target → partial' };
-  if (missedSets) return { cls: 'prog-low', label: `${missedSets} set${missedSets > 1 ? 's' : ''} not done → partial` };
-  if (short) return { cls: 'prog-low', label: 'below target → partial' };
-  if (sets.length && sets.every(r => r >= target.reps)) return { cls: 'prog-bump', label: '✓ on target' };
-  return { cls: 'prog-empty', label: '' };
+/** Live check on the set you're about to log. */
+export function setBadge(set, target) {
+  if (!target || !hasValue(set?.reps)) return { cls: 'prog-empty', label: '' };
+  if (hasValue(target.weight) && hasValue(set.weight) && set.weight < target.weight) return { cls: 'prog-low', label: 'lighter than target' };
+  if (set.reps < target.reps) return { cls: 'prog-low', label: 'below target' };
+  return { cls: 'prog-bump', label: '✓ on target' };
+}
+
+/** Where the exercise stands so far: how it would be saved right now. */
+export function exerciseVerdict(done, target) {
+  if (!done?.length) return { status: null, label: '' };
+  if (meetsTarget(done, target)) return { status: STATUS.COMPLETE, label: `✓ target hit` };
+  const needed = target?.sets ?? done.length;
+  if (done.length < needed) return { status: STATUS.PARTIAL, label: `${done.length}/${needed} sets — partial so far` };
+  return { status: STATUS.PARTIAL, label: 'partial — below target' };
 }

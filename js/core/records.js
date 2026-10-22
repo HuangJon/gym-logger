@@ -5,10 +5,9 @@
  *     entries: { [exerciseId]: Entry } }
  *
  *   Entry = { status, note,
- *             weight?, unit?,                 // what you lifted
- *             sets?: number[],                // reps for each set (0 = set not done)
- *             reps?,                          // lowest set — kept for charts and older logs
- *             target?: { weight?, reps, sets } }  // what you were aiming for
+ *             sets?: [{ weight?, reps }],         // each logged set, in order
+ *             weight?, unit?, reps?,               // summary: heaviest weight, fewest reps — for charts and older logs
+ *             target?: { weight?, reps, sets } }   // what you were aiming for
  *
  * status is one of STATUS. Unknown fields are kept as-is, so data written by a future version
  * isn't thrown away if it's ever read by this one.
@@ -22,10 +21,22 @@ export const DID_IT = new Set([STATUS.COMPLETE, STATUS.PARTIAL]);
 const KNOWN = new Set(['status', 'note', 'weight', 'unit', 'reps', 'sets', 'target', 'skipped', 'unrecorded']);
 const num = v => (hasValue(v) && Number.isFinite(Number(v)) ? Number(v) : null);
 
-/** Lowest set that was actually done (0 = not done), or null. */
-export const lowestSet = sets => { const done = (sets || []).filter(r => r > 0); return done.length ? Math.min(...done) : null; };
+/** A set in canonical form; accepts { weight, reps } or a bare reps number (with the entry's weight). */
+function normalizeSet(raw, fallbackWeight) {
+  const reps = num(typeof raw === 'object' && raw ? raw.reps : raw);
+  if (reps === null || reps <= 0) return null;
+  const weight = num(typeof raw === 'object' && raw ? raw.weight : null) ?? fallbackWeight;
+  return weight !== null && weight !== undefined ? { weight, reps: Math.round(reps) } : { reps: Math.round(reps) };
+}
 
-/** One entry in canonical form. Also upgrades shapes saved by early versions ({skipped:true}, {unrecorded:true}). */
+/** Summary of a list of sets: heaviest weight and fewest reps. */
+export function summarizeSets(sets) {
+  if (!sets?.length) return {};
+  const weights = sets.map(s => s.weight).filter(hasValue);
+  return { ...(weights.length ? { weight: Math.max(...weights) } : {}), reps: Math.min(...sets.map(s => s.reps)) };
+}
+
+/** One entry in canonical form. Also upgrades shapes saved by earlier versions. */
 export function normalizeEntry(raw) {
   if (!raw || typeof raw !== 'object') return { status: STATUS.UNRECORDED, note: '' };
   let status = raw.status;
@@ -37,12 +48,15 @@ export function normalizeEntry(raw) {
   const entry = { ...extras, status, note: typeof raw.note === 'string' ? raw.note : '' };
   if (status !== STATUS.SKIP) {
     const weight = num(raw.weight);
-    if (weight !== null) { entry.weight = weight; entry.unit = raw.unit === 'kg' ? 'kg' : 'lbs'; }
-    if (Array.isArray(raw.sets) && raw.sets.length) {
-      entry.sets = raw.sets.map(r => Math.max(0, Math.round(num(r) ?? 0)));
-      const low = lowestSet(entry.sets);
-      if (low !== null) entry.reps = low;
+    const unit = raw.unit === 'kg' ? 'kg' : 'lbs';
+    const sets = Array.isArray(raw.sets) ? raw.sets.map(s => normalizeSet(s, weight)).filter(Boolean) : [];
+    if (sets.length) {
+      const sum = summarizeSets(sets);
+      entry.sets = sets;
+      if (hasValue(sum.weight)) { entry.weight = sum.weight; entry.unit = unit; }
+      entry.reps = sum.reps;
     } else {
+      if (weight !== null) { entry.weight = weight; entry.unit = unit; }
       const reps = num(raw.reps);
       if (reps !== null) entry.reps = reps;
     }
@@ -55,41 +69,53 @@ export function normalizeEntry(raw) {
   return entry;
 }
 
-/** Reps for each set of a logged entry; older logs with a single reps value count it for every set. */
+/** Sets of a logged entry; older logs with one weight × reps count it for `setCount` sets. */
 export function setsOfEntry(entry, setCount) {
   if (entry?.sets?.length) return entry.sets;
-  return hasValue(entry?.reps) ? Array(setCount).fill(entry.reps) : [];
+  if (!hasValue(entry?.reps)) return [];
+  const set = hasValue(entry.weight) ? { weight: entry.weight, reps: entry.reps } : { reps: entry.reps };
+  return Array.from({ length: setCount }, () => ({ ...set }));
 }
 
-/** Did this attempt meet the target? (weight at least the target, every target set at least the target reps) */
-export function meetsTarget({ weight, sets }, target) {
+/** "50×6, 50×6" — or "50 × 6, 6" when every set used the same weight; "8, 8 reps" for bodyweight. */
+export function formatSets(sets, unit = '') {
+  if (!sets?.length) return '';
+  const weights = new Set(sets.map(s => s.weight ?? null));
+  if (weights.size === 1) {
+    const [w] = weights;
+    const reps = sets.map(s => s.reps).join(', ');
+    return w === null ? `${reps} reps` : `${w}${unit ? ` ${unit}` : ''} × ${reps}`;
+  }
+  return sets.map(s => (hasValue(s.weight) ? `${s.weight}×${s.reps}` : `${s.reps}`)).join(', ');
+}
+
+/** Did these sets meet the target? (enough sets, each at least the target weight and reps) */
+export function meetsTarget(sets, target) {
   if (!target) return true;
-  if (hasValue(target.weight) && !(hasValue(weight) && weight >= target.weight)) return false;
   if ((sets || []).length < target.sets) return false;
-  return sets.slice(0, target.sets).every(r => r >= target.reps);
+  return sets.slice(0, target.sets).every(s => s.reps >= target.reps && (!hasValue(target.weight) || (hasValue(s.weight) && s.weight >= target.weight)));
 }
 
 /**
  * Turn an in-progress workout into a record to save.
- *   scratch:  { [exerciseId]: { status?: 'complete'|'skip', note?, weight?, sets? } } — what you entered
- *   targetOf: ex => { weight, reps, sets } — today's target for each exercise
- * Done → saved as complete if it met the target, otherwise partial. Unmarked → "unrecorded"
- * (keeping anything you typed). Skip drops weight and sets.
+ *   scratch:  { [exerciseId]: { skipped?, note?, done?: [{ weight?, reps }] } } — what you logged
+ *   targetOf: ex => { weight, reps, sets } — the target for each exercise (yours if you changed it)
+ * Logged sets → complete if they met the target, otherwise partial. No logged sets → "unrecorded".
+ * Skip drops any sets.
  */
 export function buildSessionRecord({ sessionNum, date, scratch, targetOf, now = Date.now() }) {
   const entries = {};
   for (const ex of sessionExercises(sessionNum)) {
     const sc = scratch[ex.id] || {}, target = targetOf(ex);
-    const marked = sc.status === STATUS.COMPLETE || sc.status === STATUS.SKIP;
-    const entry = { status: marked ? sc.status : STATUS.UNRECORDED, note: (sc.note || '').trim() };
-    if (entry.status !== STATUS.SKIP) {
-      const weight = ex.bw ? undefined
-        : sc.weight !== undefined ? sc.weight
-        : entry.status === STATUS.COMPLETE ? target?.weight : undefined;
-      if (hasValue(weight)) { entry.weight = weight; entry.unit = unitOf(ex); }
-      const sets = sc.sets || (entry.status === STATUS.COMPLETE && target ? Array(target.sets).fill(target.reps) : null);
-      if (sets) { entry.sets = [...sets]; const low = lowestSet(sets); if (low !== null) entry.reps = low; }
-      if (entry.status === STATUS.COMPLETE && !meetsTarget({ weight: entry.weight, sets: entry.sets }, target)) entry.status = STATUS.PARTIAL;
+    const sets = (sc.done || []).map(s => (ex.bw || !hasValue(s.weight) ? { reps: s.reps } : { weight: s.weight, reps: s.reps }));
+    const entry = { status: STATUS.UNRECORDED, note: (sc.note || '').trim() };
+    if (sc.skipped) entry.status = STATUS.SKIP;
+    else if (sets.length) {
+      const sum = summarizeSets(sets);
+      entry.status = meetsTarget(sets, target) ? STATUS.COMPLETE : STATUS.PARTIAL;
+      entry.sets = sets;
+      if (hasValue(sum.weight)) { entry.weight = sum.weight; entry.unit = unitOf(ex); }
+      entry.reps = sum.reps;
     }
     if (target && entry.status !== STATUS.UNRECORDED) {
       entry.target = { reps: target.reps, sets: target.sets, ...(hasValue(target.weight) ? { weight: target.weight } : {}) };

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { findExercise } from '../../js/core/exercises.js';
-import { lastPerformance, computeTarget, targetReason, repZone, attemptBadge, stepWeight, stepReps } from '../../js/core/progress.js';
+import { lastPerformance, computeTarget, targetReason, repZone, setBadge, exerciseVerdict, stepWeight, stepReps, stepTarget } from '../../js/core/progress.js';
 import { liftSeries, isWeighted, inRange, groupingFor, groupPoints, changeOverWindows, weeklyCounts, summaryStats } from '../../js/core/trends.js';
 import { session, done, partial, skipped, unrecorded } from '../helpers.js';
 
@@ -31,7 +31,7 @@ test('lastPerformance: walks back past skipped/unrecorded, respects the date cut
 });
 
 // ── targets (double progression) ──
-const last = (weight, sets, status = 'complete', target) => ({ status, weight, unit: 'lbs', sets, reps: Math.min(...sets.filter(r => r > 0)), ...(target ? { target } : {}) });
+const last = (weight, reps, status = 'complete', target) => ({ status, weight, unit: 'lbs', sets: reps.map(r => ({ weight, reps: r })), reps: Math.min(...reps), ...(target ? { target } : {}) });
 
 test('computeTarget: first time uses the default weight and the bottom of the range', () => {
   assert.deepEqual(computeTarget(incline1, null), { weight: 50, reps: 6, sets: 2, reason: 'first' });
@@ -61,7 +61,7 @@ test('computeTarget: always inside the rep range', () => {
   assert.deepEqual(computeTarget(incline1, last(50, [4, 4])), { weight: 50, reps: 6, sets: 2, reason: 'low' });
   assert.equal(computeTarget(abwheel, { status: 'complete', reps: 10 }).reps, 10);   // bodyweight at the top stays at the top
   assert.equal(computeTarget(abwheel, { status: 'complete', reps: 10 }).reason, 'top');
-  assert.deepEqual(computeTarget(bss, { status: 'partial', reps: 10, sets: [10, 10] }), { weight: 15, reps: 5, sets: 2, reason: 'bodyweight' });   // last time bodyweight → program weight
+  assert.deepEqual(computeTarget(bss, { status: 'partial', reps: 10, sets: [{ reps: 10 }, { reps: 10 }] }), { weight: 15, reps: 5, sets: 2, reason: 'bodyweight' });   // last time bodyweight → program weight
   for (const ex of [incline1, deadlift, abwheel, bss]) for (const r of [0, 1, 5, 9, 20]) {
     const t = computeTarget(ex, { status: 'complete', weight: 50, reps: r });
     assert.ok(t.reps >= ex.reps[0] && t.reps <= ex.reps[1], `${ex.id} ${r} → ${t.reps}`);
@@ -88,17 +88,35 @@ test('stepWeight / stepReps', () => {
   assert.equal(stepWeight(findExercise('s1-lateral'), 3, 1), 5.5);
   assert.equal(stepReps(8, 1, [6, 12]), 9);
   assert.equal(stepReps(12, 1, [6, 12]), 12);   // stops at the top of the range
-  assert.equal(stepReps(1, -1, [6, 12]), 0);    // down to 0 = set not done
-  assert.equal(stepReps(0, -1, [6, 12]), 0);
+  assert.equal(stepReps(5, -1, [6, 12]), 4);    // below the range is allowed (it was too heavy)
+  assert.equal(stepReps(1, -1, [6, 12]), 1);    // never below 1
 });
 
-test('attemptBadge explains what falls short', () => {
+test('stepTarget keeps the target sensible', () => {
+  const t = { weight: 50, reps: 6, sets: 2 };
+  assert.deepEqual(stepTarget(incline1, t, 'weight', 1), { weight: 55, reps: 6, sets: 2 });
+  assert.deepEqual(stepTarget(incline1, t, 'reps', -1), t);                          // reps stay in the range
+  assert.deepEqual(stepTarget(incline1, { ...t, reps: 12 }, 'reps', 1), { ...t, reps: 12 });
+  assert.deepEqual(stepTarget(incline1, t, 'sets', 1), { ...t, sets: 3 });
+  assert.deepEqual(stepTarget(incline1, { ...t, sets: 1 }, 'sets', -1), { ...t, sets: 1 });
+  assert.deepEqual(stepTarget(pulldown, { weight: null, reps: 8, sets: 2 }, 'weight', 1), { weight: 2.5, reps: 8, sets: 2 });
+});
+
+test('setBadge: live check on the set you are about to log', () => {
   const t = { weight: 50, reps: 9, sets: 2 };
-  assert.match(attemptBadge({ weight: 50, sets: [9, 9] }, t).label, /on target/);
-  assert.match(attemptBadge({ weight: 50, sets: [9, 7] }, t).label, /below target/);
-  assert.match(attemptBadge({ weight: 50, sets: [9, 0] }, t).label, /1 set not done/);
-  assert.match(attemptBadge({ weight: 45, sets: [9, 9] }, t).label, /lighter/);
-  assert.equal(attemptBadge({ weight: 50, sets: [9, 9] }, null).label, '');
+  assert.match(setBadge({ weight: 50, reps: 9 }, t).label, /on target/);
+  assert.match(setBadge({ weight: 50, reps: 7 }, t).label, /below target/);
+  assert.match(setBadge({ weight: 45, reps: 9 }, t).label, /lighter/);
+  assert.equal(setBadge({ weight: 50, reps: null }, t).label, '');
+  assert.equal(setBadge({ weight: 50, reps: 9 }, null).label, '');
+});
+
+test('exerciseVerdict: how the exercise would be saved right now', () => {
+  const t = { weight: 50, reps: 9, sets: 2 };
+  assert.deepEqual(exerciseVerdict([], t), { status: null, label: '' });
+  assert.equal(exerciseVerdict([{ weight: 50, reps: 9 }], t).label, '1/2 sets — partial so far');
+  assert.equal(exerciseVerdict([{ weight: 50, reps: 9 }, { weight: 50, reps: 9 }], t).status, 'complete');
+  assert.equal(exerciseVerdict([{ weight: 50, reps: 9 }, { weight: 50, reps: 8 }], t).label, 'partial — below target');
 });
 
 test('repZone', () => {
