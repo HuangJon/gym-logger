@@ -61,6 +61,23 @@ export function lineChart(points, { valueOf, labelOf, zoneOf = () => 'none', tip
 }
 
 /** Bar chart of sessions per week with a dashed goal line. weeks: [{ start: ISO date, count }] */
+/** Weekly percentage bars (0–100%); weeks with no data show a faint dash. */
+export function percentBarsChart(weeks, { title = 'percent per week' } = {}) {
+  const W = 320, H = 80, barW = 28, gap = (W - barW * weeks.length) / (weeks.length - 1), top = 14, base = H - 14;
+  const bars = weeks.map((w, i) => {
+    const x = i * (barW + gap), p = w.total ? w.hit / w.total : null;
+    const h = p === null ? 0 : Math.max(p * (base - top), 1.5), y = base - h;
+    const cls = p === null ? '' : p >= 0.75 ? 'zone-top' : p >= 0.5 ? 'zone-mid' : 'zone-low';
+    return `<g><title>Week of ${formatMonthDay(w.start)}: ${p === null ? 'no targeted lifts' : `${w.hit} of ${w.total} hit (${Math.round(p * 100)}%)`}</title>
+      ${p === null ? `<line x1="${x + 8}" x2="${x + barW - 8}" y1="${base - 1}" y2="${base - 1}" class="chart-grid"/>`
+        : `<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="3" class="bar-pct ${cls}"/>
+           <text x="${x + barW / 2}" y="${y - 3}" text-anchor="middle" class="chart-lbl ${cls}">${Math.round(p * 100)}</text>`}
+      <text x="${x + barW / 2}" y="${H - 2}" text-anchor="middle" class="chart-axis">${formatMonthDay(w.start)}</text></g>`;
+  }).join('');
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}">
+    <line x1="0" x2="${W}" y1="${top}" y2="${top}" class="chart-grid chart-target"/>${bars}</svg>`;
+}
+
 export function weeklyBarsChart(weeks, goal) {
   const showClimbs = weeks.some(w => w.climbs);
   const W = 320, H = showClimbs ? 94 : 80, base = showClimbs ? 94 - 14 : 80, barW = 28, gap = (W - barW * weeks.length) / (weeks.length - 1);

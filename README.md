@@ -10,7 +10,7 @@ A gym lifting log for a 3-session program with **double progression** (hit the t
 - **Last time's note** shows on each card, so "grip slipped" is in front of you next session.
 - **Updates** — when a new version is installed while the app is open, a banner offers a one-tap refresh (a workout in progress is kept).
 - **History** — every session, editable after the fact (status, weight, reps, notes, date), plus **Export / Import** backups.
-- **Trends** — sessions per week, and for each lift: weight over time with reps on every dot, change over 1 month / 3 months / 1 year, and your last six sessions.
+- **Trends** — sessions per week (with climbing days), a 12-week **training calendar** (lift days by session, maintain / deload days, easy / hard climbs), **target hit rate** per week (normal sessions — a steady drop is an early fatigue sign) with the day after a hard climb vs other days, **progress per lift** (best set, recent PRs, last progressed, stalled / holding / top of range), and for each lift: weight over time with reps on every dot, change over 1 month / 3 months / 1 year, and your last six sessions.
 
 ## How targets work (double progression)
 
@@ -110,6 +110,8 @@ js/
     progress.js         last time, today's target, − / + steps, the live badge
     trends.js           series, grouping, change over time, weekly counts
     deload.js           when to suggest a deload, deload week on/off
+    climbs.js           climbing days
+    insights.js         Trends extras: training calendar, target hit rate, progress / PRs per lift
   data/
     storage.js          localStorage wrapper (+ in-memory version for tests)
     repository.js       the one place the log is saved: save-then-update, local copies, read-only guard

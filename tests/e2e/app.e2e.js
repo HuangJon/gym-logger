@@ -461,6 +461,12 @@ try {
   check('trends: current and old-program lifts', names.includes('Deadlift') && names.includes('Dips') && names.includes('Bent Over Rows') && !names.includes('Rows (elbow to hip)'));
   await page.tap('#tab-trends .seg button[data-value="all"]');
   check('trends: All shows charts', await page.locator('.trend-card svg').count() > 5);
+  const calCard = page.locator('.cal-card');
+  check('trends: training calendar — 12 weeks, lift days and a climbing day', await calCard.locator('.cal-row:not(.cal-head)').count() === 12 && await calCard.locator('.cal-day.lift').count() > 0 && await calCard.locator('.cal-day.c-hard, .cal-day.c-easy').count() >= 0);
+  const hitCard = page.locator('.trend-card', { has: page.locator('.trend-name', { hasText: 'Target hit rate' }) });
+  check('trends: target hit rate card', (await hitCard.innerText()).includes('%') && await hitCard.locator('svg').count() === 1);
+  const pgCard = page.locator('.trend-card', { has: page.locator('.trend-name', { hasText: 'Progress per lift' }) });
+  check('trends: progress per lift with statuses', await pgCard.locator('.pg-row').count() >= 5 && (await pgCard.innerText()).includes('best'));
   const deadliftCard = page.locator('.trend-card', { has: page.locator('.trend-name', { hasText: /^Deadlift$/ }) });
   check('trends: change table', (await deadliftCard.locator('.dtable').innerText()).includes('lbs'));
   check('trends: recent strip, newest last (the deload, marked)', (await deadliftCard.locator('.rc.latest').innerText()).includes('177.5×5') && await deadliftCard.locator('.rc.latest.deload').count() === 1);

@@ -1,4 +1,4 @@
-/** Trends tab: pinned range/mode controls, summary, weekly bars, and a card + chart per lift. */
+/** Trends tab: pinned controls, summary, weekly bars, training calendar, target hit rate, progress per lift, and a chart per lift. */
 import { SESSION_COLORS, WEEKLY_GOAL } from '../config/program.js';
 import { repRangeText } from '../core/exercises.js';
 import { todayISO, addDays, isISODate, formatShort, formatMonthDay, agoText, daysBetween } from '../core/dates.js';
@@ -6,9 +6,10 @@ import { hasValue, round2, signed } from '../core/numbers.js';
 import { STATUS, formatSets } from '../core/records.js';
 import { repZone } from '../core/progress.js';
 import { liftSeries, isWeighted, inRange, groupingFor, groupPoints, changeOverWindows, CHANGE_WINDOWS, weeklyCounts, summaryStats } from '../core/trends.js';
-import { makeDemoSessions } from '../dev/demo.js';
+import { makeDemoSessions, makeDemoClimbs } from '../dev/demo.js';
+import { calendarWeeks, targetHitRate, liftProgress, pct, MIN_COMPARE } from '../core/insights.js';
 import { esc, delegate } from './dom.js';
-import { lineChart, weeklyBarsChart } from './charts.js';
+import { lineChart, weeklyBarsChart, percentBarsChart } from './charts.js';
 
 const RANGE_BUTTONS = [['1m', '1M'], ['3m', '3M'], ['1y', '1Y'], ['all', 'All'], ['custom', 'Custom']];
 const MODE_BUTTONS = [['weight', 'Weight×reps'], ['e1rm', 'Strength']];
@@ -28,6 +29,7 @@ export function createTrendsView({ root, repo }) {
   function render() {
     const today = todayISO();
     const sessions = state.demo ? makeDemoSessions(today) : repo.sessions;
+    const climbs = state.demo ? makeDemoClimbs(today) : repo.climbs;
     if (!sessions.length) {
       area.innerHTML = demoBar(0) + '<div class="empty-state">No sessions logged yet.<br>Trends appear once you complete a workout.</div>';
       return;
@@ -38,7 +40,8 @@ export function createTrendsView({ root, repo }) {
     const grouping = groupingFor(state.range, state.custom);
     const rangeName = state.range === 'custom' ? `${formatShort(state.custom.from)} – ${formatShort(state.custom.to)}` : RANGE_NAMES[state.range];
 
-    area.innerHTML = controls() + demoBar(sessions.length) + stats(sessions, today) + weeklyCard(sessions, today) + explainer() +
+    area.innerHTML = controls() + demoBar(sessions.length) + stats(sessions, today) + weeklyCard(sessions, today, climbs) +
+      calendarCard(sessions, climbs, today) + hitRateCard(sessions, climbs, today) + progressCard(sessions, today) + explainer() +
       liftSeries(sessions).map(series => liftCard(series, { today, filter, grouping, rangeName })).join('');
   }
 
@@ -58,6 +61,72 @@ export function createTrendsView({ root, repo }) {
       <div class="tc-row">${segmented(state.range, RANGE_BUTTONS, 'range')}${segmented(state.mode, MODE_BUTTONS, 'mode')}</div>${custom}</div>`;
   }
 
+  // ── training calendar ───────────────────────────────────
+  function calendarCard(sessions, climbs, today) {
+    const { weeks, anchored } = calendarWeeks(sessions, climbs, today);
+    const cell = day => {
+      const lift = day.lifts[0], mode = lift?.mode;
+      const bits = [
+        ...day.lifts.map(l => `Session ${l.session}${l.mode !== 'normal' ? ` (${l.mode})` : ''}`),
+        day.climb && `${day.climb} climb`,
+      ].filter(Boolean);
+      const cls = ['cal-day', day.future && 'future', lift && 'lift', mode && mode !== 'normal' && `m-${mode}`, day.climb && `c-${day.climb}`, day.date === today && 'today'].filter(Boolean).join(' ');
+      const style = lift && mode === 'normal' ? ` style="--sess:${SESSION_COLORS[lift.session]}"` : '';
+      return `<span class="${cls}"${style} title="${esc(formatShort(day.date))}${bits.length ? ` — ${esc(bits.join(', '))}` : ''}"></span>`;
+    };
+    let lastMonth = '';
+    const rows = weeks.map(w => {
+      const month = new Date(`${w.start}T12:00:00`).toLocaleDateString('en-US', { month: 'short' });
+      const label = month !== lastMonth ? (lastMonth = month) : '';
+      return `<div class="cal-row"><span class="cal-month">${label}</span>${w.days.map(cell).join('')}</div>`;
+    }).join('');
+    return `<div class="card trend-card cal-card">
+      <div class="trend-head"><span class="trend-name">Training calendar</span><span class="trend-sub">${anchored ? '12 weeks up to your last activity' : 'last 12 weeks'}</span></div>
+      <div class="cal-grid"><div class="cal-row cal-head"><span class="cal-month"></span>${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(d => `<span class="cal-dow">${d}</span>`).join('')}</div>${rows}</div>
+      <div class="cal-legend"><span><i class="cal-day lift" style="--sess:${SESSION_COLORS[1]}"></i>lift (session color)</span><span><i class="cal-day lift m-maintain"></i>maintain</span>
+        <span><i class="cal-day lift m-deload"></i>deload</span><span><i class="cal-day c-easy"></i>easy climb</span><span><i class="cal-day c-hard"></i>hard climb</span></div>
+    </div>`;
+  }
+
+  // ── target hit rate ─────────────────────────────────────
+  function hitRateCard(sessions, climbs, today) {
+    const r = targetHitRate(sessions, climbs, today);
+    const head = `<div class="trend-head"><span class="trend-name">Target hit rate</span><span class="trend-sub">lifts that hit their target · normal sessions${r.anchored ? ' · up to your last session' : ''}</span></div>`;
+    if (!r.total) return `<div class="card trend-card">${head}<div class="trend-empty">Fills in as you log sessions — your older logs don't have targets.</div></div>`;
+    const recent = pct(r.recent);
+    const compare = r.afterHard.total >= MIN_COMPARE && r.otherDays.total >= MIN_COMPARE
+      ? `<div class="hr-compare"><span>Day after a hard climb: <b>${pct(r.afterHard)}%</b> <i>(${r.afterHard.total} lifts)</i></span><span>Other days: <b>${pct(r.otherDays)}%</b> <i>(${r.otherDays.total} lifts)</i></span>
+         ${pct(r.otherDays) - pct(r.afterHard) >= 15 ? '<span class="hr-note">Hard climbing is costing you on lifting days — consider Maintain or ↓ Deload on pulling lifts the day after.</span>' : ''}</div>`
+      : `<div class="hr-compare muted">Climbing comparison appears once there are ${MIN_COMPARE}+ lifts on days after a hard climb (now ${r.afterHard.total}).</div>`;
+    return `<div class="card trend-card">${head}
+      <div class="hr-big"><b class="${recent >= 75 ? 'zone-top' : recent >= 50 ? 'zone-mid' : 'zone-low'}">${recent ?? '–'}${recent === null ? '' : '%'}</b> <span>last 4 weeks${r.recent.total ? ` · ${r.recent.hit} of ${r.recent.total}` : ''}</span></div>
+      ${percentBarsChart(r.weeks, { title: 'target hit rate per week' })}
+      ${compare}
+      <div class="hr-hint">Mostly 70–90% is healthy progress. A steady drop is an early sign of fatigue — before lifts stall.</div>
+    </div>`;
+  }
+
+  // ── progress per lift ───────────────────────────────────
+  const STATUS_LABEL = { progressing: 'progressing', holding: 'holding', stalled: 'stalled', idle: 'not done lately', new: 'just started', top: 'top of range' };
+  function progressCard(sessions, today) {
+    const { lifts, prs } = liftProgress(sessions, today);
+    if (!lifts.length) return '';
+    const recentPrs = prs.slice(0, 5).map(p => `<li><b>${esc(p.name)}</b> · ${esc(p.text)} <span class="trend-ago">${esc(formatShort(p.date))}</span></li>`).join('');
+    const rows = lifts.map(l => {
+      const best = l.best ? (l.weighted && hasValue(l.best.weight) ? `${l.best.weight} ${l.unit} × ${l.best.reps}` : `${l.best.reps} reps`) : '–';
+      const moved = l.status === 'idle' ? `last done ${agoText(l.lastDate, today)}`
+        : l.lastProgress ? `last up ${formatShort(l.lastProgress)} · ${agoText(l.lastProgress, today)}` : (l.sessions > 1 ? 'no progress yet' : '');
+      const extra = l.status === 'stalled' ? ` · ${l.sinceProgress} sessions without progress` : l.status === 'top' ? ' · try a harder variation' : '';
+      return `<div class="pg-row"><span class="pg-name">${esc(l.name)}</span><span class="pg-status s-${l.status}">${STATUS_LABEL[l.status]}</span>
+        <span class="pg-detail">best <b>${esc(best)}</b>${moved ? ` · ${esc(moved)}` : ''}${esc(extra)}</span></div>`;
+    }).join('');
+    return `<div class="card trend-card">
+      <div class="trend-head"><span class="trend-name">Progress per lift</span><span class="trend-sub">deloads left out · maintain days don't count against you</span></div>
+      ${recentPrs ? `<div class="pg-prs"><div class="pg-sub">Recent PRs</div><ul>${recentPrs}</ul></div>` : ''}
+      <div class="pg-list">${rows}</div>
+    </div>`;
+  }
+
   function demoBar(count) {
     return state.demo
       ? '<div class="demo-bar is-demo"><span>Sample data — generated for preview, nothing is saved.</span><button type="button" class="btn-small" data-action="demo">Back to my data</button></div>'
@@ -70,12 +139,12 @@ export function createTrendsView({ root, repo }) {
     return `<div class="trend-stats">${tile(s.total, 'sessions logged')}${tile(s.perWeek.toFixed(1), 'per week (last 4 wks)')}${tile(agoText(s.lastDate, today), 'last session')}</div>`;
   }
 
-  function weeklyCard(sessions, today) {
-    const { weeks, anchored } = weeklyCounts(sessions, today, 8, state.demo ? [] : repo.climbs);
-    const climbs = weeks.some(w => w.climbs);
+  function weeklyCard(sessions, today, climbs) {
+    const { weeks, anchored } = weeklyCounts(sessions, today, 8, climbs);
+    const anyClimbs = weeks.some(w => w.climbs);
     return `<div class="card trend-card">
       <div class="trend-head"><span class="trend-name">Sessions per week</span>
-        <span class="trend-sub">${anchored ? '8 weeks up to your last session · ' : ''}dashed line = ${WEEKLY_GOAL}/week goal${climbs ? ' · <span class="climb-key">▲ climbing days</span> (green = easy, orange = any hard)' : ''}</span></div>
+        <span class="trend-sub">${anchored ? '8 weeks up to your last session · ' : ''}dashed line = ${WEEKLY_GOAL}/week goal${anyClimbs ? ' · <span class="climb-key">▲ climbing days</span> (green = easy, orange = any hard)' : ''}</span></div>
       ${weeklyBarsChart(weeks, WEEKLY_GOAL)}</div>`;
   }
 
