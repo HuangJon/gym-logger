@@ -15,6 +15,7 @@
   --warn: #92400e; --warn-bg: #fef3c7;
   --amber: #d97706;
   --danger: #ef4444;
+  --deload: #0e7490; --deload-bg: #ecfeff; --deload-line: #06b6d4;
 
   --radius: 12px;
   --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
@@ -31,5 +32,6 @@
     --mid: #fbbf24;  --mid-bg: #1c1400;  --mid-line: #fbbf24;
     --bad: #f87171;  --bad-bg: #3d0a0a;  --bad-line: #f87171;
     --warn: #fbbf24; --warn-bg: #3d2800;
+    --deload: #67e8f9; --deload-bg: #06262c; --deload-line: #22d3ee;
   }
 }

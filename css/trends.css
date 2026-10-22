@@ -89,3 +89,8 @@
 .chart-dot.partial.zone-none { stroke: var(--fg3); }
 .bar { fill: var(--input-border); }
 .bar-now { fill: var(--fg2); }
+
+/* deload sessions: hollow teal dots / outlined chips */
+.chart-dot.deload { fill: var(--card); stroke: var(--deload-line); stroke-width: 1.75; }
+.rc.deload { background: var(--deload-bg); color: var(--deload); }
+.zone-legend .zone-deload { color: var(--deload); }

@@ -1,26 +1,33 @@
-/** Workout tab: pick a date + session, log each set against the target, complete the session. */
-import { PREHAB, SESSION_LABELS, SESSION_COLORS, STALE_AFTER_DAYS } from '../config/program.js';
-import { sessionExercises, findExercise, unitOf, repRangeText } from '../core/exercises.js';
-import { todayISO, isISODate, formatShort, agoText, daysBetween } from '../core/dates.js';
+/**
+ * Workout tab: pick a date + session (normal or deload), log each set against the target,
+ * complete the session. The workout in progress is saved on every change and picked up again
+ * if the app is closed mid-workout.
+ */
+import { PREHAB, SESSION_LABELS, SESSION_COLORS } from '../config/program.js';
+import { sessionExercises, findExercise, unitOf, repRangeText, restOf } from '../core/exercises.js';
+import { todayISO, isISODate, formatShort, agoText } from '../core/dates.js';
 import { hasValue, parseWeight, parseReps } from '../core/numbers.js';
 import { STATUS, buildSessionRecord, formatSets } from '../core/records.js';
 import { addSession } from '../core/log.js';
 import { lastPerformance, computeTarget, targetReason, stepWeight, stepReps, stepTarget, setBadge, exerciseVerdict } from '../core/progress.js';
-import { esc, delegate, autoResize, flash } from './dom.js';
+import { deloadAdvice, deloadWeekActive, startDeloadWeek, endDeloadWeek, snoozeDeload } from '../core/deload.js';
+import { saveDraft, loadDraft, clearDraft } from '../data/draft.js';
+import { esc, delegate, autoResize, flash, confirmTap } from './dom.js';
+import { createRestTimer } from './rest-timer.js';
 
 const COMPLETE_LABEL = 'Complete Session';
 
-export function createWorkoutView({ root, repo, onSaved }) {
+export function createWorkoutView({ root, repo, storage, settings, onSaved }) {
   const $ = sel => root.querySelector(sel);
   const ui = {
     pickerPanel: $('#picker-panel'), sessionPanel: $('#session-panel'),
     pickDate: $('#pick-date'), pickSession: $('#pick-session'), startBtn: $('#start-btn'),
     preview: $('#session-preview-area'), hint: $('#picker-hint'),
     header: $('#session-header'), prehab: $('#prehab'), exercises: $('#exercise-area'),
-    completeBtn: $('#complete-btn'), status: $('#status'),
+    completeBtn: $('#complete-btn'), status: $('#status'), deloadArea: $('#deload-area'),
   };
 
-  let active = null;   // { sessionNum, date } while logging
+  let active = null;   // { sessionNum, date, deload } while logging
   /**
    * Per exercise, nothing saved until Complete:
    * { skipped?, note?, done: [{weight?, reps}], current?: index being edited (undefined = next set),
@@ -30,9 +37,15 @@ export function createWorkoutView({ root, repo, onSaved }) {
   let saving = false;
 
   const stateOf = id => (scratch[id] ||= { done: [] });
+  /** Last normal (non-deload) session for this lift — what progression builds on. */
   const lastFor = (ex, date = active.date) => lastPerformance(repo.sessions, ex, date);
-  const suggestedTarget = (ex, date) => computeTarget(ex, lastFor(ex, date));
+  const suggestedTarget = (ex, date = active.date, deload = active.deload) => computeTarget(ex, lastFor(ex, date), {
+    date, deload, lastActive: lastPerformance(repo.sessions, ex, date, { includeDeload: true })?.date,
+  });
   const targetFor = ex => scratch[ex.id]?.target ?? suggestedTarget(ex);
+
+  const rest = createRestTimer({ el: $('#rest-bar'), onChange: () => persist() });
+  const persist = () => { if (active) saveDraft(storage, { active, scratch, rest: rest.snapshot() }); };
 
   /** Index of the open set: one you tapped to edit, else the next set to log, else null (all logged). */
   function openIndex(ex) {
@@ -53,36 +66,79 @@ export function createWorkoutView({ root, repo, onSaved }) {
   const editDraft = (ex, change) => { const st = stateOf(ex.id); st.draft = { ...draftOf(ex), ...change }; };
 
   // ── picker ──────────────────────────────────────────────
+  let pickDeload = null;   // your choice for the next session; null = follow the deload week
+
   function resetPicker() {
     ui.pickDate.value = todayISO();
     ui.pickSession.value = '';
+    pickDeload = null;
+    renderPicker();
+  }
+
+  const pickedDate = () => (isISODate(ui.pickDate.value) ? ui.pickDate.value : todayISO());
+  const deloadPicked = () => pickDeload ?? deloadWeekActive(settings.get(), pickedDate());
+
+  function renderPicker() {
+    renderDeloadArea();
     renderPreview();
   }
 
+  /** Deload switch, deload week, and the "consider a deload" suggestion. */
+  function renderDeloadArea() {
+    const date = pickedDate(), s = settings.get(), week = deloadWeekActive(s, date), on = deloadPicked();
+    const advice = deloadAdvice(repo.sessions, todayISO(), s);
+    const suggestion = advice.suggest ? `<div class="card deload-suggest">
+        <div class="ds-title">Consider a deload week</div>
+        <div class="ds-why">${esc(advice.why)}.</div>
+        <div class="ds-how">~10% lighter, half the sets, stop 2–3 reps short of failure. Progress picks up where you left off.</div>
+        <div class="ds-actions"><button type="button" class="btn-small ds-start" data-action="deload-week">Start deload week</button>
+          <button type="button" class="link-btn" data-action="deload-snooze">Not now</button></div>
+      </div>` : '';
+    const weekText = week
+      ? `<span class="deload-week-on">Deload week until ${esc(formatShort(s.deloadUntil))}</span> <button type="button" class="link-btn" data-action="deload-week-end">end</button>`
+      : '<button type="button" class="link-btn" data-action="deload-week">Deload week…</button>';
+    ui.deloadArea.innerHTML = `${suggestion}<div class="deload-row${on ? ' is-on' : ''}">
+        <label class="switch"><input type="checkbox" id="pick-deload" data-action="pick-deload"${on ? ' checked' : ''}><span class="switch-track" aria-hidden="true"></span>
+          <span class="switch-label">Deload session</span></label>
+        <span class="deload-week">${weekText}</span>
+      </div>`;
+  }
+
   function renderPreview() {
-    const n = Number(ui.pickSession.value);
+    const n = Number(ui.pickSession.value), deload = deloadPicked();
     ui.startBtn.disabled = !n;
     ui.hint.hidden = !!n;
     if (!n) { ui.preview.innerHTML = ''; return; }
-    const date = isISODate(ui.pickDate.value) ? ui.pickDate.value : todayISO();
+    const date = pickedDate();
     const rows = sessionExercises(n).map(ex => `<div class="preview-ex"><span class="preview-ex-name">${esc(ex.name)}</span>
-      <span class="preview-ex-detail">${esc(ex.detail)} · <b>${targetText(ex, suggestedTarget(ex, date))}</b></span></div>`).join('');
+      <span class="preview-ex-detail">${esc(ex.detail)} · <b>${targetText(ex, suggestedTarget(ex, date, deload))}</b></span></div>`).join('');
     ui.preview.innerHTML = `<div class="card preview">
-      <div class="preview-header" style="color:${SESSION_COLORS[n]}">${SESSION_LABELS[n]} — today's targets</div>
+      <div class="preview-header" style="color:${SESSION_COLORS[n]}">${SESSION_LABELS[n]} — ${deload ? '<span class="deload-tag">deload</span> targets' : "today's targets"}</div>
       <div class="preview-list">${rows}</div></div>`;
+  }
+
+  function changeDeloadWeek(patch) {
+    settings.update(patch);
+    pickDeload = null;
+    renderPicker();
   }
 
   function targetText(ex, t) {
     if (!t) return '';
     const weight = !ex.bw && hasValue(t.weight) ? `${t.weight} ${unitOf(ex)} × ` : '';
-    return `${weight}${t.reps}${weight ? '' : ' reps'} × ${t.sets} sets`;
+    return `${weight}${t.reps}${weight ? '' : ' reps'} × ${t.sets} set${t.sets === 1 ? '' : 's'}`;
   }
 
   function start() {
     const n = Number(ui.pickSession.value);
     if (!n) return;
-    active = { sessionNum: n, date: isISODate(ui.pickDate.value) ? ui.pickDate.value : todayISO() };
+    active = { sessionNum: n, date: pickedDate(), deload: deloadPicked() };
     scratch = {};
+    showSession();
+    persist();
+  }
+
+  function showSession() {
     ui.pickerPanel.hidden = true;
     ui.sessionPanel.hidden = false;
     flash(ui.status, '', { ms: 0 });
@@ -90,25 +146,46 @@ export function createWorkoutView({ root, repo, onSaved }) {
     renderExercises();
   }
 
+  /** Back to the picker; the workout in progress is gone (saved to the log first, or discarded). */
   function endSession() {
     active = null;
     scratch = {};
+    rest.stop();
+    clearDraft(storage);
     ui.sessionPanel.hidden = true;
     ui.pickerPanel.hidden = false;
     resetPicker();
   }
 
+  const loggedAnything = () => sessionExercises(active.sessionNum).some(ex => scratch[ex.id]?.done?.length || scratch[ex.id]?.skipped || scratch[ex.id]?.note);
+
+  /** Pick up a workout that was in progress when the app closed. */
+  function resumeDraft() {
+    const draft = loadDraft(storage);
+    if (!draft) return false;
+    active = draft.active;
+    scratch = draft.scratch;
+    showSession();
+    if (draft.rest) rest.resume(draft.rest, findExercise(draft.rest.exId)?.name);
+    if (loggedAnything()) flash(ui.status, 'Picked up your unfinished workout — Complete to save it, or Discard', { ms: 6000 });
+    return true;
+  }
+
   // ── active session ──────────────────────────────────────
   function renderHeader() {
-    const { sessionNum: n, date } = active;
+    const { sessionNum: n, date, deload } = active, restOn = settings.get().restTimer;
     ui.header.innerHTML = `
       <span class="dot" style="background:${SESSION_COLORS[n]}"></span>
-      <h2 style="color:${SESSION_COLORS[n]}">${SESSION_LABELS[n]}</h2>
+      <h2 style="color:${SESSION_COLORS[n]}">${SESSION_LABELS[n]}${deload ? ' <span class="deload-tag">deload</span>' : ''}</h2>
       <input type="date" class="date-input" id="active-date" value="${date}" data-action="active-date" aria-label="Session date">
-      <button type="button" class="link-btn sa-change" data-action="ask-discard">change</button>`;
+      <button type="button" class="link-btn sa-change" data-action="ask-discard">change</button>
+      <div class="session-tools">
+        <button type="button" class="rest-toggle" data-action="rest-toggle" aria-pressed="${restOn}">⏱ Rest timer ${restOn ? 'on' : 'off'}</button>
+      </div>`;
   }
 
   function askDiscard() {
+    if (!loggedAnything()) return endSession();   // nothing to lose
     if (ui.header.querySelector('.discard-bar')) return;
     ui.header.insertAdjacentHTML('beforeend', `<div class="discard-bar"><span>Discard this session?</span>
       <button type="button" class="discard-yes" data-action="discard">Yes, discard</button>
@@ -122,6 +199,7 @@ export function createWorkoutView({ root, repo, onSaved }) {
 
   /** Re-render one card (state lives in `scratch`, so nothing typed is lost). */
   function refreshCard(exId) {
+    persist();
     const card = ui.exercises.querySelector(`#card-${exId}`);
     if (!card) return;
     card.outerHTML = exerciseCard(findExercise(exId));
@@ -194,12 +272,13 @@ export function createWorkoutView({ root, repo, onSaved }) {
     const unit = last.unit || unitOf(ex);
     const value = last.sets?.length ? formatSets(last.sets, unit)
       : [!ex.bw && hasValue(last.weight) && `${last.weight} ${unit}`, hasValue(last.reps) && `${last.reps} reps`].filter(Boolean).join(' × ');
-    const stale = daysBetween(last.date, active.date) > STALE_AFTER_DAYS;
+    const lastDeload = lastPerformance(repo.sessions, ex, active.date, { includeDeload: true });
+    const deloadSince = lastDeload?.deload && lastDeload.date >= last.date ? lastDeload : null;
     return `<div class="ex-row last-row">
       <span class="row-label">Last</span>
       <span class="last-val">${value}${last.status === STATUS.PARTIAL ? ' <span class="badge badge-partial">partial</span>' : ''}
         <span class="last-when">${formatShort(last.date)} · ${agoText(last.date, active.date)}</span></span>
-      ${stale ? '<span class="last-stale">⏳ been a while — ease back in</span>' : ''}
+      ${deloadSince ? `<span class="last-note">deload since (${esc(formatShort(deloadSince.date))}) — targets build on this one</span>` : ''}
     </div>`;
   }
 
@@ -311,9 +390,11 @@ export function createWorkoutView({ root, repo, onSaved }) {
     const ex = findExercise(exId), st = stateOf(exId), i = openIndex(ex), d = draftOf(ex);
     if (i === null || !hasValue(d.reps) || d.reps <= 0) return;
     const set = ex.bw || !hasValue(d.weight) ? { reps: d.reps } : { weight: d.weight, reps: d.reps };
-    if (i < st.done.length) st.done[i] = set; else st.done.push(set);
+    const isNew = i >= st.done.length;
+    if (isNew) st.done.push(set); else st.done[i] = set;
     st.current = undefined;
     st.draft = undefined;
+    if (isNew && settings.get().restTimer) rest.start({ exId, label: ex.name, seconds: restOf(ex) });
     refreshCard(exId);
   }
 
@@ -356,7 +437,22 @@ export function createWorkoutView({ root, repo, onSaved }) {
   function changeDate(input) {
     if (!isISODate(input.value)) { input.value = active.date; return; }
     active.date = input.value;
+    persist();
     renderExercises();   // targets depend on the date; what you logged lives in `scratch`
+  }
+
+  function toggleRestTimer() {
+    const on = !settings.get().restTimer;
+    settings.update({ restTimer: on });
+    if (!on) rest.stop();
+    renderHeader();
+  }
+
+  function discardFromBottom(btn) {
+    if (!loggedAnything() || confirmTap(btn, 'Tap again to discard — nothing will be saved')) {
+      endSession();
+      flash(ui.status, '');
+    }
   }
 
   // ── complete ────────────────────────────────────────────
@@ -375,7 +471,7 @@ export function createWorkoutView({ root, repo, onSaved }) {
     btn.disabled = true;
     btn.textContent = 'Saving…';
     try {
-      const record = buildSessionRecord({ sessionNum: active.sessionNum, date: active.date, scratch, targetOf: ex => targetFor(ex) });
+      const record = buildSessionRecord({ sessionNum: active.sessionNum, date: active.date, scratch, targetOf: ex => targetFor(ex), deload: active.deload });
       await repo.commit(addSession(repo.sessions, record));
       endSession();
       flash(ui.status, 'Session saved ✓');
@@ -415,24 +511,33 @@ export function createWorkoutView({ root, repo, onSaved }) {
     'cancel-set': el => openSet(exIdOf(el), stateOf(exIdOf(el)).done.length),
     'skip': el => toggleSkip(exIdOf(el)),
     'complete': complete,
+    'discard-bottom': discardFromBottom,
+    'rest-toggle': toggleRestTimer,
+    'rest-adjust': el => rest.adjust(Number(el.dataset.dir)),
+    'rest-stop': () => rest.stop(),
+    'deload-week': () => changeDeloadWeek(startDeloadWeek(pickedDate())),
+    'deload-week-end': () => changeDeloadWeek(endDeloadWeek()),
+    'deload-snooze': () => changeDeloadWeek(snoozeDeload(todayISO())),
   });
   delegate(root, 'keydown', {
     'edit-weight': (el, e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startWeightEdit(exIdOf(el)); } },
   });
   delegate(root, 'input', {
     'reps': typeReps,
-    'note': el => { stateOf(exIdOf(el)).note = el.value; autoResize(el); },
+    'note': el => { stateOf(exIdOf(el)).note = el.value; autoResize(el); persist(); },
   });
   delegate(root, 'change', {
     'pick-session': renderPreview,
-    'pick-date': renderPreview,
+    'pick-date': () => { pickDeload = null; renderPicker(); },
+    'pick-deload': el => { pickDeload = el.checked; renderPicker(); },
     'active-date': changeDate,
   });
 
   resetPicker();
+  resumeDraft();
 
   return {
     /** Re-render anything that depends on the saved log (called after History edits). */
-    refresh() { if (active) renderExercises(); else renderPreview(); },
+    refresh() { if (active) renderExercises(); else renderPicker(); },
   };
 }

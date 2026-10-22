@@ -6,6 +6,7 @@
  *   v1  { entries: [...] } / { app, format: 1, entries: [...] }  — first versions and their exports
  *   v2  { schemaVersion: 2, sessions: [...] }                     — modular rewrite
  *   v3  same, entries may add `sets: number[]` and `target`        — per-set logging + targets
+ *       (sessions may also carry `deload: true` — an optional extra, older versions just ignore it)
  * Unknown fields are kept, so nothing written by a newer version is dropped.
  */
 import { isISODate } from './dates.js';

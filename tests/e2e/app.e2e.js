@@ -43,8 +43,10 @@ page.on('pageerror', e => errors.push(e.message));
 const text = async sel => (await page.locator(sel).first().innerText()).replace(/\s+/g, ' ').trim();
 const savedLog = () => page.evaluate(() => JSON.parse(localStorage.getItem('liftlog:log') || 'null'));
 const sessionsOn = async date => (await savedLog()).sessions.filter(s => s.date === date);
+const mySession = async () => (await sessionsOn('2026-05-04')).filter(s => s.session === 1);   // the Session 1 logged below
 const tab = name => page.tap(`.tab-btn[data-tab="${name}"]`);
 const failWrites = on => page.evaluate(v => { window.__failWrites = v; }, on);
+const SESSION_DATE = '2026-05-04';
 const TODAY = await (async () => { await page.goto(url); return page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }); })();
 
 try {
@@ -85,6 +87,8 @@ try {
   const summary = async id => (await text(`#setlog-${id} .setlog-summary`));
   const tabState = async id => page.$$eval(`#card-${id} .set-tab:not(.add)`, ts => ts.map(t => (t.classList.contains('is-done') ? 'done' : '') + (t.classList.contains('is-current') ? 'current' : '') + (t.disabled ? 'locked' : '') || 'open'));
   const log = id => page.tap(`#card-${id} [data-action="log-set"]`);
+  // the synthetic log ends in early May, so log this session on its last day (no ease-back after a long gap)
+  await page.fill('#pick-date', SESSION_DATE); await page.dispatchEvent('#pick-date', 'change');
   await page.selectOption('#pick-session', '1');
   check('picker: preview shows today\'s targets', (await text('#session-preview-area')).includes('175 lbs × 7 × 2 sets'));
   await page.tap('#start-btn');
@@ -94,7 +98,7 @@ try {
   check('target: below range last time → bottom of range', (await text('#card-s1-lateral .target-row')).includes('7.5 lbs × 12 × 2 sets') && (await text('#card-s1-lateral .target-row')).includes('below range'));
   check('target: kg lift', (await text('#card-s1-crunches .target-row')).includes('45 kg × 13 × 2 sets'));
   check('target: first time asks for a weight', (await text('#card-s1-pulldown .target-row')).includes('set a weight'));
-  check('last: shows last time and flags a long gap', (await text('#card-s1-deadlift .last-row')).includes('175 lbs × 6 reps') && (await text('#card-s1-deadlift .last-row')).includes('been a while'));
+  check('last: shows last time', (await text('#card-s1-deadlift .last-row')).includes('175 lbs × 6 reps') && (await text('#card-s1-deadlift .last-row')).includes('Apr 20'));
   check('set 1 open, pre-filled with the target', (await text('#wv-s1-deadlift')) === '175' && (await page.inputValue('#reps-s1-deadlift')) === '7' && (await text('#card-s1-deadlift .set-title')) === 'Set 1');
   check('tabs: set 1 current, set 2 locked', JSON.stringify(await tabState('s1-deadlift')) === '["current","locked"]');
   check('phone: reps box is 16px (no iPhone zoom)', await page.$eval('#reps-s1-deadlift', el => getComputedStyle(el).fontSize) === '16px');
@@ -188,13 +192,16 @@ try {
   await page.fill('#active-date', '2026-10-20'); await page.dispatchEvent('#active-date', 'change');
   check('date change mid-session keeps everything', (await page.inputValue('#note-s1-incline')) === 'felt solid' && (await summary('s1-deadlift')) === '177.5 lbs × 7, 6' && (await summary('s1-incline')) === '50 lbs × 6, 6');
   check('date change updates "last time" age', (await text('#card-s1-deadlift .last-row')).includes('6 months ago'));
+  check('ease back: 6 months off → ~10% lighter, bottom of range', (await text('#card-s1-deadlift .target-row')).includes('155 lbs × 5 × 2 sets') && (await text('#card-s1-deadlift .target-row')).includes('days since last time'));
+  await page.fill('#active-date', SESSION_DATE); await page.dispatchEvent('#active-date', 'change');
+  check('ease back: gone again when the date is back', (await text('#card-s1-deadlift .target-row')).includes('175 lbs × 7 × 2 sets'));
 
   await page.tap('.sa-change'); await page.tap('.discard-bar [data-action="keep"]');
   check('discard: keep going', await page.locator('#session-panel').isVisible() && await page.locator('.discard-bar').count() === 0);
 
   await page.locator('#complete-btn').dblclick();
   await wait(1000);
-  const saved = await sessionsOn('2026-10-20');
+  const saved = await mySession();
   check('complete: double tap saves once', saved.length === 1, `${saved.length}`);
   const E = saved[0]?.entries || {};
   check('saved: target hit = complete, sets + target stored', JSON.stringify(E['s1-incline']) === JSON.stringify({ status: 'complete', note: 'felt solid', sets: [{ weight: 50, reps: 6 }, { weight: 50, reps: 6 }], weight: 50, unit: 'lbs', reps: 6, target: { reps: 6, sets: 2, weight: 47.5 } }), JSON.stringify(E['s1-incline']));
@@ -207,10 +214,64 @@ try {
 
   // next time: partial → same target, complete → one more
   await tab('workout');
-  await page.fill('#pick-date', '2026-10-21'); await page.selectOption('#pick-session', '1'); await page.tap('#start-btn');
+  await page.fill('#pick-date', '2026-05-05'); await page.dispatchEvent('#pick-date', 'change'); await page.selectOption('#pick-session', '1'); await page.tap('#start-btn');
   check('next time: after a partial the target repeats (no increase)', (await text('#card-s1-deadlift .target-row')).includes('175 lbs × 7 × 2 sets'));
   check('next time: after hitting it, one more rep', (await text('#card-s1-incline .target-row')).includes('50 lbs × 7 × 2 sets'));
-  await page.tap('.sa-change'); await page.tap('.discard-yes');
+
+  // ── unfinished workout: survives closing the app ───────
+  const draft = () => page.evaluate(() => JSON.parse(localStorage.getItem('liftlog:draft') || 'null'));
+  await log('s1-deadlift');
+  check('draft: saved as you log', (await draft())?.scratch?.['s1-deadlift']?.done?.length === 1);
+  await page.reload(); await wait(400);
+  check('draft: reopening picks up the workout', await page.locator('#session-panel').isVisible() && (await summary('s1-deadlift')) === '175 lbs × 7' && (await text('#status')).includes('unfinished workout'));
+  await page.tap('.sa-change');
+  check('draft: "change" asks before throwing away logged sets', await page.locator('.discard-bar').count() === 1);
+  await page.tap('.discard-bar [data-action="keep"]');
+
+  // ── rest timer (optional) ──────────────────────────────
+  check('rest timer: off by default', (await page.getAttribute('.rest-toggle', 'aria-pressed')) === 'false');
+  await log('s1-incline');
+  check('rest timer: off → nothing after logging', await page.locator('#rest-bar').isHidden());
+  await page.tap('.rest-toggle');
+  await log('s1-incline');
+  check('rest timer: counts down after a set', await page.locator('#rest-bar').isVisible() && /Rest · Incline DB Press/.test(await text('#rest-bar')) && /1:(30|29|28)/.test(await text('.rest-clock')));
+  await page.tap('#rest-bar [data-action="rest-adjust"][data-dir="1"]');
+  check('rest timer: +15 s', /1:(45|44|43|42)/.test(await text('.rest-clock')));
+  await page.reload(); await wait(400);
+  check('rest timer: still running after reopening', await page.locator('#rest-bar').isVisible() && (await page.getAttribute('.rest-toggle', 'aria-pressed')) === 'true');
+  await page.tap('#rest-bar [data-action="rest-stop"]');
+  check('rest timer: ✕ stops it', await page.locator('#rest-bar').isHidden());
+  await page.tap('.rest-toggle');
+
+  // ── discard ─────────────────────────────────────────────
+  const countBefore = (await savedLog()).sessions.length;
+  await page.tap('#discard-btn');
+  check('discard: first tap asks', (await text('#discard-btn')).includes('Tap again') && await page.locator('#session-panel').isVisible());
+  await page.tap('#discard-btn');
+  check('discard: second tap drops the workout, saves nothing', await page.locator('#picker-panel').isVisible() && (await savedLog()).sessions.length === countBefore && (await draft()) === null);
+
+  // ── deload ──────────────────────────────────────────────
+  await page.fill('#pick-date', '2026-05-05'); await page.dispatchEvent('#pick-date', 'change'); await page.selectOption('#pick-session', '1');
+  check('deload: off by default', !(await page.isChecked('#pick-deload')));
+  await page.tap('#deload-area .switch-track');
+  check('deload: preview shows lighter targets, half the sets', (await text('#session-preview-area')).toLowerCase().includes('deload targets') && (await text('#session-preview-area')).includes('155 lbs × 5 × 1 set'));
+  await page.tap('#start-btn');
+  check('deload: header tag + reason', (await text('#session-header')).toLowerCase().includes('deload') && (await text('#card-s1-deadlift .target-row')).includes('half the sets'));
+  await log('s1-deadlift');
+  await page.tap('#complete-btn'); await wait(1000);
+  const dl = (await sessionsOn('2026-05-05')).find(x => x.session === 1);
+  check('deload: saved as a deload session', dl?.deload === true && dl.entries['s1-deadlift'].status === 'complete' && JSON.stringify(dl.entries['s1-deadlift'].sets) === '[{"weight":155,"reps":5}]', JSON.stringify(dl));
+  await tab('workout');
+  await page.fill('#pick-date', '2026-05-06'); await page.dispatchEvent('#pick-date', 'change'); await page.selectOption('#pick-session', '1');
+  check('deload: picker back to normal for the next session', !(await page.isChecked('#pick-deload')));
+  await page.tap('#start-btn');
+  check('deload: next normal session builds on the session before the deload', (await text('#card-s1-deadlift .target-row')).includes('175 lbs × 7 × 2 sets') && (await text('#card-s1-deadlift .last-row')).includes('deload since'));
+  await page.tap('.sa-change');
+  check('nothing logged → "change" goes straight back', await page.locator('#picker-panel').isVisible());
+  await page.tap('[data-action="deload-week"]');
+  check('deload week: switches deload on for the week', await page.isChecked('#pick-deload') && (await text('#deload-area')).includes('Deload week until'));
+  await page.tap('[data-action="deload-week-end"]');
+  check('deload week: end', !(await page.isChecked('#pick-deload')) && !(await text('#deload-area')).includes('until'));
 
   // empty-session guard
   await tab('workout');
@@ -224,10 +285,10 @@ try {
   // ── reload: data persists ───────────────────────────────
   await page.reload(); await wait(400);
   await tab('history');
-  check('reload: everything still there', await page.locator('.history-entry').count() === FIXTURE_COUNT + 2);
+  check('reload: everything still there', await page.locator('.history-entry').count() === FIXTURE_COUNT + 3);
 
   // ── history ─────────────────────────────────────────────
-  const oct20 = page.locator('.history-entry', { has: page.locator('.history-title', { hasText: 'Oct 20, 2026' }) });
+  const oct20 = page.locator('.history-entry', { has: page.locator('.history-title', { hasText: 'May 4, 2026' }) }).filter({ hasText: 'Session 1' });
   if (!(await oct20.locator('.history-body').isVisible())) await oct20.locator('.history-hdr').tap();
   check('history: note shown as text, not HTML', (await oct20.innerText()).includes('<b>shoulder</b> & "tired"'));
   check('history: header date · session · done count', (await oct20.locator('.history-hdr').innerText()).replace(/\s+/g, ' ').includes('Session 1 · 3/5 done'));
@@ -236,13 +297,20 @@ try {
   await page.tap('#hedit-panel .status-btn[data-status="complete"]');
   await page.fill('#hedit-w-0', '42.5'); await page.fill('#hedit-r-0', '11'); await page.fill('#hedit-w-1', '42.5'); await page.fill('#hedit-r-1', '11');
   await page.tap('#hedit-panel [data-action="edit-save"]'); await wait(150);
-  let e = (await sessionsOn('2026-10-20'))[0].entries['s1-crunches'];
+  let e = (await mySession())[0].entries['s1-crunches'];
   check('history edit: each set saved with the exercise unit', e.status === 'complete' && JSON.stringify(e.sets) === '[{"weight":42.5,"reps":11},{"weight":42.5,"reps":11}]' && e.unit === 'kg', JSON.stringify(e));
   check('history edit: header count updates', (await oct20.locator('.history-hdr').innerText()).includes('4/5 done'));
 
   const apr22 = page.locator('.history-entry', { has: page.locator('.history-title', { hasText: 'Apr 22, 2026' }) });
   await apr22.locator('.history-hdr').tap();
   check('history: old-program tag', (await apr22.locator('.history-hdr').innerText()).toLowerCase().includes('old program'));
+  const may5 = page.locator('.history-entry', { has: page.locator('.history-title', { hasText: 'May 5, 2026' }) }).filter({ hasText: 'Session 1' });
+  check('history: deload tag', (await may5.locator('.history-hdr').innerText()).toLowerCase().includes('deload'));
+  if (!(await may5.locator('.history-body').isVisible())) await may5.locator('.history-hdr').tap();
+  await may5.locator('.entry-date-row .switch-track').tap(); await wait(150);
+  check('history: deload switch off → saved as a normal session', (await sessionsOn('2026-05-05')).find(x => x.session === 1).deload === undefined);
+  await may5.locator('.entry-date-row .switch-track').tap(); await wait(150);
+  check('history: deload switch back on', (await sessionsOn('2026-05-05')).find(x => x.session === 1).deload === true);
   await apr22.locator('.history-row[data-ex="s2-dips"]').tap();
   check('history edit: retired bodyweight lift has set boxes but no weight box', await page.locator('.hedit-w').count() === 0 && await page.locator('.hedit-r').count() === 2);
   await page.tap('#hedit-panel .status-btn[data-status="partial"]'); await page.fill('#hedit-r-0', '5');
@@ -254,10 +322,10 @@ try {
   await page.tap('#hedit-panel .status-btn[data-status="partial"]');
   await page.tap('#hedit-panel .status-btn[data-status="complete"]');
   await page.fill('#hedit-r-1', '7'); await page.tap('#hedit-panel [data-action="edit-save"]'); await wait(150);
-  check('history edit: fixed to meet the target → complete', (await sessionsOn('2026-10-20'))[0].entries['s1-deadlift'].status === 'complete');
+  check('history edit: fixed to meet the target → complete', (await mySession())[0].entries['s1-deadlift'].status === 'complete');
   await oct20.locator('.history-row[data-ex="s1-deadlift"]').tap();
   await page.fill('#hedit-r-1', '5'); await page.tap('#hedit-panel [data-action="edit-save"]'); await wait(150);
-  check('history edit: Done below the target is saved as partial', (await sessionsOn('2026-10-20'))[0].entries['s1-deadlift'].status === 'partial');
+  check('history edit: Done below the target is saved as partial', (await mySession())[0].entries['s1-deadlift'].status === 'partial');
 
   await failWrites(true);
   await apr22.locator('.history-row[data-ex="s2-pallof"]').tap();
@@ -298,7 +366,8 @@ try {
   check('trends: All shows charts', await page.locator('.trend-card svg').count() > 5);
   const deadliftCard = page.locator('.trend-card', { has: page.locator('.trend-name', { hasText: /^Deadlift$/ }) });
   check('trends: change table', (await deadliftCard.locator('.dtable').innerText()).includes('lbs'));
-  check('trends: recent strip, newest last', (await deadliftCard.locator('.rc.latest').innerText()).includes('175×6'));
+  check('trends: recent strip, newest last (the deload, marked)', (await deadliftCard.locator('.rc.latest').innerText()).includes('155×5') && await deadliftCard.locator('.rc.latest.deload').count() === 1);
+  check('trends: deload dot is marked', await deadliftCard.locator('.chart-dot.deload').count() >= 1 || await deadliftCard.locator('title', { hasText: '(deload)' }).count() >= 1);
   await page.tap('.seg button[data-value="custom"]');
   await page.fill('.tc-custom input >> nth=0', '2026-04-01'); await page.dispatchEvent('.tc-custom input >> nth=0', 'change');
   await page.fill('.tc-custom input >> nth=1', '2026-04-15'); await page.dispatchEvent('.tc-custom input >> nth=1', 'change');
