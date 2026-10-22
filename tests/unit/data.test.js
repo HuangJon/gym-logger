@@ -179,7 +179,9 @@ test('lineChart escapes tooltip text', () => {
 
 test('weeklyBarsChart draws one bar per week', () => {
   const weeks = Array.from({ length: 8 }, (_, i) => ({ start: `2026-08-${String(3 + i * 7).padStart(2, '0')}`, count: i % 4 }));
-  assert.equal((weeklyBarsChart(weeks, 3).match(/<rect/g) || []).length, 8);
+  const svg = weeklyBarsChart(weeks, 3);
+  assert.equal((svg.match(/class="bar[ "]/g) || []).length, 8);
+  assert.equal((svg.match(/data-action="tip"/g) || []).length, 8, 'every week can be tapped for details');
 });
 
 // ── offline worker ──

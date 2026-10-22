@@ -8,7 +8,7 @@ import { repZone } from '../core/progress.js';
 import { liftSeries, isWeighted, inRange, groupingFor, groupPoints, changeOverWindows, CHANGE_WINDOWS, weeklyCounts, summaryStats } from '../core/trends.js';
 import { makeDemoSessions, makeDemoClimbs } from '../dev/demo.js';
 import { calendarWeeks, targetHitRate, liftProgress, pct, MIN_COMPARE } from '../core/insights.js';
-import { esc, delegate } from './dom.js';
+import { esc, delegate, tipAttrs, showTip } from './dom.js';
 import { lineChart, weeklyBarsChart, percentBarsChart } from './charts.js';
 
 const RANGE_BUTTONS = [['1m', '1M'], ['3m', '3M'], ['1y', '1Y'], ['all', 'All'], ['custom', 'Custom']];
@@ -71,8 +71,9 @@ export function createTrendsView({ root, repo }) {
         day.climb && `${day.climb} climb`,
       ].filter(Boolean);
       const cls = ['cal-day', day.future && 'future', lift && 'lift', mode && mode !== 'normal' && `m-${mode}`, day.climb && `c-${day.climb}`, day.date === today && 'today'].filter(Boolean).join(' ');
-      const label = day.lifts.map(l => l.session).join('');
-      return `<span class="${cls}" title="${esc(formatShort(day.date))}${bits.length ? ` — ${esc(bits.join(', '))}` : ''}">${label ? `<b>${label}</b>` : ''}</span>`;
+      const label = day.lifts.length === 1 ? `S${day.lifts[0].session}` : day.lifts.length > 1 ? `×${day.lifts.length}` : '';
+      const tip = `${formatShort(day.date)}${bits.length ? ` — ${bits.join(', ')}` : ' — rest day'}`;
+      return `<span class="${cls}" title="${esc(tip)}"${day.future ? '' : tipAttrs(tip)}>${label ? `<b>${label}</b>` : ''}</span>`;
     };
     let lastMonth = '';
     const rows = weeks.map(w => {
@@ -83,8 +84,10 @@ export function createTrendsView({ root, repo }) {
     return `<div class="card trend-card cal-card">
       <div class="trend-head"><span class="trend-name">Training calendar</span><span class="trend-sub">${anchored ? '12 weeks up to your last activity' : 'last 12 weeks'}</span></div>
       <div class="cal-grid"><div class="cal-row cal-head"><span class="cal-month"></span>${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(d => `<span class="cal-dow">${d}</span>`).join('')}</div>${rows}</div>
-      <div class="cal-legend"><span><i class="cal-day lift"><b>1</b></i>lifted (session #)</span><span><i class="cal-day lift m-maintain"><b>2</b></i>maintain</span>
-        <span><i class="cal-day lift m-deload"><b>3</b></i>deload</span><span><i class="cal-day c-easy"></i>easy climb</span><span><i class="cal-day c-hard"></i>hard climb</span></div>
+      <div class="cal-legend"><span><i class="cal-day lift"><b>S1</b></i>lifted (session)</span><span><i class="cal-day lift"><b>×2</b></i>2 sessions that day</span>
+        <span><i class="cal-day lift m-maintain"><b>S2</b></i>maintain</span><span><i class="cal-day lift m-deload"><b>S3</b></i>deload</span>
+        <span><i class="cal-day c-easy"></i>easy climb</span><span><i class="cal-day c-hard"></i>hard climb</span></div>
+      <div class="tip-hint">Tap a day for details.</div>
     </div>`;
   }
 
@@ -100,7 +103,7 @@ export function createTrendsView({ root, repo }) {
       : `<div class="hr-compare muted">Climbing comparison appears once there are ${MIN_COMPARE}+ lifts on days after a hard climb (now ${r.afterHard.total}).</div>`;
     return `<div class="card trend-card">${head}
       <div class="hr-big"><b class="${recent >= 75 ? 'zone-top' : recent >= 50 ? 'zone-mid' : 'zone-low'}">${recent ?? '–'}${recent === null ? '' : '%'}</b> <span>last 4 weeks${r.recent.total ? ` · ${r.recent.hit} of ${r.recent.total}` : ''}</span></div>
-      ${percentBarsChart(r.weeks, { title: 'target hit rate per week' })}
+      ${percentBarsChart(r.weeks, { title: 'target hit rate per week' })}<div class="tip-hint">Tap a bar for details.</div>
       ${compare}
       <div class="hr-hint">Mostly 70–90% is healthy progress. A steady drop is an early sign of fatigue — before lifts stall.</div>
     </div>`;
@@ -145,7 +148,7 @@ export function createTrendsView({ root, repo }) {
     return `<div class="card trend-card">
       <div class="trend-head"><span class="trend-name">Sessions per week</span>
         <span class="trend-sub">${anchored ? '8 weeks up to your last session · ' : ''}dashed line = ${WEEKLY_GOAL}/week goal${anyClimbs ? ' · <span class="climb-key">▲ climbing days</span> (green = easy, orange = any hard)' : ''}</span></div>
-      ${weeklyBarsChart(weeks, WEEKLY_GOAL)}</div>`;
+      ${weeklyBarsChart(weeks, WEEKLY_GOAL)}<div class="tip-hint">Tap a bar for details.</div></div>`;
   }
 
   function explainer() {
@@ -153,7 +156,7 @@ export function createTrendsView({ root, repo }) {
       return '<div class="trend-explain"><b>Strength</b> = estimated 1-rep max, weight × (1 + reps ÷ 30). A single number that goes up when you add reps <i>or</i> weight — useful for comparing across rep ranges, but it’s an estimate, not a lift you did. Hollow dot = partial.</div>';
     }
     return `<div class="trend-explain">The line is your working weight; the number on each dot is the reps you hit.
-      <span class="zone-legend"><span class="zone-top">● top of range: add weight</span><span class="zone-mid">● in range: keep going</span><span class="zone-low">● below range</span><span>○ partial</span><span class="zone-deload">○ deload</span></span></div>`;
+      <span class="zone-legend"><span class="zone-top">● top of range: add weight</span><span class="zone-mid">● in range: keep going</span><span class="zone-low">● below range</span><span>○ partial</span><span class="zone-deload">○ deload</span><span class="zone-maintain">○ maintain</span></span></div>`;
   }
 
   // ── one card per lift ───────────────────────────────────
@@ -193,7 +196,7 @@ export function createTrendsView({ root, repo }) {
     const cells = change.cells.map(c => {
       if (!c) return '<span class="dt-v">—</span>';
       const dir = c.delta > 0 ? ' up' : c.delta < 0 ? ' down' : '';
-      return `<span class="dt-v${dir}" title="vs ${formatShort(c.vsDate)}">${signed(c.delta)}${weighted ? ` ${unit}` : ''}${c.short ? '<sup>*</sup>' : ''}</span>`;
+      return `<span class="dt-v${dir}" title="vs ${formatShort(c.vsDate)}"${tipAttrs(`${signed(c.delta)}${weighted ? ` ${unit}` : ''} compared with ${formatShort(c.vsDate)}${c.short ? ' (not much data that far back)' : ''}`)}>${signed(c.delta)}${weighted ? ` ${unit}` : ''}${c.short ? '<sup>*</sup>' : ''}</span>`;
     }).join('');
     return `<div class="dtable"><span></span>${CHANGE_WINDOWS.map(([label]) => `<span class="dt-h">${label}</span>`).join('')}
       <span class="dt-lbl">${weighted ? 'Weight' : 'Reps'}</span>${cells}</div>
@@ -221,7 +224,7 @@ export function createTrendsView({ root, repo }) {
       legend = `<span class="chart-key"><i></i>Weight (${unit})</span><span class="chart-key-note">numbers = reps${target}</span>`;
       svg = lineChart(points, { valueOf: p => p.weight, labelOf: p => p.reps, zoneOf: zone, tipOf: tip, grid: 'levels', tagChanges: true, minSpan: 5 });
     }
-    const note = by ? `<div class="group-note">Each dot = best set of the ${by}. Tap a dot for details.</div>` : '';
+    const note = by ? `<div class="group-note">Each dot = best set of the ${by}. Tap a dot for details.</div>` : '<div class="tip-hint">Tap a dot for details.</div>';
     return `<div class="chart-legend">${legend}</div>${svg}${note}`;
   }
 
@@ -230,8 +233,9 @@ export function createTrendsView({ root, repo }) {
     if (!recent.length) return '';
     return `<div class="recent"><span class="recent-lbl">Recent →</span>${recent.map((p, i) => {
       const value = weighted ? `${round2(p.weight)}${hasValue(p.reps) ? `×${p.reps}` : ''}` : `${p.reps} reps`;
-      const cls = ['rc', `zone-${repZone(p.reps, series.reps)}`, p.status === STATUS.PARTIAL && 'partial', p.deload && 'deload', i === recent.length - 1 && 'latest'].filter(Boolean).join(' ');
-      return `<span class="${cls}" title="${esc(formatShort(p.date))}${p.status === STATUS.PARTIAL ? ' (partial)' : ''}${p.deload ? ' (deload)' : ''}"><i>${formatMonthDay(p.date)}</i>${value}</span>`;
+      const cls = ['rc', `zone-${repZone(p.reps, series.reps)}`, p.status === STATUS.PARTIAL && 'partial', p.deload && 'deload', p.maintain && 'maintain', i === recent.length - 1 && 'latest'].filter(Boolean).join(' ');
+      const tip = `${formatShort(p.date)}: ${p.sets?.length ? formatSets(p.sets, weighted ? (p.unit || series.unit) : '') : value}${p.status === STATUS.PARTIAL ? ' (partial)' : ''}${p.deload ? ' (deload)' : ''}${p.maintain ? ' (maintain)' : ''}`;
+      return `<span class="${cls}" title="${esc(tip)}"${tipAttrs(tip)}><i>${formatMonthDay(p.date)}</i>${value}</span>`;
     }).join('')}</div>`;
   }
 
@@ -254,7 +258,9 @@ export function createTrendsView({ root, repo }) {
     'range': el => setRange(el.dataset.value),
     'mode': el => { state.mode = el.dataset.value; render(); },
     'demo': () => { state.demo = !state.demo; render(); },
+    'tip': el => showTip(el, '.trend-card'),
   });
+  delegate(root, 'keydown', { 'tip': (el, e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showTip(el, '.trend-card'); } } });
   delegate(root, 'change', {
     'custom-from': el => setCustom('from', el.value),
     'custom-to': el => setCustom('to', el.value),

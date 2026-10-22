@@ -1,7 +1,7 @@
 /** SVG charts, returned as strings. Colors come from CSS classes so light/dark mode just works. */
 import { dayNum, formatShort, formatMonthDay } from '../core/dates.js';
 import { hasValue, round2 } from '../core/numbers.js';
-import { esc } from './dom.js';
+import { esc, tipAttrs } from './dom.js';
 
 const MAX_LABELED_POINTS = 30;
 
@@ -50,8 +50,9 @@ export function lineChart(points, { valueOf, labelOf, zoneOf = () => 'none', tip
     ? `<text x="${X(xs[i]).toFixed(1)}" y="${(Y(ys[i]) + 14).toFixed(1)}" text-anchor="middle" class="chart-tag">${round2(ys[i])}</text>` : '').join('') : '';
   const dotsSvg = pts.map((p, i) => {
     const x = X(xs[i]).toFixed(1), y = Y(ys[i]), zone = `zone-${zoneOf(p)}`, label = showLabels ? labelOf(p) : '';
-    return `<g><title>${esc(tipOf(p))}</title>
-      <circle cx="${x}" cy="${y.toFixed(1)}" r="4" class="chart-dot ${zone}${p.status === 'partial' ? ' partial' : ''}${p.deload ? ' deload' : ''}"/>
+    return `<g${tipAttrs(tipOf(p))}><title>${esc(tipOf(p))}</title>
+      <circle cx="${x}" cy="${y.toFixed(1)}" r="13" class="chart-hit"/>
+      <circle cx="${x}" cy="${y.toFixed(1)}" r="4" class="chart-dot ${zone}${p.status === 'partial' ? ' partial' : ''}${p.deload ? ' deload' : ''}${p.maintain ? ' maintain' : ''}"/>
       ${hasValue(label) && label !== '' ? `<text x="${x}" y="${(y - 7).toFixed(1)}" text-anchor="middle" class="chart-lbl ${zone}">${esc(label)}</text>` : ''}</g>`;
   }).join('');
   const datesSvg = `<text x="${L}" y="${H - 4}" class="chart-axis">${formatShort(pts[0].date)}</text>` +
@@ -68,7 +69,8 @@ export function percentBarsChart(weeks, { title = 'percent per week' } = {}) {
     const x = i * (barW + gap), p = w.total ? w.hit / w.total : null;
     const h = p === null ? 0 : Math.max(p * (base - top), 1.5), y = base - h;
     const cls = p === null ? '' : p >= 0.75 ? 'zone-top' : p >= 0.5 ? 'zone-mid' : 'zone-low';
-    return `<g><title>Week of ${formatMonthDay(w.start)}: ${p === null ? 'no targeted lifts' : `${w.hit} of ${w.total} hit (${Math.round(p * 100)}%)`}</title>
+    const tip = `Week of ${formatMonthDay(w.start)}: ${p === null ? 'no targeted lifts' : `${w.hit} of ${w.total} hit (${Math.round(p * 100)}%)`}`;
+    return `<g${tipAttrs(tip)}><title>${esc(tip)}</title><rect x="${x}" y="${top}" width="${barW}" height="${base - top}" class="chart-hit"/>
       ${p === null ? `<line x1="${x + 8}" x2="${x + barW - 8}" y1="${base - 1}" y2="${base - 1}" class="chart-grid"/>`
         : `<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="3" class="bar-pct ${cls}"/>
            <text x="${x + barW / 2}" y="${y - 3}" text-anchor="middle" class="chart-lbl ${cls}">${Math.round(p * 100)}</text>`}
@@ -88,7 +90,8 @@ export function weeklyBarsChart(weeks, goal) {
     const climbTip = w.climbs ? `, ${w.climbs} climbing day${w.climbs === 1 ? '' : 's'}${w.hardClimbs ? ` (${w.hardClimbs} hard)` : ''}` : '';
     const climbLbl = showClimbs && w.climbs
       ? `<text x="${x + barW / 2}" y="${H - 2}" text-anchor="middle" class="chart-climb${w.hardClimbs ? ' hard' : ''}">▲${w.climbs}</text>` : '';
-    return `<g><title>Week of ${formatMonthDay(w.start)}: ${w.count} session${w.count === 1 ? '' : 's'}${climbTip}</title>
+    const tip = `Week of ${formatMonthDay(w.start)}: ${w.count} session${w.count === 1 ? '' : 's'}${climbTip}`;
+    return `<g${tipAttrs(tip)}><title>${esc(tip)}</title><rect x="${x}" y="0" width="${barW}" height="${base}" class="chart-hit"/>
       <rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="3" class="${i === weeks.length - 1 ? 'bar bar-now' : 'bar'}"/>
       ${w.count ? `<text x="${x + barW / 2}" y="${y - 3}" text-anchor="middle" class="chart-lbl zone-mid">${w.count}</text>` : ''}
       <text x="${x + barW / 2}" y="${base - 2}" text-anchor="middle" class="chart-axis">${formatMonthDay(w.start)}</text>${climbLbl}</g>`;

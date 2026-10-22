@@ -147,3 +147,16 @@
 .pg-detail { width: 100%; font-size: 11px; color: var(--fg2); }
 .pg-detail b { color: var(--fg); font-variant-numeric: tabular-nums; }
 .pg-status.s-top { background: var(--deload-bg); color: var(--deload); }
+
+/* tap for details (phones don't show hover tooltips) */
+[data-action="tip"] { cursor: pointer; -webkit-tap-highlight-color: transparent; outline: none; }
+.chart-hit { fill: transparent; stroke: none; }
+.cal-day.is-tipped { box-shadow: 0 0 0 2px var(--fg); }
+g.is-tipped .chart-dot { stroke: var(--fg); stroke-width: 2.5; }
+g.is-tipped rect.bar, g.is-tipped rect.bar-pct { stroke: var(--fg); stroke-width: 2; }
+.rc.is-tipped, .dt-v.is-tipped { outline: 2px solid var(--fg); outline-offset: 1px; border-radius: 6px; }
+.tip-line { margin-top: 6px; padding: 6px 10px; border-radius: 8px; background: var(--input-bg); font-size: 12px; font-weight: 600; color: var(--fg); }
+.tip-hint { font-size: 10px; color: var(--fg3); margin-top: 4px; }
+.chart-dot.maintain { fill: var(--card); stroke: var(--maintain-line); stroke-width: 1.75; }
+.rc.maintain { background: var(--maintain-bg); color: var(--maintain); }
+.zone-legend .zone-maintain { color: var(--maintain); }
