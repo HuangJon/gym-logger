@@ -357,6 +357,24 @@ try {
   const apr22 = page.locator('.history-entry', { has: page.locator('.history-title', { hasText: 'Apr 22, 2026' }) });
   await apr22.locator('.history-hdr').tap();
   check('history: old-program tag', (await apr22.locator('.history-hdr').innerText()).toLowerCase().includes('old program'));
+  // climbing, marked after the fact in History
+  const climbDates = async () => JSON.stringify((await savedLog()).climbs.map(c => [c.date, c.intensity]).sort());
+  if (!(await oct20.locator('.history-body').isVisible())) await oct20.locator('.history-hdr').tap();
+  await oct20.locator('[data-action="hclimb"][data-intensity="hard"]').tap(); await wait(150);
+  check('history: mark a session day as a hard climb', (await climbDates()) === '[["2026-05-04","hard"],["2026-05-06","hard"]]' && (await oct20.locator('.history-hdr').innerText()).toLowerCase().includes('hard'));
+  await oct20.locator('[data-action="hclimb"][data-intensity="easy"]').tap(); await wait(150);
+  check('history: switch it to easy', (await climbDates()) === '[["2026-05-04","easy"],["2026-05-06","hard"]]');
+  await oct20.locator('[data-action="hclimb"][data-intensity="easy"]').tap(); await wait(150);
+  check('history: tap again to clear', (await climbDates()) === '[["2026-05-06","hard"]]');
+  await page.fill('#climb-add-date', '2026-05-09'); await page.dispatchEvent('#climb-add-date', 'change');
+  await page.tap('.climb-adder [data-intensity="easy"]'); await wait(150);
+  check('history: log a climbing day with no gym', (await climbDates()) === '[["2026-05-06","hard"],["2026-05-09","easy"]]');
+  const climbOnly = page.locator('.history-climb');
+  check('history: a climbing day with no session has its own row', await climbOnly.count() === 1 && (await climbOnly.innerText()).includes('May 9'));
+  await climbOnly.locator('[data-intensity="hard"]').tap(); await wait(150);
+  check('history: climbing-only day switched to hard', (await climbDates()) === '[["2026-05-06","hard"],["2026-05-09","hard"]]');
+  await page.locator('.history-climb [data-intensity="hard"]').tap(); await wait(150);
+  check('history: cleared (row goes away)', (await climbDates()) === '[["2026-05-06","hard"]]' && await page.locator('.history-climb').count() === 0);
   const may5 = page.locator('.history-entry', { has: page.locator('.history-title', { hasText: 'May 5, 2026' }) }).filter({ hasText: 'Session 1' });
   check('history: deload tag', (await may5.locator('.history-hdr').innerText()).toLowerCase().includes('deload'));
   if (!(await may5.locator('.history-body').isVisible())) await may5.locator('.history-hdr').tap();
@@ -411,29 +429,29 @@ try {
 
   // ── trends ──────────────────────────────────────────────
   await tab('trends');
-  const pressed = async () => (await page.locator('.seg button[aria-pressed="true"]').first().innerText()).trim();
+  const pressed = async () => (await page.locator('#tab-trends .seg button[aria-pressed="true"]').first().innerText()).trim();
   check('trends: opens on All when nothing is from the last 3 months (the test log is from spring)', (await pressed()) === 'All');
   const names = await page.locator('.trend-name').allInnerTexts();
   check('trends: current and old-program lifts', names.includes('Deadlift') && names.includes('Dips') && names.includes('Bent Over Rows') && !names.includes('Rows (elbow to hip)'));
-  await page.tap('.seg button[data-value="all"]');
+  await page.tap('#tab-trends .seg button[data-value="all"]');
   check('trends: All shows charts', await page.locator('.trend-card svg').count() > 5);
   const deadliftCard = page.locator('.trend-card', { has: page.locator('.trend-name', { hasText: /^Deadlift$/ }) });
   check('trends: change table', (await deadliftCard.locator('.dtable').innerText()).includes('lbs'));
   check('trends: recent strip, newest last (the deload, marked)', (await deadliftCard.locator('.rc.latest').innerText()).includes('155×5') && await deadliftCard.locator('.rc.latest.deload').count() === 1);
   check('trends: deload dot is marked', await deadliftCard.locator('.chart-dot.deload').count() >= 1 || await deadliftCard.locator('title', { hasText: '(deload)' }).count() >= 1);
-  await page.tap('.seg button[data-value="custom"]');
+  await page.tap('#tab-trends .seg button[data-value="custom"]');
   await page.fill('.tc-custom input >> nth=0', '2026-04-01'); await page.dispatchEvent('.tc-custom input >> nth=0', 'change');
   await page.fill('.tc-custom input >> nth=1', '2026-04-15'); await page.dispatchEvent('.tc-custom input >> nth=1', 'change');
   const tips = await page.$$eval('.trend-card svg title', ts => ts.map(t => t.textContent).filter(t => !t.startsWith('Week of')));
   check('trends: custom range shows only those dates', tips.length > 0 && tips.every(t => /Apr ([1-9]|1[0-5])\b/.test(t)), tips.find(t => !/Apr ([1-9]|1[0-5])\b/.test(t)));
-  await page.tap('.seg button[data-value="e1rm"]');
+  await page.tap('#tab-trends .seg button[data-value="e1rm"]');
   check('trends: Strength mode', (await text('.trend-explain')).includes('estimated 1-rep max'));
-  await page.tap('.seg button[data-value="weight"]');
-  await page.tap('.seg button[data-value="all"]');
+  await page.tap('#tab-trends .seg button[data-value="weight"]');
+  await page.tap('#tab-trends .seg button[data-value="all"]');
   await page.evaluate(() => window.scrollTo(0, 3000)); await wait(100);
   const bar = await page.locator('.tab-bar').boundingBox(), ctl = await page.locator('#trend-controls').boundingBox();
   check('trends: controls stay pinned under the tabs', Math.abs(ctl.y - (bar.y + bar.height)) < 3, `${ctl.y} vs ${bar.y + bar.height}`);
-  await page.tap('.seg button[data-value="1m"]');
+  await page.tap('#tab-trends .seg button[data-value="1m"]');
   check('trends: buttons work while scrolled', (await pressed()) === '1M');
   const logBefore = JSON.stringify(await savedLog());
   await page.evaluate(() => window.scrollTo(0, 0));
@@ -477,7 +495,7 @@ try {
   const fresh = await browser.newContext(phone);
   const p2 = await fresh.newPage(); await p2.goto(url); await p2.waitForTimeout(300);
   await p2.tap('.tab-btn[data-tab="history"]'); await p2.setInputFiles('#import-file', file); await p2.waitForTimeout(200);
-  check('restore on a new device', await p2.locator('.history-entry').count() === n1 + 2 && await p2.locator('.history-climb').count() === 1);
+  check('restore on a new device', await p2.locator('.history-entry').count() === n1 + 2 && (await p2.evaluate(() => JSON.parse(localStorage.getItem('liftlog:log')).climbs.length)) === 1);
   await fresh.close();
 
   // ── site down (e.g. repo made private): installed app still opens ──
