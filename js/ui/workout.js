@@ -9,7 +9,7 @@ import { todayISO, isISODate, formatShort, agoText } from '../core/dates.js';
 import { hasValue, parseWeight, parseReps, convertWeight, UNITS } from '../core/numbers.js';
 import { STATUS, buildSessionRecord, formatSets } from '../core/records.js';
 import { addSession } from '../core/log.js';
-import { canStepRepsDown, lastPerformance, computeTarget, targetReason, missedStreak, MISSES_BEFORE_HINT, lighterWeight, stepWeight, stepReps, stepTarget, setBadge, exerciseVerdict } from '../core/progress.js';
+import { canStepRepsDown, canStepRepsUp, lastPerformance, computeTarget, targetReason, missedStreak, MISSES_BEFORE_HINT, lighterWeight, stepWeight, stepReps, stepTarget, setBadge, exerciseVerdict } from '../core/progress.js';
 import { deloadAdvice, deloadFrequency, deloadWeekActive, startDeloadWeek, endDeloadWeek, snoozeDeload } from '../core/deload.js';
 import { saveDraft, loadDraft, clearDraft } from '../data/draft.js';
 import { esc, delegate, autoResize, flash, confirmTap } from './dom.js';
@@ -334,7 +334,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
         <span class="row-label">Reps</span>
         <button type="button" class="stepper" data-action="reps-step" data-dir="-1" aria-label="One less rep" id="rm-${ex.id}"${canStepRepsDown(d.reps, ex.reps) ? '' : ' disabled'}>−</button>
         <input class="reps-input" type="number" inputmode="numeric" min="0" id="reps-${ex.id}" value="${d.reps ?? ''}" data-action="reps" aria-label="${esc(ex.name)} reps, set ${i + 1}">
-        <button type="button" class="stepper" data-action="reps-step" data-dir="1" aria-label="One more rep">+</button>
+        <button type="button" class="stepper" data-action="reps-step" data-dir="1" aria-label="One more rep" id="rp-${ex.id}"${canStepRepsUp(d.reps, ex.reps) ? '' : ' disabled'}>+</button>
         <span class="reps-target">/ ${repRangeText(ex.reps)}</span>
       </div>
       <div class="set-actions">
@@ -363,6 +363,8 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     if (box) box.innerHTML = weightInner(ex, d);
     const minus = ui.exercises.querySelector(`#rm-${exId}`);
     if (minus) minus.disabled = !canStepRepsDown(d.reps, ex.reps);
+    const plus = ui.exercises.querySelector(`#rp-${exId}`);
+    if (plus) plus.disabled = !canStepRepsUp(d.reps, ex.reps);
     const badge = setBadge(d, targetFor(ex)), el = ui.exercises.querySelector(`#pb-${exId}`);
     if (el) { el.className = `prog-badge ${badge.cls}`; el.textContent = badge.label; }
   }

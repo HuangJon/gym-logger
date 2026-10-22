@@ -121,15 +121,12 @@ try {
   // reps steppers
   await page.tap('#card-s1-deadlift [data-action="reps-step"][data-dir="-1"]');
   check('reps −: below target flagged', (await page.inputValue('#reps-s1-deadlift')) === '6' && (await text('#pb-s1-deadlift')).includes('below target'));
-  await page.tap('#card-s1-deadlift [data-action="reps-step"][data-dir="-1"]');
-  check('reps −: stops at the bottom of the range (5) and greys out', (await page.inputValue('#reps-s1-deadlift')) === '5' && await page.locator('#rm-s1-deadlift').isDisabled());
-  await page.tap('#card-s1-deadlift [data-action="reps-step"][data-dir="-1"]', { force: true });
-  check('reps −: no further', (await page.inputValue('#reps-s1-deadlift')) === '5');
-  await page.fill('#reps-s1-deadlift', '3');
-  check('reps: a short set can still be typed', (await page.inputValue('#reps-s1-deadlift')) === '3' && await page.locator('#rm-s1-deadlift').isDisabled());
-  for (let i = 0; i < 4; i++) await page.tap('#card-s1-deadlift [data-action="reps-step"][data-dir="1"]');
-  for (let i = 0; i < 3; i++) await page.tap('#card-s1-deadlift [data-action="reps-step"][data-dir="1"]');
-  check('reps +: stops at the top of the range (8)', (await page.inputValue('#reps-s1-deadlift')) === '8');
+  for (let i = 0; i < 3; i++) await page.tap('#card-s1-deadlift [data-action="reps-step"][data-dir="-1"]', { force: true });
+  check('reps −: down to 2 below the range (3) and greys out', (await page.inputValue('#reps-s1-deadlift')) === '3' && await page.locator('#rm-s1-deadlift').isDisabled());
+  await page.fill('#reps-s1-deadlift', '1');
+  check('reps: anything further can be typed', (await page.inputValue('#reps-s1-deadlift')) === '1');
+  for (let i = 0; i < 12; i++) await page.tap('#card-s1-deadlift [data-action="reps-step"][data-dir="1"]', { force: true });
+  check('reps +: up to 2 above the range (10) and greys out', (await page.inputValue('#reps-s1-deadlift')) === '10' && await page.locator('#rp-s1-deadlift').isDisabled());
   await page.fill('#reps-s1-deadlift', '7');
 
   // log set by set

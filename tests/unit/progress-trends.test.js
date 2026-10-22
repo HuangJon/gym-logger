@@ -97,11 +97,15 @@ test('stepWeight / stepReps', () => {
   assert.equal(stepWeight(findExercise('s1-lateral'), 0, 1), 2.5);       // nothing logged → + starts from 0
   assert.equal(stepWeight(findExercise('s1-lateral'), 3, 1), 5.5);
   assert.equal(stepReps(8, 1, [6, 12]), 9);
-  assert.equal(stepReps(12, 1, [6, 12]), 12);   // stops at the top of the range
-  assert.equal(stepReps(7, -1, [6, 12]), 6);
-  assert.equal(stepReps(6, -1, [6, 12]), 6);    // stops at the bottom of the range
-  assert.equal(stepReps(4, -1, [6, 12]), 4);    // a typed number below the range isn't changed by −
-  assert.equal(stepReps(4, 1, [6, 12]), 5);     // + climbs back toward the range
+  assert.equal(stepReps(12, 1, [6, 12]), 13);   // up to 2 past the top
+  assert.equal(stepReps(14, 1, [6, 12]), 14);
+  assert.equal(stepReps(6, -1, [6, 12]), 5);    // up to 2 below the bottom
+  assert.equal(stepReps(4, -1, [6, 12]), 4);
+  assert.equal(stepReps(2, -1, [6, 12]), 2);    // a typed number further out isn't pulled back by −
+  assert.equal(stepReps(2, 1, [6, 12]), 3);
+  assert.equal(stepReps(20, -1, [6, 12]), 19);
+  assert.equal(stepReps(20, 1, [6, 12]), 20);
+  assert.equal(stepReps(1, -1, [1, 3]), 1);     // never below 1
   assert.equal(stepReps(null, 1, [6, 12]), 7);
 });
 
