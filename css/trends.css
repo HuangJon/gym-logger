@@ -160,3 +160,23 @@ g.is-tipped rect.bar, g.is-tipped rect.bar-pct { stroke: var(--fg); stroke-width
 .chart-dot.maintain { fill: var(--card); stroke: var(--maintain-line); stroke-width: 1.75; }
 .rc.maintain { background: var(--maintain-bg); color: var(--maintain); }
 .zone-legend .zone-maintain { color: var(--maintain); }
+.pg-none { font-size: 11px; color: var(--fg2); }
+.pg-sort { margin: 2px 0 4px; }
+.pg-sort .seg button { font-size: 11px; padding: 4px 10px; }
+.pg-group { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--fg3); padding: 10px 0 2px; }
+.pg-group + .pg-row { border-top: none; }
+.pg-letters { font-size: 10px; font-weight: 700; color: var(--fg3); letter-spacing: .03em; }
+.pg-line { width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 12px; color: var(--fg2); }
+.pg-line b { color: var(--fg); font-variant-numeric: tabular-nums; }
+.pg-spark { display: inline-flex; color: var(--fg3); }
+.pg-spark.s-progressing { color: var(--good); }
+.pg-spark.s-stalled { color: var(--bad); }
+.pg-spark.s-holding { color: var(--mid); }
+.pg-spark.s-top { color: var(--deload); }
+.pg-trend { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--fg2); }
+.pg-trend.up { color: var(--good); }
+.pg-trend.down { color: var(--bad); }
+.pg-est[data-tip], .pg-trend[data-tip] { cursor: help; text-decoration: underline dotted var(--fg3); text-underline-offset: 3px; }
+.pg-abs { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 11px; color: var(--fg2); }
+.pg-abs .pg-sub { color: var(--fg3); display: block; }
+.pg-abs b { color: var(--fg); }
