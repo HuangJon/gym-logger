@@ -130,7 +130,7 @@
 .tp-row { display: flex; align-items: center; gap: 8px; }
 .tp-val { min-width: 44px; text-align: center; font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .tp-suffix { font-size: 11px; color: var(--fg3); }
-.unit-seg button { font-size: 13px; padding: 6px 14px; touch-action: manipulation; }
+.unit-seg button { font-size: 12px; padding: 6px 10px; min-height: 32px; touch-action: manipulation; }
 .tp-actions { display: flex; justify-content: space-between; align-items: center; }
 
 /* set-by-set panel */
@@ -230,3 +230,10 @@
   color: var(--fg2); font-size: 12px; font-weight: 600; cursor: pointer;
 }
 .discard-btn.btn-confirm { border-color: var(--danger); color: var(--danger); }
+
+/* deload: mid-session switch + per-lift button */
+.session-tools { align-items: center; gap: 14px; }
+.session-deload .switch-label { font-size: 12px; }
+.session-deload.is-on .switch-label { color: var(--deload); }
+.ex-card.is-deload .ex-header { background: var(--deload-bg); }
+.ex-card .deload-btn[aria-pressed="true"] { border-color: var(--deload-line); color: var(--deload); background: var(--deload-bg); }

@@ -39,7 +39,9 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   const stateOf = id => (scratch[id] ||= { done: [] });
   /** Last normal (non-deload) session for this lift — what progression builds on. */
   const lastFor = (ex, date = active.date) => lastPerformance(repo.sessions, ex, date);
-  const suggestedTarget = (ex, date = active.date, deload = active.deload) => computeTarget(ex, lastFor(ex, date), {
+  /** Is this lift deloaded today? Its own choice on the card, else the session's. */
+  const liftDeload = ex => scratch[ex.id]?.deload ?? active.deload;
+  const suggestedTarget = (ex, date = active.date, deload = liftDeload(ex)) => computeTarget(ex, lastFor(ex, date), {
     date, deload, lastActive: lastPerformance(repo.sessions, ex, date, { includeDeload: true })?.date,
   });
   const targetFor = ex => scratch[ex.id]?.target ?? suggestedTarget(ex);
@@ -182,10 +184,12 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     const { sessionNum: n, date, deload } = active, restOn = settings.get().restTimer;
     ui.header.innerHTML = `
       <span class="dot" style="background:${SESSION_COLORS[n]}"></span>
-      <h2 style="color:${SESSION_COLORS[n]}">${SESSION_LABELS[n]}${deload ? ' <span class="deload-tag">deload</span>' : ''}</h2>
+      <h2 style="color:${SESSION_COLORS[n]}">${SESSION_LABELS[n]}</h2>
       <input type="date" class="date-input" id="active-date" value="${date}" data-action="active-date" aria-label="Session date">
       <button type="button" class="link-btn sa-change" data-action="ask-discard">change</button>
       <div class="session-tools">
+        <label class="switch session-deload${deload ? ' is-on' : ''}"><input type="checkbox" id="session-deload" data-action="session-deload"${deload ? ' checked' : ''}><span class="switch-track" aria-hidden="true"></span>
+          <span class="switch-label">Deload</span></label>
         <button type="button" class="rest-toggle" data-action="rest-toggle" aria-pressed="${restOn}">⏱ Rest timer ${restOn ? 'on' : 'off'}</button>
       </div>`;
   }
@@ -213,23 +217,24 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   }
 
   function exerciseCard(ex) {
-    const st = stateOf(ex.id);
-    const tags = [ex.tag && `<span class="ex-tag tag-circuit">${esc(ex.tag)}</span>`, ex.warn && `<span class="ex-tag tag-warn">${esc(ex.warn)}</span>`].filter(Boolean).join('');
+    const st = stateOf(ex.id), deload = liftDeload(ex);
+    const tags = [deload && '<span class="deload-tag">deload</span>', ex.tag && `<span class="ex-tag tag-circuit">${esc(ex.tag)}</span>`, ex.warn && `<span class="ex-tag tag-warn">${esc(ex.warn)}</span>`].filter(Boolean).join('');
     return `
-      <div class="card ex-card s${active.sessionNum}${st.skipped ? ' is-skipped' : ''}" id="card-${ex.id}" data-ex="${ex.id}">
+      <div class="card ex-card s${active.sessionNum}${st.skipped ? ' is-skipped' : ''}${deload ? ' is-deload' : ''}" id="card-${ex.id}" data-ex="${ex.id}">
         <div class="ex-header">
           <div>
             <div class="ex-name">${esc(ex.name)}</div>
             <div class="ex-detail">${esc(ex.detail)}</div>
             ${tags ? `<div class="ex-tags">${tags}</div>` : ''}
           </div>
-          <div>${ex.bw ? '<span class="weight-bw">bodyweight</span>' : ''}</div>
+          <div>${ex.bw ? '<span class="weight-bw">bodyweight</span>' : unitSwitch(ex)}</div>
         </div>
         ${targetRow(ex)}
         ${lastRow(ex)}
         ${st.skipped ? '' : setLog(ex)}
         <div class="ex-row status-row">
           <button type="button" class="status-btn" data-action="skip" data-status="skip" aria-pressed="${!!st.skipped}">✕ Skip</button>
+          <button type="button" class="status-btn deload-btn" data-action="lift-deload" aria-pressed="${deload}">↓ Deload this lift</button>
         </div>
         <div class="ex-row note-row">
           <span class="note-icon">✎</span>
@@ -259,6 +264,10 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     </div>`;
   }
 
+  /** One-tap lbs | kg, to match the machine's labels. */
+  const unitSwitch = ex => `<div class="seg unit-seg" role="group" aria-label="Weight unit for ${esc(ex.name)}">${UNITS.map(u =>
+    `<button type="button" data-action="unit" data-unit="${u}" aria-pressed="${unitOf(ex) === u}">${u}</button>`).join('')}</div>`;
+
   function targetPop(ex, t) {
     const row = (field, label, value, suffix = '') => `<div class="tp-row">
       <span class="row-label">${label}</span>
@@ -266,14 +275,10 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
       <span class="tp-val" id="tp-${field}-${ex.id}">${value ?? '–'}</span>
       <button type="button" class="stepper" data-action="target-step" data-field="${field}" data-dir="1" aria-label="Raise target ${label}">+</button>
       <span class="tp-suffix">${suffix}</span></div>`;
-    const unitRow = ex.bw ? '' : `<div class="tp-row"><span class="row-label">Unit</span>
-      <div class="seg unit-seg" role="group" aria-label="Weight unit">${UNITS.map(u => `<button type="button" data-action="unit" data-unit="${u}" aria-pressed="${unitOf(ex) === u}">${u}</button>`).join('')}</div>
-      <span class="tp-suffix">match the machine's labels</span></div>`;
     return `<div class="target-pop" role="dialog" aria-label="Adjust today's target">
       ${ex.bw ? '' : row('weight', 'Weight', t.weight, unitOf(ex))}
       ${row('reps', 'Reps', t.reps, `/ ${repRangeText(ex.reps)}`)}
       ${row('sets', 'Sets', t.sets)}
-      ${unitRow}
       <div class="tp-actions">
         ${stateOf(ex.id).target ? '<button type="button" class="link-btn" data-action="target-reset">Back to suggested</button>' : '<span></span>'}
         <button type="button" class="btn-small" data-action="target-close">Done</button>
@@ -479,6 +484,24 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     onUnitsChanged?.();
   }
 
+  /** Deload the whole session (or back to normal) mid-workout. Logged sets stay; targets follow. */
+  function setSessionDeload(on) {
+    active.deload = on;
+    for (const st of Object.values(scratch)) { delete st.deload; delete st.target; delete st.draft; }
+    persist();
+    renderHeader();
+    renderExercises();
+  }
+
+  /** Deload just this lift (or keep this one normal in a deload session). */
+  function toggleLiftDeload(exId) {
+    const ex = findExercise(exId), st = stateOf(exId), next = !liftDeload(ex);
+    if (next === active.deload) delete st.deload; else st.deload = next;
+    delete st.target;   // the suggested target follows the change
+    st.draft = undefined;
+    refreshCard(exId);
+  }
+
   function toggleRestTimer() {
     const on = !settings.get().restTimer;
     settings.update({ restTimer: on });
@@ -552,6 +575,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     'discard-bottom': discardFromBottom,
     'rest-toggle': toggleRestTimer,
     'unit': el => setUnit(exIdOf(el), el.dataset.unit),
+    'lift-deload': el => toggleLiftDeload(exIdOf(el)),
     'rest-adjust': el => rest.adjust(Number(el.dataset.dir)),
     'rest-stop': () => rest.stop(),
     'deload-week': () => changeDeloadWeek(startDeloadWeek(pickedDate())),
@@ -570,6 +594,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     'pick-date': () => { pickDeload = null; renderPicker(); },
     'pick-deload': el => { pickDeload = el.checked; renderPicker(); },
     'active-date': changeDate,
+    'session-deload': el => setSessionDeload(el.checked),
   });
 
   resetPicker();

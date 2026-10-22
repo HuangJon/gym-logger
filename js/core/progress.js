@@ -2,7 +2,7 @@
 import { STALE_AFTER_DAYS, EASE_BACK_FACTOR, DELOAD } from '../config/program.js';
 import { hasValue, round2, convertWeight } from './numbers.js';
 import { daysBetween } from './dates.js';
-import { normalizeEntry, DID_IT, STATUS, byNewest, setsOfEntry, meetsTarget } from './records.js';
+import { normalizeEntry, DID_IT, STATUS, byNewest, setsOfEntry, meetsTarget, isDeloadEntry } from './records.js';
 import { exercisesForSession, incrementOf, setsOf, unitOf, defaultWeightOf } from './exercises.js';
 
 /**
@@ -18,12 +18,13 @@ export function performances(sessions, ex, beforeDate, { includeDeload = false, 
   for (const record of [...sessions].sort(byNewest)) {
     if (found.length >= limit) break;
     if (beforeDate && record.date > beforeDate) continue;
-    if (record.deload && !includeDeload) continue;
     for (const other of exercisesForSession(record)) {
       if (other.name !== ex.name) continue;
       const e = normalizeEntry(record.entries?.[other.id]);
+      const deload = isDeloadEntry(record, e);
+      if (deload && !includeDeload) continue;
       if (DID_IT.has(e.status) && (hasValue(e.weight) || hasValue(e.reps))) {
-        found.push({ ...inUnit(e, ex), date: record.date, session: record.session, ...(record.deload ? { deload: true } : {}) });
+        found.push({ ...inUnit(e, ex), date: record.date, session: record.session, deload });
         break;
       }
     }
@@ -61,7 +62,7 @@ export function lighterWeight(ex, weight, factor) {
   const down = round2(Math.floor(scaled + 1e-9) * inc);
   if (down > 0 && (weight - down) / weight <= 0.2 + 1e-9) return down;
   const near = round2(Math.round(scaled) * inc);
-  return near > 0 ? near : weight;
+  return near > 0 ? Math.min(near, weight) : weight;   // never heavier than where you started
 }
 
 /**

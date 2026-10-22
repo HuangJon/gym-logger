@@ -7,7 +7,8 @@
  *   Entry = { status, note,
  *             sets?: [{ weight?, reps }],         // each logged set, in order
  *             weight?, unit?, reps?,               // summary: heaviest weight, fewest reps — for charts and older logs
- *             target?: { weight?, reps, sets } }   // what you were aiming for
+ *             target?: { weight?, reps, sets },    // what you were aiming for
+ *             deload?: boolean }                   // only when it differs from the session's deload flag
  *
  * status is one of STATUS. Unknown fields are kept as-is, so data written by a future version
  * isn't thrown away if it's ever read by this one.
@@ -101,7 +102,8 @@ export function meetsTarget(sets, target) {
  *   scratch:  { [exerciseId]: { skipped?, note?, done?: [{ weight?, reps }] } } — what you logged
  *   targetOf: ex => { weight, reps, sets } — the target for each exercise (yours if you changed it)
  * Logged sets → complete if they met the target, otherwise partial. No logged sets → "unrecorded".
- * Skip drops any sets. `deload` marks the session as a deload (it won't move progression).
+ * Skip drops any sets. `deload` marks the session as a deload (it won't move progression); a lift can
+ * differ with scratch[id].deload (deload just that lift, or keep one lift normal in a deload session).
  */
 export function buildSessionRecord({ sessionNum, date, scratch, targetOf, deload = false, now = Date.now() }) {
   const entries = {};
@@ -117,6 +119,8 @@ export function buildSessionRecord({ sessionNum, date, scratch, targetOf, deload
       if (hasValue(sum.weight)) { entry.weight = sum.weight; entry.unit = unitOf(ex); }
       entry.reps = sum.reps;
     }
+    const liftDeload = typeof sc.deload === 'boolean' ? sc.deload : deload;
+    if (liftDeload !== deload && DID_IT.has(entry.status)) entry.deload = liftDeload;
     if (target && entry.status !== STATUS.UNRECORDED) {
       entry.target = { reps: target.reps, sets: target.sets, ...(hasValue(target.weight) ? { weight: target.weight } : {}) };
     }
@@ -124,6 +128,9 @@ export function buildSessionRecord({ sessionNum, date, scratch, targetOf, deload
   }
   return { id: String(now), session: Number(sessionNum), date, ts: now, ...(deload ? { deload: true } : {}), entries };
 }
+
+/** Was this lift deloaded in this session? Its own flag if it has one, else the session's. */
+export const isDeloadEntry = (record, entry) => (typeof entry?.deload === 'boolean' ? entry.deload : !!record?.deload);
 
 /** { complete, partial, skip, unrecorded } counts for a record, over the exercises it shows. */
 export function statusCounts(record) {
