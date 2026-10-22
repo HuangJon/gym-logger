@@ -1,11 +1,11 @@
-/** Workout tab: pick a date + session, log each exercise against its target, complete the session. */
+/** Workout tab: pick a date + session, log each set against the target, complete the session. */
 import { PREHAB, SESSION_LABELS, SESSION_COLORS, STALE_AFTER_DAYS } from '../config/program.js';
 import { sessionExercises, findExercise, unitOf, repRangeText } from '../core/exercises.js';
 import { todayISO, isISODate, formatShort, agoText, daysBetween } from '../core/dates.js';
-import { hasValue, parseWeight } from '../core/numbers.js';
-import { STATUS, buildSessionRecord, setsOfEntry } from '../core/records.js';
+import { hasValue, parseWeight, parseReps } from '../core/numbers.js';
+import { STATUS, buildSessionRecord, formatSets } from '../core/records.js';
 import { addSession } from '../core/log.js';
-import { lastPerformance, computeTarget, targetReason, stepWeight, stepReps, attemptBadge } from '../core/progress.js';
+import { lastPerformance, computeTarget, targetReason, stepWeight, stepReps, stepTarget, setBadge, exerciseVerdict } from '../core/progress.js';
 import { esc, delegate, autoResize, flash } from './dom.js';
 
 const COMPLETE_LABEL = 'Complete Session';
@@ -21,15 +21,36 @@ export function createWorkoutView({ root, repo, onSaved }) {
   };
 
   let active = null;   // { sessionNum, date } while logging
-  let scratch = {};    // { [exerciseId]: { status?, note?, weight?, sets?, selected? } } — not saved until Complete
+  /**
+   * Per exercise, nothing saved until Complete:
+   * { skipped?, note?, done: [{weight?, reps}], current?: index being edited (undefined = next set),
+   *   draft?: {weight?, reps} for the open set, target?: your edited target, targetOpen? }
+   */
+  let scratch = {};
   let saving = false;
 
-  const entryFor = id => (scratch[id] ||= {});
+  const stateOf = id => (scratch[id] ||= { done: [] });
   const lastFor = (ex, date = active.date) => lastPerformance(repo.sessions, ex, date);
-  const targetFor = (ex, date) => computeTarget(ex, lastFor(ex, date));
-  /** What the card currently shows: your changes, otherwise the target. */
-  const currentWeight = ex => ex.bw ? null : (scratch[ex.id]?.weight ?? targetFor(ex)?.weight ?? null);
-  const currentSets = ex => scratch[ex.id]?.sets ?? (t => Array(t.sets).fill(t.reps))(targetFor(ex));
+  const suggestedTarget = (ex, date) => computeTarget(ex, lastFor(ex, date));
+  const targetFor = ex => scratch[ex.id]?.target ?? suggestedTarget(ex);
+
+  /** Index of the open set: one you tapped to edit, else the next set to log, else null (all logged). */
+  function openIndex(ex) {
+    const st = stateOf(ex.id);
+    if (st.current !== undefined) return st.current;
+    return st.done.length < targetFor(ex).sets ? st.done.length : null;
+  }
+
+  /** Values in the open set: your changes, else the set you're editing, else the previous set, else the target. */
+  function draftOf(ex) {
+    const st = stateOf(ex.id), i = openIndex(ex), t = targetFor(ex);
+    if (st.draft) return st.draft;
+    if (i !== null && i < st.done.length) return { ...st.done[i] };
+    const prev = st.done[st.done.length - 1];
+    if (prev) return { ...prev };
+    return ex.bw ? { reps: t.reps } : { weight: t.weight ?? null, reps: t.reps };
+  }
+  const editDraft = (ex, change) => { const st = stateOf(ex.id); st.draft = { ...draftOf(ex), ...change }; };
 
   // ── picker ──────────────────────────────────────────────
   function resetPicker() {
@@ -45,7 +66,7 @@ export function createWorkoutView({ root, repo, onSaved }) {
     if (!n) { ui.preview.innerHTML = ''; return; }
     const date = isISODate(ui.pickDate.value) ? ui.pickDate.value : todayISO();
     const rows = sessionExercises(n).map(ex => `<div class="preview-ex"><span class="preview-ex-name">${esc(ex.name)}</span>
-      <span class="preview-ex-detail">${esc(ex.detail)} · <b>${targetText(ex, targetFor(ex, date))}</b></span></div>`).join('');
+      <span class="preview-ex-detail">${esc(ex.detail)} · <b>${targetText(ex, suggestedTarget(ex, date))}</b></span></div>`).join('');
     ui.preview.innerHTML = `<div class="card preview">
       <div class="preview-header" style="color:${SESSION_COLORS[n]}">${SESSION_LABELS[n]} — today's targets</div>
       <div class="preview-list">${rows}</div></div>`;
@@ -53,8 +74,8 @@ export function createWorkoutView({ root, repo, onSaved }) {
 
   function targetText(ex, t) {
     if (!t) return '';
-    const weight = ex.bw ? '' : (hasValue(t.weight) ? `${t.weight} ${unitOf(ex)} × ` : '');
-    return `${weight}${t.reps}${ex.bw || !hasValue(t.weight) ? ' reps' : ''} × ${t.sets} sets`;
+    const weight = !ex.bw && hasValue(t.weight) ? `${t.weight} ${unitOf(ex)} × ` : '';
+    return `${weight}${t.reps}${weight ? '' : ' reps'} × ${t.sets} sets`;
   }
 
   function start() {
@@ -99,11 +120,19 @@ export function createWorkoutView({ root, repo, onSaved }) {
     ui.exercises.querySelectorAll('.note-input').forEach(autoResize);
   }
 
+  /** Re-render one card (state lives in `scratch`, so nothing typed is lost). */
+  function refreshCard(exId) {
+    const card = ui.exercises.querySelector(`#card-${exId}`);
+    if (!card) return;
+    card.outerHTML = exerciseCard(findExercise(exId));
+    autoResize(ui.exercises.querySelector(`#note-${exId}`));
+  }
+
   function exerciseCard(ex) {
-    const sc = scratch[ex.id] || {};
+    const st = stateOf(ex.id);
     const tags = [ex.tag && `<span class="ex-tag tag-circuit">${esc(ex.tag)}</span>`, ex.warn && `<span class="ex-tag tag-warn">${esc(ex.warn)}</span>`].filter(Boolean).join('');
     return `
-      <div class="card ex-card s${active.sessionNum}${sc.status === STATUS.SKIP ? ' is-skipped' : ''}" id="card-${ex.id}" data-ex="${ex.id}">
+      <div class="card ex-card s${active.sessionNum}${st.skipped ? ' is-skipped' : ''}" id="card-${ex.id}" data-ex="${ex.id}">
         <div class="ex-header">
           <div>
             <div class="ex-name">${esc(ex.name)}</div>
@@ -114,39 +143,57 @@ export function createWorkoutView({ root, repo, onSaved }) {
         </div>
         ${targetRow(ex)}
         ${lastRow(ex)}
-        <div class="ex-log"${sc.status === STATUS.SKIP ? ' hidden' : ''}>
-          ${ex.bw ? '' : `<div class="ex-row log-line"><span class="row-label">Weight</span><div class="weight-box" id="wb-${ex.id}">${weightBoxInner(ex)}</div></div>`}
-          ${setsRow(ex)}
-        </div>
+        ${st.skipped ? '' : setLog(ex)}
         <div class="ex-row status-row">
-          <button type="button" class="status-btn" data-action="status" data-status="${STATUS.COMPLETE}" aria-pressed="${sc.status === STATUS.COMPLETE}">✓ Done</button>
-          <button type="button" class="status-btn" data-action="status" data-status="${STATUS.SKIP}" aria-pressed="${sc.status === STATUS.SKIP}">✕ Skip</button>
+          <button type="button" class="status-btn" data-action="skip" data-status="skip" aria-pressed="${!!st.skipped}">✕ Skip</button>
         </div>
         <div class="ex-row note-row">
           <span class="note-icon">✎</span>
-          <textarea class="note-input" id="note-${ex.id}" rows="1" placeholder="notes (optional)…" data-action="note">${esc(sc.note || '')}</textarea>
+          <textarea class="note-input" id="note-${ex.id}" rows="1" placeholder="notes (optional)…" data-action="note">${esc(st.note || '')}</textarea>
         </div>
       </div>`;
   }
 
+  // target + last time
   function targetRow(ex) {
-    const last = lastFor(ex), target = computeTarget(ex, last);
+    const st = stateOf(ex.id), last = lastFor(ex), target = targetFor(ex);
     if (!target) return '';
-    const unit = unitOf(ex), reason = targetReason(ex, target, last, unit);
+    const unit = unitOf(ex), edited = !!st.target;
+    const reason = edited ? 'your target for today' : targetReason(ex, target, last, unit);
     const needsWeight = !ex.bw && !hasValue(target.weight);
     return `<div class="ex-row target-row">
       <span class="row-label">Target</span>
-      <span class="target-val"><b>${targetText(ex, target)}</b>${needsWeight ? ' <span class="last-when">· set a weight</span>' : ''}</span>
+      <button type="button" class="target-btn" data-action="target-open" aria-expanded="${!!st.targetOpen}">
+        <b>${targetText(ex, target)}</b>${needsWeight ? ' <span class="last-when">· set a weight</span>' : ''} <span class="target-edit">✎</span>
+      </button>
       ${reason ? `<span class="target-reason">${reason}</span>` : ''}
+      ${st.targetOpen ? targetPop(ex, target) : ''}
     </div>`;
+  }
+
+  function targetPop(ex, t) {
+    const row = (field, label, value, suffix = '') => `<div class="tp-row">
+      <span class="row-label">${label}</span>
+      <button type="button" class="stepper" data-action="target-step" data-field="${field}" data-dir="-1" aria-label="Lower target ${label}">−</button>
+      <span class="tp-val" id="tp-${field}-${ex.id}">${value ?? '–'}</span>
+      <button type="button" class="stepper" data-action="target-step" data-field="${field}" data-dir="1" aria-label="Raise target ${label}">+</button>
+      <span class="tp-suffix">${suffix}</span></div>`;
+    return `<div class="target-pop" role="dialog" aria-label="Adjust today's target">
+      ${ex.bw ? '' : row('weight', 'Weight', t.weight, unitOf(ex))}
+      ${row('reps', 'Reps', t.reps, `/ ${repRangeText(ex.reps)}`)}
+      ${row('sets', 'Sets', t.sets)}
+      <div class="tp-actions">
+        ${stateOf(ex.id).target ? '<button type="button" class="link-btn" data-action="target-reset">Back to suggested</button>' : '<span></span>'}
+        <button type="button" class="btn-small" data-action="target-close">Done</button>
+      </div></div>`;
   }
 
   function lastRow(ex) {
     const last = lastFor(ex);
     if (!last) return '<div class="ex-row last-row"><span class="row-label">Last</span><span class="last-none">no previous log</span></div>';
     const unit = last.unit || unitOf(ex);
-    const sets = setsOfEntry(last, 1).map(r => (r === 0 ? '–' : r)).join(', ');
-    const value = [!ex.bw && hasValue(last.weight) && `${last.weight} ${unit}`, sets && `${sets} reps`].filter(Boolean).join(' × ');
+    const value = last.sets?.length ? formatSets(last.sets, unit)
+      : [!ex.bw && hasValue(last.weight) && `${last.weight} ${unit}`, hasValue(last.reps) && `${last.reps} reps`].filter(Boolean).join(' × ');
     const stale = daysBetween(last.date, active.date) > STALE_AFTER_DAYS;
     return `<div class="ex-row last-row">
       <span class="row-label">Last</span>
@@ -156,50 +203,75 @@ export function createWorkoutView({ root, repo, onSaved }) {
     </div>`;
   }
 
-  function weightBoxInner(ex) {
-    const w = currentWeight(ex);
-    const value = w == null
-      ? `<span class="weight-placeholder" id="wp-${ex.id}" tabindex="0" role="button" data-action="edit-weight">–</span>`
-      : `<span class="weight-val" id="wv-${ex.id}" tabindex="0" role="button" data-action="edit-weight">${w}</span>`;
-    return `<div class="weight-row">
-      <button type="button" class="stepper" data-action="weight-step" data-dir="-1" aria-label="Less weight"${w == null ? ' disabled' : ''}>−</button>
-      ${value}<span class="weight-unit">${unitOf(ex)}</span>
-      <button type="button" class="stepper" data-action="weight-step" data-dir="1" aria-label="More weight">+</button>
-    </div>`;
-  }
-
-  function setsRow(ex) {
+  // set-by-set panel
+  function setLog(ex) {
     if (!ex.reps) return '';
-    return `<div class="ex-row log-line sets-line">
-      <span class="row-label">Sets</span>
-      <div class="sets-box" id="sets-${ex.id}">${setsInner(ex)}</div>
+    const st = stateOf(ex.id), target = targetFor(ex), open = openIndex(ex), unit = unitOf(ex);
+    const tabCount = Math.max(target.sets, st.done.length, open !== null ? open + 1 : 0);
+    const tabs = Array.from({ length: tabCount }, (_, i) => {
+      const done = i < st.done.length, current = i === open, reachable = i <= st.done.length;
+      const cls = ['set-tab', done && 'is-done', current && 'is-current'].filter(Boolean).join(' ');
+      return `<button type="button" class="${cls}" data-action="set-tab" data-i="${i}"${reachable ? '' : ' disabled'}${current ? ' aria-current="step"' : ''} aria-label="Set ${i + 1}${done ? ', logged' : ''}">${done && !current ? '✓' : ''}${i + 1}</button>`;
+    }).join('');
+    const add = open === null ? '<button type="button" class="set-tab add" data-action="set-add" aria-label="Add a set">+</button>' : '';
+    const verdict = exerciseVerdict(st.done, target);
+    return `<div class="setlog${open === null ? ' is-collapsed' : ''}" id="setlog-${ex.id}">
+      <div class="setlog-head">
+        <span class="row-label">Sets</span>
+        <span class="setlog-summary">${st.done.length ? esc(formatSets(st.done, ex.bw ? '' : unit)) : 'none logged yet'}</span>
+        <div class="set-tabs">${tabs}${add}</div>
+      </div>
+      ${open !== null ? setBody(ex, open) : ''}
+      ${verdict.label ? `<div class="setlog-verdict ${verdict.status === STATUS.COMPLETE ? 'ok' : 'short'}">${verdict.label}</div>` : ''}
     </div>`;
   }
 
-  function setsInner(ex) {
-    const sets = currentSets(ex), selected = scratch[ex.id]?.selected ?? sets.length - 1;
-    const touched = scratch[ex.id]?.sets || scratch[ex.id]?.weight !== undefined;   // no verdict until you change something
-    const badge = touched ? attemptBadge({ weight: currentWeight(ex), sets }, targetFor(ex)) : { label: '' };
-    return `
-      <div class="set-chips">${sets.map((r, i) => `<button type="button" class="set-chip${r === 0 ? ' not-done' : ''}" data-action="set-select" data-i="${i}" aria-pressed="${i === selected}" aria-label="Set ${i + 1}: ${r} reps">${r === 0 ? '–' : r}</button>`).join('')}</div>
-      <div class="set-controls">
-        <button type="button" class="stepper" data-action="set-step" data-dir="-1" aria-label="One less rep">−</button>
-        <span class="set-label">set ${selected + 1}</span>
-        <button type="button" class="stepper" data-action="set-step" data-dir="1" aria-label="One more rep">+</button>
+  function setBody(ex, i) {
+    const st = stateOf(ex.id), d = draftOf(ex), editing = i < st.done.length;
+    const badge = setBadge(d, targetFor(ex));
+    return `<div class="setlog-body">
+      <div class="set-title">Set ${i + 1}${editing ? ' · editing' : ''}</div>
+      ${ex.bw ? '' : `<div class="log-line"><span class="row-label">Weight</span><div class="weight-box" id="wb-${ex.id}">${weightInner(ex, d)}</div></div>`}
+      <div class="log-line">
+        <span class="row-label">Reps</span>
+        <button type="button" class="stepper" data-action="reps-step" data-dir="-1" aria-label="One less rep">−</button>
+        <input class="reps-input" type="number" inputmode="numeric" min="0" id="reps-${ex.id}" value="${d.reps ?? ''}" data-action="reps" aria-label="${esc(ex.name)} reps, set ${i + 1}">
+        <button type="button" class="stepper" data-action="reps-step" data-dir="1" aria-label="One more rep">+</button>
         <span class="reps-target">/ ${repRangeText(ex.reps)}</span>
       </div>
-      ${badge.label ? `<span class="prog-badge ${badge.cls}" id="pb-${ex.id}">${badge.label}</span>` : ''}`;
+      <div class="set-actions">
+        <button type="button" class="btn-log" data-action="log-set">✓ ${editing ? 'Update' : 'Log'} set ${i + 1}</button>
+        <span class="prog-badge ${badge.cls}" id="pb-${ex.id}">${badge.label}</span>
+        ${editing ? '<button type="button" class="link-btn" data-action="remove-set">remove</button><button type="button" class="link-btn" data-action="cancel-set">cancel</button>' : ''}
+      </div>
+    </div>`;
   }
 
-  // ── editing ─────────────────────────────────────────────
-  /** Redraw only part of a card — redrawing the list would wipe whatever you tapped next. */
-  const refreshWeightBox = exId => { const el = ui.exercises.querySelector(`#wb-${exId}`); if (el) el.innerHTML = weightBoxInner(findExercise(exId)); };
-  const refreshSets = exId => { const el = ui.exercises.querySelector(`#sets-${exId}`); if (el) el.innerHTML = setsInner(findExercise(exId)); };
+  function weightInner(ex, d) {
+    const w = d.weight;
+    const value = hasValue(w)
+      ? `<span class="weight-val" id="wv-${ex.id}" tabindex="0" role="button" data-action="edit-weight">${w}</span>`
+      : `<span class="weight-placeholder" id="wp-${ex.id}" tabindex="0" role="button" data-action="edit-weight">–</span>`;
+    return `<div class="weight-row">
+      <button type="button" class="stepper" data-action="weight-step" data-dir="-1" aria-label="Less weight"${hasValue(w) ? '' : ' disabled'}>−</button>
+      ${value}<span class="weight-unit">${unitOf(ex)}</span>
+      <button type="button" class="stepper" data-action="weight-step" data-dir="1" aria-label="More weight">+</button></div>`;
+  }
 
+  /** Update only the weight box + badge — a full redraw would swallow the tap that caused the blur. */
+  function refreshDraft(exId) {
+    const ex = findExercise(exId), d = draftOf(ex);
+    const box = ui.exercises.querySelector(`#wb-${exId}`);
+    if (box) box.innerHTML = weightInner(ex, d);
+    const badge = setBadge(d, targetFor(ex)), el = ui.exercises.querySelector(`#pb-${exId}`);
+    if (el) { el.className = `prog-badge ${badge.cls}`; el.textContent = badge.label; }
+  }
+
+  // ── actions ─────────────────────────────────────────────
   function startWeightEdit(exId) {
     const ex = findExercise(exId), box = ui.exercises.querySelector(`#wb-${exId}`);
     if (!ex || !box || box.querySelector('input')) return;
-    box.innerHTML = `<div class="weight-row"><input type="number" inputmode="decimal" step="any" class="weight-input" id="inp-${exId}" value="${currentWeight(ex) ?? ''}" aria-label="${esc(ex.name)} weight"><span class="weight-unit">${unitOf(ex)}</span></div>`;
+    box.innerHTML = `<div class="weight-row"><input type="number" inputmode="decimal" step="any" class="weight-input" id="inp-${exId}" value="${draftOf(ex).weight ?? ''}" aria-label="${esc(ex.name)} weight"><span class="weight-unit">${unitOf(ex)}</span></div>`;
     const input = box.querySelector('input');
     let cancelled = false;
     input.addEventListener('keydown', e => {
@@ -208,57 +280,93 @@ export function createWorkoutView({ root, repo, onSaved }) {
     });
     input.addEventListener('blur', () => {
       const weight = parseWeight(input.value);
-      if (!cancelled && weight !== null) entryFor(exId).weight = weight;
-      refreshWeightBox(exId);
-      refreshSets(exId);
+      if (!cancelled && weight !== null) editDraft(ex, { weight });
+      refreshDraft(exId);
     }, { once: true });
     input.focus();
     input.select();
   }
 
-  function stepWeightBy(exId, direction) {
-    const ex = findExercise(exId), current = currentWeight(ex);
-    if (current == null && direction < 0) return;
-    entryFor(exId).weight = stepWeight(ex, current ?? 0, direction);   // nothing yet → + starts from 0
-    refreshWeightBox(exId);
-    refreshSets(exId);   // the badge compares weight with the target
+  function stepDraftWeight(exId, direction) {
+    const ex = findExercise(exId), w = draftOf(ex).weight;
+    if (!hasValue(w) && direction < 0) return;
+    editDraft(ex, { weight: stepWeight(ex, w ?? 0, direction) });   // nothing yet → + starts from 0
+    refreshDraft(exId);
   }
 
-  function selectSet(exId, i) {
-    entryFor(exId).selected = i;
-    refreshSets(exId);
+  function stepDraftReps(exId, direction) {
+    const ex = findExercise(exId), d = draftOf(ex);
+    editDraft(ex, { reps: stepReps(d.reps ?? targetFor(ex).reps, direction, ex.reps) });
+    ui.exercises.querySelector(`#reps-${exId}`).value = draftOf(ex).reps;
+    refreshDraft(exId);
   }
 
-  function stepSet(exId, direction) {
-    const ex = findExercise(exId), sc = entryFor(exId), sets = [...currentSets(ex)];
-    const i = sc.selected ?? sets.length - 1;
-    sets[i] = stepReps(sets[i], direction, ex.reps);
-    sc.sets = sets;
-    refreshSets(exId);
+  function typeReps(input) {
+    const ex = findExercise(input.closest('[data-ex]').dataset.ex), reps = parseReps(input.value);
+    editDraft(ex, { reps: reps === null || reps === '' ? null : reps });
+    refreshDraft(ex.id);
   }
 
-  function setStatus(card, value) {
-    const sc = entryFor(card.dataset.ex);
-    sc.status = sc.status === value ? '' : value;   // tap again to clear
-    card.classList.toggle('is-skipped', sc.status === STATUS.SKIP);
-    card.querySelector('.ex-log').hidden = sc.status === STATUS.SKIP;
-    card.querySelectorAll('.status-btn').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.status === sc.status)));
+  function logSet(exId) {
+    const ex = findExercise(exId), st = stateOf(exId), i = openIndex(ex), d = draftOf(ex);
+    if (i === null || !hasValue(d.reps) || d.reps <= 0) return;
+    const set = ex.bw || !hasValue(d.weight) ? { reps: d.reps } : { weight: d.weight, reps: d.reps };
+    if (i < st.done.length) st.done[i] = set; else st.done.push(set);
+    st.current = undefined;
+    st.draft = undefined;
+    refreshCard(exId);
+  }
+
+  function openSet(exId, i) {
+    const st = stateOf(exId);
+    if (i > st.done.length) return;
+    st.current = i < st.done.length ? i : undefined;
+    st.draft = undefined;
+    refreshCard(exId);
+  }
+
+  function addSet(exId) {
+    const st = stateOf(exId);
+    st.current = st.done.length;
+    st.draft = undefined;
+    refreshCard(exId);
+  }
+
+  function removeSet(exId) {
+    const ex = findExercise(exId), st = stateOf(exId), i = openIndex(ex);
+    if (i !== null && i < st.done.length) st.done.splice(i, 1);
+    st.current = undefined;
+    st.draft = undefined;
+    refreshCard(exId);
+  }
+
+  function toggleSkip(exId) {
+    const st = stateOf(exId);
+    st.skipped = !st.skipped;
+    refreshCard(exId);
+  }
+
+  function changeTarget(exId, change) {
+    const ex = findExercise(exId), st = stateOf(exId);
+    if (change === 'reset') delete st.target;
+    else st.target = stepTarget(ex, targetFor(ex), change.field, change.dir);
+    refreshCard(exId);   // sets not started yet pick up the new numbers
   }
 
   function changeDate(input) {
     if (!isISODate(input.value)) { input.value = active.date; return; }
     active.date = input.value;
-    renderExercises();   // targets depend on the date; your changes live in `scratch`
+    renderExercises();   // targets depend on the date; what you logged lives in `scratch`
   }
 
   // ── complete ────────────────────────────────────────────
   async function complete() {
     if (saving || !active) return;
     const btn = ui.completeBtn;
-    const marked = sessionExercises(active.sessionNum).some(ex => scratch[ex.id]?.status);
-    if (!marked && !btn.dataset.armed) {   // ask before saving a session where nothing is marked
+    const anything = sessionExercises(active.sessionNum).some(ex => scratch[ex.id]?.done?.length || scratch[ex.id]?.skipped);
+    if (!anything && !btn.dataset.armed) {   // ask before saving a session with nothing logged
       btn.dataset.armed = '1';
-      btn.textContent = 'Nothing marked yet — tap again to save anyway';
+      btn.textContent = 'Nothing logged yet — tap again to save anyway';
       setTimeout(() => { if (btn.dataset.armed) { delete btn.dataset.armed; if (!saving) btn.textContent = COMPLETE_LABEL; } }, 4000);
       return;
     }
@@ -293,18 +401,27 @@ export function createWorkoutView({ root, repo, onSaved }) {
     'ask-discard': askDiscard,
     'discard': endSession,
     'keep': el => el.closest('.discard-bar').remove(),
+    'target-open': el => { const st = stateOf(exIdOf(el)); st.targetOpen = !st.targetOpen; refreshCard(exIdOf(el)); },
+    'target-close': el => { stateOf(exIdOf(el)).targetOpen = false; refreshCard(exIdOf(el)); },
+    'target-step': el => changeTarget(exIdOf(el), { field: el.dataset.field, dir: Number(el.dataset.dir) }),
+    'target-reset': el => changeTarget(exIdOf(el), 'reset'),
     'edit-weight': el => startWeightEdit(exIdOf(el)),
-    'weight-step': el => stepWeightBy(exIdOf(el), Number(el.dataset.dir)),
-    'set-select': el => selectSet(exIdOf(el), Number(el.dataset.i)),
-    'set-step': el => stepSet(exIdOf(el), Number(el.dataset.dir)),
-    'status': el => setStatus(el.closest('[data-ex]'), el.dataset.status),
+    'weight-step': el => stepDraftWeight(exIdOf(el), Number(el.dataset.dir)),
+    'reps-step': el => stepDraftReps(exIdOf(el), Number(el.dataset.dir)),
+    'log-set': el => logSet(exIdOf(el)),
+    'set-tab': el => openSet(exIdOf(el), Number(el.dataset.i)),
+    'set-add': el => addSet(exIdOf(el)),
+    'remove-set': el => removeSet(exIdOf(el)),
+    'cancel-set': el => openSet(exIdOf(el), stateOf(exIdOf(el)).done.length),
+    'skip': el => toggleSkip(exIdOf(el)),
     'complete': complete,
   });
   delegate(root, 'keydown', {
     'edit-weight': (el, e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startWeightEdit(exIdOf(el)); } },
   });
   delegate(root, 'input', {
-    'note': el => { entryFor(exIdOf(el)).note = el.value; autoResize(el); },
+    'reps': typeReps,
+    'note': el => { stateOf(exIdOf(el)).note = el.value; autoResize(el); },
   });
   delegate(root, 'change', {
     'pick-session': renderPreview,

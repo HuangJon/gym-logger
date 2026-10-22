@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { findExercise, sessionExercises, exercisesForSession, unitOf, incrementOf, repRangeText, allExercises } from '../../js/core/exercises.js';
-import { normalizeEntry, buildSessionRecord, statusCounts, byNewest, meetsTarget, setsOfEntry, lowestSet } from '../../js/core/records.js';
+import { normalizeEntry, buildSessionRecord, statusCounts, byNewest, meetsTarget, setsOfEntry, summarizeSets, formatSets } from '../../js/core/records.js';
 import { addSession, updateEntry, setSessionDate, deleteSession, mergeSessions } from '../../js/core/log.js';
 import { migrateLog, SCHEMA_VERSION } from '../../js/core/migrate.js';
 import { SESSIONS, RETIRED } from '../../js/config/program.js';
@@ -60,58 +60,67 @@ test('normalizeEntry upgrades early shapes and drops junk', () => {
   assert.deepEqual(normalizeEntry(null), { status: 'unrecorded', note: '' });
 });
 
-test('normalizeEntry keeps per-set reps, the target, and fields it does not know', () => {
-  const e = normalizeEntry({ status: 'partial', weight: 50, unit: 'lbs', sets: [9, 8, 0], target: { weight: 50, reps: 9, sets: 3 }, rpe: 8 });
-  assert.deepEqual(e, { rpe: 8, status: 'partial', note: '', weight: 50, unit: 'lbs', sets: [9, 8, 0], reps: 8, target: { reps: 9, sets: 3, weight: 50 } });
-  assert.deepEqual(normalizeEntry({ status: 'skip', sets: [5], target: { reps: 5, sets: 2 } }), { status: 'skip', note: '', target: { reps: 5, sets: 2 } });
+test('normalizeEntry keeps sets (weight × reps), the target, and fields it does not know', () => {
+  const e = normalizeEntry({ status: 'partial', unit: 'lbs', sets: [{ weight: 50, reps: 9 }, { weight: 45, reps: 8 }], target: { weight: 50, reps: 9, sets: 3 }, rpe: 8 });
+  assert.deepEqual(e, { rpe: 8, status: 'partial', note: '', sets: [{ weight: 50, reps: 9 }, { weight: 45, reps: 8 }], weight: 50, unit: 'lbs', reps: 8, target: { reps: 9, sets: 3, weight: 50 } });
+  // bare rep numbers take the entry's weight; zero-rep sets are dropped
+  assert.deepEqual(normalizeEntry({ weight: 50, unit: 'lbs', sets: [9, 0, 8] }).sets, [{ weight: 50, reps: 9 }, { weight: 50, reps: 8 }]);
+  assert.deepEqual(normalizeEntry({ status: 'skip', sets: [{ reps: 5 }], target: { reps: 5, sets: 2 } }), { status: 'skip', note: '', target: { reps: 5, sets: 2 } });
 });
 
-test('setsOfEntry / lowestSet / meetsTarget', () => {
-  assert.deepEqual(setsOfEntry({ sets: [9, 8] }, 2), [9, 8]);
-  assert.deepEqual(setsOfEntry({ reps: 8 }, 3), [8, 8, 8]);   // older logs: one reps value for every set
+test('setsOfEntry / summarizeSets / formatSets', () => {
+  assert.deepEqual(setsOfEntry({ sets: [{ weight: 50, reps: 9 }] }, 2), [{ weight: 50, reps: 9 }]);
+  assert.deepEqual(setsOfEntry({ weight: 50, reps: 8 }, 2), [{ weight: 50, reps: 8 }, { weight: 50, reps: 8 }]);   // older logs
+  assert.deepEqual(setsOfEntry({ reps: 8 }, 1), [{ reps: 8 }]);
   assert.deepEqual(setsOfEntry({}, 2), []);
-  assert.equal(lowestSet([9, 0, 7]), 7);
-  assert.equal(lowestSet([0, 0]), null);
-  const t = { weight: 50, reps: 9, sets: 2 };
-  assert.ok(meetsTarget({ weight: 50, sets: [9, 9] }, t));
-  assert.ok(meetsTarget({ weight: 55, sets: [10, 9] }, t));
-  assert.ok(!meetsTarget({ weight: 50, sets: [9, 8] }, t));
-  assert.ok(!meetsTarget({ weight: 45, sets: [9, 9] }, t));
-  assert.ok(!meetsTarget({ weight: 50, sets: [9] }, t));
-  assert.ok(meetsTarget({ sets: [9, 9] }, { reps: 9, sets: 2 }));   // bodyweight
+  assert.deepEqual(summarizeSets([{ weight: 50, reps: 9 }, { weight: 45, reps: 10 }]), { weight: 50, reps: 9 });
+  assert.equal(formatSets([{ weight: 50, reps: 6 }, { weight: 50, reps: 5 }], 'lbs'), '50 lbs × 6, 5');
+  assert.equal(formatSets([{ weight: 50, reps: 6 }, { weight: 45, reps: 8 }]), '50×6, 45×8');
+  assert.equal(formatSets([{ reps: 8 }, { reps: 9 }]), '8, 9 reps');
+  assert.equal(formatSets([]), '');
 });
 
-test('buildSessionRecord: Done = hit target unless something fell short; skip and unmarked rules', () => {
+test('meetsTarget: enough sets, each at least the target weight and reps', () => {
+  const t = { weight: 50, reps: 9, sets: 2 };
+  assert.ok(meetsTarget([{ weight: 50, reps: 9 }, { weight: 50, reps: 9 }], t));
+  assert.ok(meetsTarget([{ weight: 55, reps: 10 }, { weight: 50, reps: 9 }, { weight: 40, reps: 5 }], t));   // extra sets don't count against you
+  assert.ok(!meetsTarget([{ weight: 50, reps: 9 }, { weight: 50, reps: 8 }], t));
+  assert.ok(!meetsTarget([{ weight: 50, reps: 9 }, { weight: 45, reps: 9 }], t));
+  assert.ok(!meetsTarget([{ weight: 50, reps: 9 }], t));
+  assert.ok(meetsTarget([{ reps: 9 }, { reps: 9 }], { reps: 9, sets: 2 }));   // bodyweight
+  assert.ok(meetsTarget([], null));
+});
+
+test('buildSessionRecord: only logged sets count; complete/partial from the target', () => {
   const targets = { 's1-incline': { weight: 50, reps: 9, sets: 2 }, 's1-deadlift': { weight: 185, reps: 6, sets: 2 },
                     's1-lateral': { weight: 7.5, reps: 12, sets: 2 }, 's1-crunches': { weight: 55, reps: 11, sets: 2 }, 's1-pulldown': { weight: null, reps: 8, sets: 2 } };
   const rec = buildSessionRecord({
     sessionNum: 1, date: '2026-10-21', now: 123, targetOf: ex => targets[ex.id],
     scratch: {
-      's1-incline': { status: 'complete', note: ' felt solid ' },              // untouched → hit target exactly
-      's1-deadlift': { status: 'complete', sets: [6, 5] },                     // short on set 2 → partial
-      's1-lateral': { status: 'skip', sets: [12, 12], weight: 10 },            // skip drops weight/sets
-      's1-pulldown': { status: 'complete', weight: 45 },                       // no target weight, weight typed
-      's1-crunches': { weight: 57.5 },                                         // unmarked keeps what you typed
+      's1-incline': { done: [{ weight: 50, reps: 9 }, { weight: 50, reps: 9 }], note: ' felt solid ' },
+      's1-deadlift': { done: [{ weight: 185, reps: 6 }] },                        // one of two sets → partial
+      's1-lateral': { skipped: true, done: [{ weight: 7.5, reps: 12 }] },         // skip drops sets
+      's1-pulldown': { done: [{ weight: 45, reps: 8 }, { weight: 45, reps: 8 }] },
+      's1-crunches': { note: 'cable busy' },                                      // nothing logged
     },
   });
   assert.equal(rec.id, '123');
-  assert.deepEqual(rec.entries['s1-incline'], { status: 'complete', note: 'felt solid', weight: 50, unit: 'lbs', sets: [9, 9], reps: 9, target: { reps: 9, sets: 2, weight: 50 } });
-  assert.deepEqual(rec.entries['s1-deadlift'], { status: 'partial', note: '', weight: 185, unit: 'lbs', sets: [6, 5], reps: 5, target: { reps: 6, sets: 2, weight: 185 } });
+  assert.deepEqual(rec.entries['s1-incline'], { status: 'complete', note: 'felt solid', sets: [{ weight: 50, reps: 9 }, { weight: 50, reps: 9 }], weight: 50, unit: 'lbs', reps: 9, target: { reps: 9, sets: 2, weight: 50 } });
+  assert.deepEqual(rec.entries['s1-deadlift'], { status: 'partial', note: '', sets: [{ weight: 185, reps: 6 }], weight: 185, unit: 'lbs', reps: 6, target: { reps: 6, sets: 2, weight: 185 } });
   assert.deepEqual(rec.entries['s1-lateral'], { status: 'skip', note: '', target: { reps: 12, sets: 2, weight: 7.5 } });
-  assert.deepEqual(rec.entries['s1-pulldown'], { status: 'complete', note: '', weight: 45, unit: 'lbs', sets: [8, 8], reps: 8, target: { reps: 8, sets: 2 } });
-  assert.deepEqual(rec.entries['s1-crunches'], { status: 'unrecorded', note: '', weight: 57.5, unit: 'kg' });
+  assert.deepEqual(rec.entries['s1-pulldown'], { status: 'complete', note: '', sets: [{ weight: 45, reps: 8 }, { weight: 45, reps: 8 }], weight: 45, unit: 'lbs', reps: 8, target: { reps: 8, sets: 2 } });
+  assert.deepEqual(rec.entries['s1-crunches'], { status: 'unrecorded', note: 'cable busy' });
 });
 
-test('buildSessionRecord: lighter than target or a set not done → partial; bodyweight never gets a weight', () => {
+test('buildSessionRecord: drop sets, lighter weight, bodyweight', () => {
   const rec = buildSessionRecord({
     sessionNum: 1, date: '2026-10-21', now: 1, targetOf: () => ({ weight: 50, reps: 6, sets: 2 }),
-    scratch: { 's1-incline': { status: 'complete', weight: 45 }, 's1-deadlift': { status: 'complete', sets: [6, 0] } },
+    scratch: { 's1-incline': { done: [{ weight: 50, reps: 6 }, { weight: 45, reps: 8 }] } },
   });
-  assert.equal(rec.entries['s1-incline'].status, 'partial');
-  assert.equal(rec.entries['s1-deadlift'].status, 'partial');
-  assert.equal(rec.entries['s1-deadlift'].reps, 6);   // lowest set actually done
-  const bw = buildSessionRecord({ sessionNum: 2, date: '2026-10-21', now: 1, targetOf: () => ({ weight: null, reps: 9, sets: 2 }), scratch: { 's2-legraiser': { status: 'complete' } } });
-  assert.deepEqual(bw.entries['s2-legraiser'], { status: 'complete', note: '', sets: [9, 9], reps: 9, target: { reps: 9, sets: 2 } });
+  assert.equal(rec.entries['s1-incline'].status, 'partial');            // second set lighter than target
+  assert.equal(rec.entries['s1-incline'].weight, 50);                   // summary = heaviest
+  const bw = buildSessionRecord({ sessionNum: 2, date: '2026-10-21', now: 1, targetOf: () => ({ weight: null, reps: 9, sets: 2 }), scratch: { 's2-legraiser': { done: [{ weight: 99, reps: 9 }, { reps: 10 }] } } });
+  assert.deepEqual(bw.entries['s2-legraiser'], { status: 'complete', note: '', sets: [{ reps: 9 }, { reps: 10 }], reps: 9, target: { reps: 9, sets: 2 } });
 });
 
 test('statusCounts and byNewest', () => {
@@ -177,7 +186,7 @@ test('every past save format still loads (fixtures are permanent — never edit 
   assert.equal(v2.sessions[0].note, 'tweaked shoulder');
   assert.equal(v2.sessions[0].entries['s1-crunches'].unit, 'kg');
   const v3 = migrateLog(load('schema-v3.json'));
-  assert.deepEqual(v3.sessions[0].entries['s1-incline'].sets, [9, 8]);
+  assert.deepEqual(v3.sessions[0].entries['s1-incline'].sets, [{ weight: 50, reps: 9 }, { weight: 50, reps: 8 }]);
   assert.deepEqual(v3.sessions[0].entries['s1-incline'].target, { reps: 9, sets: 2, weight: 50 });
   assert.equal(v3.sessions[0].futureField, 'kept');   // unknown fields survive
   assert.equal(v3.sessions[0].entries['s1-incline'].rpe, 8);

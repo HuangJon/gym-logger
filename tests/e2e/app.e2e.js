@@ -82,7 +82,9 @@ try {
   check('picker: clearing hides preview', (await page.locator('#session-preview-area').innerText()).trim() === '' && await page.locator('#start-btn').isDisabled());
 
   // ── logging a session: targets ─────────────────────────
-  const chips = async id => (await page.locator(`#card-${id} .set-chip`).allInnerTexts()).map(t => t.trim());
+  const summary = async id => (await text(`#setlog-${id} .setlog-summary`));
+  const tabState = async id => page.$$eval(`#card-${id} .set-tab:not(.add)`, ts => ts.map(t => (t.classList.contains('is-done') ? 'done' : '') + (t.classList.contains('is-current') ? 'current' : '') + (t.disabled ? 'locked' : '') || 'open'));
+  const log = id => page.tap(`#card-${id} [data-action="log-set"]`);
   await page.selectOption('#pick-session', '1');
   check('picker: preview shows today\'s targets', (await text('#session-preview-area')).includes('175 lbs × 7 × 2 sets'));
   await page.tap('#start-btn');
@@ -93,9 +95,9 @@ try {
   check('target: kg lift', (await text('#card-s1-crunches .target-row')).includes('45 kg × 13 × 2 sets'));
   check('target: first time asks for a weight', (await text('#card-s1-pulldown .target-row')).includes('set a weight'));
   check('last: shows last time and flags a long gap', (await text('#card-s1-deadlift .last-row')).includes('175 lbs × 6 reps') && (await text('#card-s1-deadlift .last-row')).includes('been a while'));
-  check('pre-filled: weight = target', (await text('#wv-s1-deadlift')) === '175');
-  check('pre-filled: one box per set = target reps', JSON.stringify(await chips('s1-deadlift')) === '["7","7"]');
-  check('no verdict badge until you change something', await page.locator('#pb-s1-deadlift').count() === 0);
+  check('set 1 open, pre-filled with the target', (await text('#wv-s1-deadlift')) === '175' && (await page.inputValue('#reps-s1-deadlift')) === '7' && (await text('#card-s1-deadlift .set-title')) === 'Set 1');
+  check('tabs: set 1 current, set 2 locked', JSON.stringify(await tabState('s1-deadlift')) === '["current","locked"]');
+  check('phone: reps box is 16px (no iPhone zoom)', await page.$eval('#reps-s1-deadlift', el => getComputedStyle(el).fontSize) === '16px');
 
   // weight: typing, validation, steppers
   for (const badWeight of ['0', '-5', '']) {
@@ -108,45 +110,83 @@ try {
   check('weight +: steps by the lift increment (deadlift 5)', (await text('#wv-s1-deadlift')) === '180');
   await page.tap('#card-s1-deadlift [data-action="weight-step"][data-dir="-1"]');
   await page.tap('#card-s1-deadlift [data-action="weight-step"][data-dir="-1"]');
-  check('weight −: below target shows "lighter → partial"', (await text('#wv-s1-deadlift')) === '170' && (await text('#pb-s1-deadlift')).includes('lighter'));
+  check('weight −: below target → "lighter than target"', (await text('#wv-s1-deadlift')) === '170' && (await text('#pb-s1-deadlift')).includes('lighter'));
   await page.tap('#wv-s1-deadlift'); await page.fill('#inp-s1-deadlift', '177.5'); await page.keyboard.press('Enter');
   check('weight: decimals accepted', (await text('#wv-s1-deadlift')) === '177.5');
-  check('weight: no log yet → − disabled, + starts from 0', await page.locator('#card-s1-pulldown [data-action="weight-step"][data-dir="-1"]').isDisabled());
+
+  // reps steppers
+  await page.tap('#card-s1-deadlift [data-action="reps-step"][data-dir="-1"]');
+  check('reps −: below target flagged', (await page.inputValue('#reps-s1-deadlift')) === '6' && (await text('#pb-s1-deadlift')).includes('below target'));
+  for (let i = 0; i < 4; i++) await page.tap('#card-s1-deadlift [data-action="reps-step"][data-dir="1"]');
+  check('reps +: stops at the top of the range (8)', (await page.inputValue('#reps-s1-deadlift')) === '8');
+  await page.fill('#reps-s1-deadlift', '7');
+
+  // log set by set
+  await log('s1-deadlift');
+  check('log set 1: collapses into a ✓ tab + summary', (await summary('s1-deadlift')) === '177.5 lbs × 7' && JSON.stringify(await tabState('s1-deadlift')) === '["done","current"]');
+  check('set 2 opens pre-filled with set 1', (await text('#card-s1-deadlift .set-title')) === 'Set 2' && (await text('#wv-s1-deadlift')) === '177.5' && (await page.inputValue('#reps-s1-deadlift')) === '7');
+  check('verdict: partial so far', (await text('#setlog-s1-deadlift .setlog-verdict')).includes('1/2 sets'));
+  await page.tap('#card-s1-deadlift [data-action="reps-step"][data-dir="-1"]');
+  await log('s1-deadlift');
+  check('all sets logged → panel minimizes', await page.locator('#setlog-s1-deadlift.is-collapsed').count() === 1 && (await summary('s1-deadlift')) === '177.5 lbs × 7, 6');
+  check('verdict: partial — below target', (await text('#setlog-s1-deadlift .setlog-verdict')).includes('below target'));
+  await page.tap('#card-s1-deadlift .set-tab[data-i="1"]');
+  check('tap a ✓ tab to edit that set', (await text('#card-s1-deadlift .set-title')).includes('Set 2 · editing') && (await page.inputValue('#reps-s1-deadlift')) === '6');
+  await page.tap('#card-s1-deadlift [data-action="reps-step"][data-dir="1"]');
+  await log('s1-deadlift');
+  check('update a set: now on target', (await summary('s1-deadlift')) === '177.5 lbs × 7, 7' && (await text('#setlog-s1-deadlift .setlog-verdict')).includes('target hit'));
+  await page.tap('#card-s1-deadlift .set-tab[data-i="1"]');
+  await page.tap('#card-s1-deadlift [data-action="reps-step"][data-dir="-1"]');
+  await log('s1-deadlift');
+  await page.tap('#card-s1-deadlift [data-action="set-add"]');
+  check('+ adds an extra set, pre-filled', (await text('#card-s1-deadlift .set-title')) === 'Set 3' && (await page.inputValue('#reps-s1-deadlift')) === '6');
+  await log('s1-deadlift');
+  check('extra set logged', (await summary('s1-deadlift')) === '177.5 lbs × 7, 6, 6');
+  await page.tap('#card-s1-deadlift .set-tab[data-i="2"]');
+  await page.tap('#card-s1-deadlift [data-action="remove-set"]');
+  check('remove a set', (await summary('s1-deadlift')) === '177.5 lbs × 7, 6' && await page.locator('#setlog-s1-deadlift.is-collapsed').count() === 1);
+
+  // first-time lift: weight from nothing; type then tap Log right away (phone)
+  check('weight: nothing yet → − disabled', await page.locator('#card-s1-pulldown [data-action="weight-step"][data-dir="-1"]').isDisabled());
   await page.tap('#card-s1-pulldown [data-action="weight-step"][data-dir="1"]');
   check('weight: first + gives one increment', (await text('#wv-s1-pulldown')) === '2.5');
   await page.tap('#wv-s1-pulldown'); await page.fill('#inp-s1-pulldown', '45');
-  await page.tap('#card-s1-pulldown .status-btn[data-status="complete"]');
-  check('phone: type weight then tap Done → both register', (await text('#wv-s1-pulldown')) === '45' && await page.locator('#card-s1-pulldown .status-btn[aria-pressed="true"]').count() === 1);
+  await log('s1-pulldown');
+  check('phone: type weight then tap Log → logged with that weight', (await summary('s1-pulldown')) === '45 lbs × 8');
+  await log('s1-pulldown');
+
+  // phone: type weight then tap into notes
   await page.tap('#wv-s1-incline'); await page.fill('#inp-s1-incline', '50');
   await page.tap('#note-s1-incline'); await page.keyboard.type('felt solid');
   check('phone: type weight then tap notes → note kept', (await page.inputValue('#note-s1-incline')) === 'felt solid' && (await text('#wv-s1-incline')) === '50');
-  check('phone: text boxes are 16px (no iPhone zoom)', await page.$eval('#note-s1-incline', el => getComputedStyle(el).fontSize) === '16px');
+  await log('s1-incline'); await log('s1-incline');
+  check('target hit → ✓', (await text('#setlog-s1-incline .setlog-verdict')).includes('target hit'));
 
-  // sets: select a set, − / +
-  await page.tap('#card-s1-deadlift .set-chip >> nth=1');
-  await page.tap('#card-s1-deadlift [data-action="set-step"][data-dir="-1"]');
-  check('sets: − changes the selected set', JSON.stringify(await chips('s1-deadlift')) === '["7","6"]' && (await text('#pb-s1-deadlift')).includes('below target'));
-  await page.tap('#card-s1-lateral .set-chip >> nth=0');
-  for (let i = 0; i < 5; i++) await page.tap('#card-s1-lateral [data-action="set-step"][data-dir="1"]');
-  check('sets: + stops at the top of the range', JSON.stringify(await chips('s1-lateral')) === '["15","12"]');
-  await page.tap('#card-s1-crunches .set-chip >> nth=1');
-  for (let i = 0; i < 15; i++) await page.tap('#card-s1-crunches [data-action="set-step"][data-dir="-1"]');
-  check('sets: − goes down to "–" (set not done)', JSON.stringify(await chips('s1-crunches')) === '["13","–"]' && (await text('#pb-s1-crunches')).includes('1 set not done'));
+  // target pop-out
+  await page.tap('#card-s1-crunches [data-action="target-open"]');
+  check('target pop-out opens', await page.locator('#card-s1-crunches .target-pop').isVisible());
+  await page.tap('#card-s1-crunches [data-action="target-step"][data-field="sets"][data-dir="1"]');
+  await page.tap('#card-s1-crunches [data-action="target-step"][data-field="weight"][data-dir="1"]');
+  await page.tap('#card-s1-crunches [data-action="target-step"][data-field="reps"][data-dir="1"]');
+  for (let i = 0; i < 5; i++) await page.tap('#card-s1-crunches [data-action="target-step"][data-field="reps"][data-dir="1"]');
+  check('target: edited, reps capped at the top of the range', (await text('#card-s1-crunches .target-btn')).includes('47.5 kg × 15 × 3 sets') && (await text('#card-s1-crunches .target-row')).includes('your target'));
+  check('target: a new set count adds tabs, and the open set follows the new target', (await tabState('s1-crunches')).length === 3 && (await page.inputValue('#reps-s1-crunches')) === '15' && (await text('#wv-s1-crunches')) === '47.5');
+  await page.tap('#card-s1-crunches [data-action="target-reset"]');
+  check('target: back to suggested', (await text('#card-s1-crunches .target-btn')).includes('45 kg × 13 × 2 sets') && (await tabState('s1-crunches')).length === 2);
+  await page.tap('#card-s1-crunches [data-action="target-close"]');
+  check('target pop-out closes', await page.locator('#card-s1-crunches .target-pop').count() === 0);
 
-  // Done / Skip
-  await page.tap('#card-s1-incline .status-btn[data-status="complete"]');
-  await page.tap('#card-s1-deadlift .status-btn[data-status="complete"]');
-  await page.tap('#card-s1-lateral .status-btn[data-status="skip"]');
-  check('skip: card dims and the logging rows hide', await page.locator('#card-s1-lateral.is-skipped').count() === 1 && await page.locator('#card-s1-lateral .ex-log').isHidden());
-  await page.tap('#card-s1-lateral .status-btn[data-status="skip"]');
-  check('skip: tap again clears', await page.locator('#card-s1-lateral .status-btn[aria-pressed="true"]').count() === 0 && await page.locator('#card-s1-lateral .ex-log').isVisible());
-  await page.tap('#card-s1-lateral .status-btn[data-status="skip"]');
+  // skip
+  await page.tap('#card-s1-lateral [data-action="skip"]');
+  check('skip: card dims and the set panel hides', await page.locator('#card-s1-lateral.is-skipped').count() === 1 && await page.locator('#setlog-s1-lateral').count() === 0);
+  await page.tap('#card-s1-lateral [data-action="skip"]');
+  check('skip: tap again brings it back', await page.locator('#setlog-s1-lateral').count() === 1);
+  await page.tap('#card-s1-lateral [data-action="skip"]');
   await page.fill('#note-s1-lateral', '<b>shoulder</b> & "tired"');
-  check('no Partial button — partial is worked out from the target', await page.locator('#card-s1-incline .status-btn[data-status="partial"]').count() === 0);
+  check('no Done/Partial buttons — status comes from the logged sets', await page.locator('#card-s1-incline .status-btn[data-status="complete"], #card-s1-incline .status-btn[data-status="partial"]').count() === 0);
 
   await page.fill('#active-date', '2026-10-20'); await page.dispatchEvent('#active-date', 'change');
-  check('date change mid-session keeps everything', (await page.inputValue('#note-s1-incline')) === 'felt solid' && (await text('#wv-s1-incline')) === '50' &&
-    JSON.stringify(await chips('s1-deadlift')) === '["7","6"]' && await page.locator('#card-s1-incline .status-btn[aria-pressed="true"]').count() === 1);
+  check('date change mid-session keeps everything', (await page.inputValue('#note-s1-incline')) === 'felt solid' && (await summary('s1-deadlift')) === '177.5 lbs × 7, 6' && (await summary('s1-incline')) === '50 lbs × 6, 6');
   check('date change updates "last time" age', (await text('#card-s1-deadlift .last-row')).includes('6 months ago'));
 
   await page.tap('.sa-change'); await page.tap('.discard-bar [data-action="keep"]');
@@ -157,11 +197,11 @@ try {
   const saved = await sessionsOn('2026-10-20');
   check('complete: double tap saves once', saved.length === 1, `${saved.length}`);
   const E = saved[0]?.entries || {};
-  check('saved: Done untouched = hit target (complete), with target stored', JSON.stringify(E['s1-incline']) === JSON.stringify({ status: 'complete', note: 'felt solid', weight: 50, unit: 'lbs', sets: [6, 6], reps: 6, target: { reps: 6, sets: 2, weight: 47.5 } }), JSON.stringify(E['s1-incline']));
-  check('saved: Done short of target = partial, per-set reps kept', E['s1-deadlift']?.status === 'partial' && E['s1-deadlift'].weight === 177.5 && JSON.stringify(E['s1-deadlift'].sets) === '[7,6]' && E['s1-deadlift'].reps === 6, JSON.stringify(E['s1-deadlift']));
-  check('saved: skip keeps note only', E['s1-lateral']?.status === 'skip' && E['s1-lateral'].weight === undefined && E['s1-lateral'].sets === undefined && E['s1-lateral'].note.includes('shoulder'));
-  check('saved: unmarked → not recorded', E['s1-crunches']?.status === 'unrecorded' && E['s1-crunches'].weight === undefined);
-  check('saved: first-time lift with typed weight', E['s1-pulldown']?.status === 'complete' && E['s1-pulldown'].weight === 45 && JSON.stringify(E['s1-pulldown'].sets) === '[8,8]', JSON.stringify(E['s1-pulldown']));
+  check('saved: target hit = complete, sets + target stored', JSON.stringify(E['s1-incline']) === JSON.stringify({ status: 'complete', note: 'felt solid', sets: [{ weight: 50, reps: 6 }, { weight: 50, reps: 6 }], weight: 50, unit: 'lbs', reps: 6, target: { reps: 6, sets: 2, weight: 47.5 } }), JSON.stringify(E['s1-incline']));
+  check('saved: short of target = partial, each set kept', E['s1-deadlift']?.status === 'partial' && JSON.stringify(E['s1-deadlift'].sets) === '[{"weight":177.5,"reps":7},{"weight":177.5,"reps":6}]', JSON.stringify(E['s1-deadlift']));
+  check('saved: skip keeps note only', E['s1-lateral']?.status === 'skip' && E['s1-lateral'].sets === undefined && E['s1-lateral'].note.includes('shoulder'));
+  check('saved: nothing logged → not recorded', E['s1-crunches']?.status === 'unrecorded' && E['s1-crunches'].sets === undefined);
+  check('saved: first-time lift', E['s1-pulldown']?.status === 'complete' && JSON.stringify(E['s1-pulldown'].sets) === '[{"weight":45,"reps":8},{"weight":45,"reps":8}]', JSON.stringify(E['s1-pulldown']));
   check('complete: picker resets to today', (await page.inputValue('#pick-date')) === TODAY);
   check('complete: switches to History', await page.locator('#tab-history.active').count() === 1);
 
@@ -177,7 +217,7 @@ try {
   await page.selectOption('#pick-session', '2'); await page.tap('#start-btn');
   const before = (await savedLog()).sessions.length;
   await page.tap('#complete-btn'); await wait(150);
-  check('empty session: first tap asks first', (await savedLog()).sessions.length === before && (await text('#complete-btn')).includes('Nothing marked'));
+  check('empty session: first tap asks first', (await savedLog()).sessions.length === before && (await text('#complete-btn')).includes('Nothing logged'));
   await page.tap('#complete-btn'); await wait(900);
   check('empty session: second tap saves', (await savedLog()).sessions.length === before + 1);
 
@@ -191,37 +231,37 @@ try {
   if (!(await oct20.locator('.history-body').isVisible())) await oct20.locator('.history-hdr').tap();
   check('history: note shown as text, not HTML', (await oct20.innerText()).includes('<b>shoulder</b> & "tired"'));
   check('history: header date · session · done count', (await oct20.locator('.history-hdr').innerText()).replace(/\s+/g, ' ').includes('Session 1 · 3/5 done'));
-  check('history: actual next to target', (await oct20.locator('.history-row[data-ex="s1-deadlift"]').innerText()).replace(/\s+/g, ' ').includes('177.5 lbs · 7, 6 reps') && (await oct20.locator('.history-row[data-ex="s1-deadlift"]').innerText()).includes('target 175 lbs × 7 × 2 sets'));
+  check('history: actual next to target', (await oct20.locator('.history-row[data-ex="s1-deadlift"]').innerText()).replace(/\s+/g, ' ').includes('177.5 lbs × 7, 6') && (await oct20.locator('.history-row[data-ex="s1-deadlift"]').innerText()).includes('target 175 lbs × 7 × 2 sets'));
   await oct20.locator('.history-row[data-ex="s1-crunches"]').tap();
   await page.tap('#hedit-panel .status-btn[data-status="complete"]');
-  await page.fill('#hedit-weight', '42.5'); await page.fill('#hedit-set-0', '11'); await page.fill('#hedit-set-1', '11');
+  await page.fill('#hedit-w-0', '42.5'); await page.fill('#hedit-r-0', '11'); await page.fill('#hedit-w-1', '42.5'); await page.fill('#hedit-r-1', '11');
   await page.tap('#hedit-panel [data-action="edit-save"]'); await wait(150);
   let e = (await sessionsOn('2026-10-20'))[0].entries['s1-crunches'];
-  check('history edit: per-set reps saved with the exercise unit', e.status === 'complete' && e.weight === 42.5 && JSON.stringify(e.sets) === '[11,11]' && e.unit === 'kg', JSON.stringify(e));
+  check('history edit: each set saved with the exercise unit', e.status === 'complete' && JSON.stringify(e.sets) === '[{"weight":42.5,"reps":11},{"weight":42.5,"reps":11}]' && e.unit === 'kg', JSON.stringify(e));
   check('history edit: header count updates', (await oct20.locator('.history-hdr').innerText()).includes('4/5 done'));
 
   const apr22 = page.locator('.history-entry', { has: page.locator('.history-title', { hasText: 'Apr 22, 2026' }) });
   await apr22.locator('.history-hdr').tap();
   check('history: old-program tag', (await apr22.locator('.history-hdr').innerText()).toLowerCase().includes('old program'));
   await apr22.locator('.history-row[data-ex="s2-dips"]').tap();
-  check('history edit: retired bodyweight lift has set boxes but no weight box', await page.locator('#hedit-weight').count() === 0 && await page.locator('.hedit-set').count() === 2);
-  await page.tap('#hedit-panel .status-btn[data-status="partial"]'); await page.fill('#hedit-set-0', '5');
+  check('history edit: retired bodyweight lift has set boxes but no weight box', await page.locator('.hedit-w').count() === 0 && await page.locator('.hedit-r').count() === 2);
+  await page.tap('#hedit-panel .status-btn[data-status="partial"]'); await page.fill('#hedit-r-0', '5');
   await page.tap('#hedit-panel [data-action="edit-save"]'); await wait(150);
   e = (await sessionsOn('2026-04-22'))[0].entries['s2-dips'];
-  check('history edit: retired lift saved (blank set = not done)', e.status === 'partial' && e.reps === 5 && JSON.stringify(e.sets) === '[5,0]', JSON.stringify(e));
+  check('history edit: retired lift saved (blank reps = set not done)', e.status === 'partial' && e.reps === 5 && JSON.stringify(e.sets) === '[{"reps":5}]', JSON.stringify(e));
 
   await oct20.locator('.history-row[data-ex="s1-deadlift"]').tap();
   await page.tap('#hedit-panel .status-btn[data-status="partial"]');
   await page.tap('#hedit-panel .status-btn[data-status="complete"]');
-  await page.fill('#hedit-set-1', '7'); await page.tap('#hedit-panel [data-action="edit-save"]'); await wait(150);
+  await page.fill('#hedit-r-1', '7'); await page.tap('#hedit-panel [data-action="edit-save"]'); await wait(150);
   check('history edit: fixed to meet the target → complete', (await sessionsOn('2026-10-20'))[0].entries['s1-deadlift'].status === 'complete');
   await oct20.locator('.history-row[data-ex="s1-deadlift"]').tap();
-  await page.fill('#hedit-set-1', '5'); await page.tap('#hedit-panel [data-action="edit-save"]'); await wait(150);
+  await page.fill('#hedit-r-1', '5'); await page.tap('#hedit-panel [data-action="edit-save"]'); await wait(150);
   check('history edit: Done below the target is saved as partial', (await sessionsOn('2026-10-20'))[0].entries['s1-deadlift'].status === 'partial');
 
   await failWrites(true);
   await apr22.locator('.history-row[data-ex="s2-pallof"]').tap();
-  await page.fill('#hedit-set-0', '99'); await page.tap('#hedit-panel [data-action="edit-save"]'); await wait(150);
+  await page.fill('#hedit-r-0', '99'); await page.tap('#hedit-panel [data-action="edit-save"]'); await wait(150);
   await failWrites(false);
   check('history edit: failed save keeps the editor with a message', (await text('#hedit-msg')).includes('failed') && await page.locator('#hedit-panel').count() === 1);
   check('history edit: failed save changed nothing', (await sessionsOn('2026-04-22'))[0].entries['s2-pallof'].reps === 5);
@@ -283,7 +323,7 @@ try {
   // ── failed save on Complete ─────────────────────────────
   await tab('workout');
   await page.selectOption('#pick-session', '3'); await page.tap('#start-btn');
-  await page.tap('#card-s3-incline .status-btn[data-status="complete"]');
+  await log('s3-incline');
   const n1 = (await savedLog()).sessions.length;
   await failWrites(true); await page.tap('#complete-btn'); await wait(300); await failWrites(false);
   check('complete failure: message, session stays open', (await text('#status')).includes('failed') && await page.locator('#session-panel').isVisible());
@@ -299,7 +339,7 @@ try {
   check('offline: app opens with your log', offlineCount === n1 + 1);
   await tab('workout');
   await page.selectOption('#pick-session', '2'); await page.tap('#start-btn');
-  await page.tap('#card-s2-rows .status-btn[data-status="complete"]');
+  await page.tap('#card-s2-rows [data-action="weight-step"][data-dir="1"]'); await log('s2-rows');
   await page.tap('#complete-btn'); await wait(900);
   check('offline: can log a session', (await savedLog()).sessions.length === n1 + 2);
   await ctx.setOffline(false);
@@ -338,7 +378,7 @@ try {
   const p4 = await ro.newPage(); await p4.goto(roServer.url); await p4.waitForTimeout(300);
   check('newer log: warning banner shown', await p4.locator('#readonly-banner').isVisible());
   await p4.selectOption('#pick-session', '2'); await p4.tap('#start-btn');
-  await p4.tap('#card-s2-rows .status-btn[data-status="complete"]'); await p4.tap('#complete-btn'); await p4.waitForTimeout(300);
+  await p4.tap('#card-s2-rows [data-action="log-set"]'); await p4.tap('#complete-btn'); await p4.waitForTimeout(300);
   const roLog = await p4.evaluate(() => JSON.parse(localStorage.getItem('liftlog:log')));
   check('newer log: saving refused, data untouched', (await p4.locator('#status').innerText()).includes('newer version') && roLog.schemaVersion === 99 && roLog.sessions[0].fromTheFuture === true);
   await ro.close(); roServer.server.close();

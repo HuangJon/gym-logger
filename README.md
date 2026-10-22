@@ -2,7 +2,7 @@
 
 A gym lifting log for a 3-session program with **double progression** (hit the top of the rep range → add weight → drop back to the bottom). It installs to your phone's home screen, works offline, and keeps your data on your device.
 
-- **Workout** — pick a date and session; each exercise shows today's **target** (weight × reps × sets) and what you did last time. Weight and one box per set are pre-filled with the target — adjust with − / +, then tap **Done** (or **Skip**).
+- **Workout** — pick a date and session; each exercise shows today's **target** (weight × reps × sets — tap it to adjust) and what you did last time. Log **one set at a time**: weight and reps start at the target, adjust with − / +, tap **Log set**. The set collapses into a ✓ tab and the next one opens pre-filled with what you just did. Tap a ✓ tab to fix a set, **+** to add one, or **Skip** the exercise.
 - **History** — every session, editable after the fact (status, weight, reps, notes, date), plus **Export / Import** backups.
 - **Trends** — sessions per week, and for each lift: weight over time with reps on every dot, change over 1 month / 3 months / 1 year, and your last six sessions.
 
@@ -14,7 +14,7 @@ A gym lifting log for a 3-session program with **double progression** (hit the t
 - Missed the target (partial) → **the same target again**. No increase until you hit it.
 - Below the range last time → same weight, aim for the bottom of the range (or go lighter).
 
-Tapping **Done** with nothing changed means you hit the target. Anything short of it — a lighter weight, fewer reps on any set, or a set not done (−  down to “–”) — is saved as **partial** automatically. History shows what you did next to the target.
+Only logged sets are saved. An exercise is **complete** when its logged sets meet the target (enough sets, each at least the target weight and reps), otherwise **partial**; with no sets logged it's "not recorded". Each set keeps its own weight, so drop sets are recorded as they happened. History shows what you did next to the target.
 
 ## Install on iPhone
 

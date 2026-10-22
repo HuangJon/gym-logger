@@ -3,7 +3,7 @@ import { SESSION_LABELS, SESSION_COLORS } from '../config/program.js';
 import { exercisesForSession, findExercise, unitOf, repRangeText, setsOf } from '../core/exercises.js';
 import { todayISO, formatLong, agoText } from '../core/dates.js';
 import { hasValue, parseWeight, parseReps } from '../core/numbers.js';
-import { STATUS, normalizeEntry, statusCounts, byNewest, setsOfEntry, meetsTarget, lowestSet } from '../core/records.js';
+import { STATUS, normalizeEntry, statusCounts, byNewest, setsOfEntry, meetsTarget, formatSets } from '../core/records.js';
 import { updateEntry, setSessionDate, deleteSession, mergeSessions } from '../core/log.js';
 import { createBackup, parseBackup, backupStatus, markBackedUp, deliverFile } from '../data/backup.js';
 import { esc, delegate, autoResize, confirmTap, flash } from './dom.js';
@@ -59,8 +59,8 @@ export function createHistoryView({ root, repo, storage }) {
     const e = normalizeEntry(s.entries?.[ex.id]);
     const isEditing = editing?.sessionId === s.id && editing.exerciseId === ex.id;
     const unit = e.unit || unitOf(ex);
-    const sets = e.sets?.length ? e.sets.map(r => (r === 0 ? '–' : r)).join(', ') : (hasValue(e.reps) ? String(e.reps) : '');
-    const parts = [!ex.bw && hasValue(e.weight) && `${e.weight} ${unit}`, sets && `${sets} reps`].filter(Boolean);
+    const parts = e.sets?.length ? [formatSets(e.sets, ex.bw ? '' : unit)]
+      : [!ex.bw && hasValue(e.weight) && `${e.weight} ${unit}`, hasValue(e.reps) && `${e.reps} reps`].filter(Boolean);
     if (ex.bw && !parts.length && (e.status === STATUS.COMPLETE || e.status === STATUS.PARTIAL)) parts.push('bodyweight');
     const right = e.status === STATUS.SKIP
       ? '<span class="badge badge-skip">skipped</span>'
@@ -90,16 +90,16 @@ export function createHistoryView({ root, repo, storage }) {
         <div class="status-row">${EDIT_STATUSES.map(([value, label]) =>
           `<button type="button" class="status-btn" data-action="edit-status" data-status="${value}" aria-pressed="${status === value}">${label}</button>`).join('')}</div>
         <div class="hedit-fields${status === STATUS.SKIP ? ' is-skip' : ''}">
-          ${ex.bw ? '' : `<div class="hedit-row"><span class="hedit-label">Weight</span>
-            <input class="hedit-input" id="hedit-weight" type="number" inputmode="decimal" step="any" value="${hasValue(e.weight) ? e.weight : ''}" placeholder="—">
-            <span class="hedit-unit">${e.unit || unitOf(ex)}</span></div>`}
-          <div class="hedit-row"><span class="hedit-label">Sets</span>
-            ${editorSets(ex, e).map((r, i) => `<input class="hedit-input hedit-set" id="hedit-set-${i}" type="number" inputmode="numeric" min="0" value="${hasValue(r) ? r : ''}" placeholder="—" aria-label="Set ${i + 1} reps">`).join('')}
-            <span class="hedit-unit">${ex.reps ? `reps · ${repRangeText(ex.reps)}` : 'reps'}</span></div>
+          ${editorSets(ex, e).map((set, i) => `<div class="hedit-row hedit-setrow">
+            <span class="hedit-label">Set ${i + 1}</span>
+            ${ex.bw ? '' : `<input class="hedit-input hedit-w" id="hedit-w-${i}" type="number" inputmode="decimal" step="any" value="${hasValue(set.weight) ? set.weight : ''}" placeholder="—" aria-label="Set ${i + 1} weight"><span class="hedit-unit">${e.unit || unitOf(ex)} ×</span>`}
+            <input class="hedit-input hedit-r" id="hedit-r-${i}" type="number" inputmode="numeric" min="0" value="${hasValue(set.reps) ? set.reps : ''}" placeholder="—" aria-label="Set ${i + 1} reps">
+            <span class="hedit-unit">reps</span></div>`).join('')}
+          ${ex.reps ? `<div class="hedit-hint">Rep range ${repRangeText(ex.reps)}.</div>` : ''}
         </div>
         <div class="hedit-row" style="align-items:flex-start"><span class="hedit-label" style="padding-top:5px">Note</span>
           <textarea class="hedit-note" id="hedit-note" rows="1" data-action="autosize">${esc(e.note)}</textarea></div>
-        <div class="hedit-hint">Nothing selected = saved as “not recorded”. Blank set = not done.${e.target ? ` Done below the target saves as partial.` : ''}</div>
+        <div class="hedit-hint">Nothing selected = saved as “not recorded”. Blank reps = set not done.${e.target ? ' Done below the target saves as partial.' : ''}</div>
         <div class="hedit-actions">
           <button type="button" class="hedit-save" data-action="edit-save">Save</button>
           <button type="button" class="hedit-cancel" data-action="edit-cancel">Cancel</button>
@@ -108,11 +108,11 @@ export function createHistoryView({ root, repo, storage }) {
       </div>`;
   }
 
-  /** Set boxes for the editor: what was logged, or the reps from older logs repeated for each set. */
+  /** Rows for the editor: what was logged (older logs: weight × reps repeated per set), plus blanks up to the target. */
   function editorSets(ex, e) {
     const count = Math.max(e.sets?.length || 0, e.target?.sets || 0, setsOf(ex));
-    const sets = setsOfEntry(e, count);
-    return Array.from({ length: count }, (_, i) => sets[i] ?? '');
+    const sets = setsOfEntry(e, e.sets?.length ? e.sets.length : count);
+    return Array.from({ length: count }, (_, i) => sets[i] ?? { weight: e.weight });
   }
 
   function renderBackupCard() {
@@ -172,17 +172,16 @@ export function createHistoryView({ root, repo, storage }) {
     const ex = findExercise(editing.exerciseId);
     const record = repo.sessions.find(s => s.id === editing.sessionId);
     const previous = normalizeEntry(record?.entries?.[editing.exerciseId]);
-    const weight = parseWeight($('#hedit-weight')?.value ?? '');
-    const typed = [...$('#hedit-panel').querySelectorAll('.hedit-set')].map(input => parseReps(input.value));
-    const anySet = typed.some(r => hasValue(r) && r !== null);
+    const panel = $('#hedit-panel');
+    const sets = [...panel.querySelectorAll('.hedit-setrow')].map(row => {
+      const reps = parseReps(row.querySelector('.hedit-r').value), weight = ex.bw ? null : parseWeight(row.querySelector('.hedit-w')?.value ?? '');
+      return hasValue(reps) && reps > 0 ? (weight !== null ? { weight, reps } : { reps }) : null;   // blank reps = set not done
+    }).filter(Boolean);
     const entry = { status: editing.status || STATUS.UNRECORDED, note: $('#hedit-note').value.trim() };
-    if (entry.status !== STATUS.SKIP) {
-      if (!ex.bw && weight !== null) { entry.weight = weight; entry.unit = unitOf(ex); }
-      if (anySet) { entry.sets = typed.map(r => (hasValue(r) && r !== null ? r : 0)); entry.reps = lowestSet(entry.sets) ?? undefined; }
-    }
+    if (entry.status !== STATUS.SKIP && sets.length) { entry.sets = sets; entry.unit = unitOf(ex); }
     if (previous.target) entry.target = previous.target;
     // "Done" that falls short of the target is a partial — keeps next time's target honest
-    if (entry.status === STATUS.COMPLETE && previous.target && !meetsTarget({ weight: entry.weight, sets: entry.sets }, previous.target)) entry.status = STATUS.PARTIAL;
+    if (entry.status === STATUS.COMPLETE && previous.target && !meetsTarget(sets, previous.target)) entry.status = STATUS.PARTIAL;
     try {
       await repo.commit(updateEntry(repo.sessions, editing.sessionId, editing.exerciseId, entry));
     } catch (err) {
