@@ -339,8 +339,8 @@ test('last note, shorter rest for circuits', async () => {
   sessions.push(session('2026-10-09', 1, { 's1-deadlift': done(185, 7) }));
   assert.equal(lastNote(sessions, deadlift, '2026-10-10'), null, 'older notes do not resurface');
   assert.equal(lastNote(sessions, deadlift, '2026-10-09').note, 'back tight', "today's own session isn't 'last time'");
-  assert.equal(restOf(lateral), 60);
-  assert.equal(restOf(deadlift), 150);
+  assert.equal(restOf(lateral), 45);
+  assert.equal(restOf(deadlift), 120);
   assert.equal(restOf(incline), 90);
-  assert.equal(restOf(findExercise('s3-abwheel')), 60);
+  assert.equal(restOf(findExercise('s3-abwheel')), 45);
 });
