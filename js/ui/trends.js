@@ -7,7 +7,7 @@ import { STATUS, formatSets } from '../core/records.js';
 import { repZone } from '../core/progress.js';
 import { liftSeries, isWeighted, inRange, groupingFor, groupPoints, changeOverWindows, CHANGE_WINDOWS, weeklyCounts, summaryStats } from '../core/trends.js';
 import { makeDemoSessions, makeDemoClimbs } from '../dev/demo.js';
-import { calendarWeeks, targetHitRate, liftProgress, pickOneUsage, PROGRESS, pct, MIN_COMPARE } from '../core/insights.js';
+import { calendarWeeks, targetHitRate, liftProgress, pickOneUsage, pct, MIN_COMPARE } from '../core/insights.js';
 import { esc, delegate, tipAttrs, showTip } from './dom.js';
 import { lineChart, weeklyBarsChart, percentBarsChart, sparkline } from './charts.js';
 
@@ -17,6 +17,8 @@ const RANGE_NAMES = { '1m': 'the last month', '3m': 'the last 3 months', '1y': '
 const STALE_DAYS = 14;
 const RECENT_COUNT = 6;
 const SORT_KEY = 'liftlog:progressSort';
+const PR_RANGES = [['4w', '4W', 28, 'in the last 4 weeks'], ['3m', '3M', 91, 'in the last 3 months'], ['1y', '1Y', 365, 'in the last year'], ['all', 'All', Infinity, 'yet']];
+const PR_SHOW = 8;
 function readSort() { try { return localStorage.getItem(SORT_KEY) === 'workout' ? 'workout' : 'attention'; } catch { return 'attention'; } }
 
 export function createTrendsView({ root, repo }) {
@@ -26,6 +28,7 @@ export function createTrendsView({ root, repo }) {
     mode: 'weight',     // 'weight' (weight line + reps labels) | 'e1rm' (estimated 1-rep max)
     custom: null,       // { from, to } for the Custom range
     demo: false,        // preview with generated sample data (never saved)
+    prRange: '4w',      // PRs shown: last 4 weeks / 3 months / 1 year / all time
     progressSort: readSort(),   // 'attention' | 'workout' (remembered on this phone)
   };
 
@@ -143,11 +146,14 @@ export function createTrendsView({ root, repo }) {
   }
 
   function progressCard(sessions, today) {
-    const { lifts, recentPrs } = liftProgress(sessions, today);
+    const { lifts, prs: allPrs } = liftProgress(sessions, today);
     if (!lifts.length) return '';
-    const prs = recentPrs.length
-      ? `<ul>${recentPrs.slice(0, 6).map(p => `<li><b>${esc(p.name)}</b> · ${esc(p.text)} <span class="trend-ago">${esc(formatShort(p.date))}</span></li>`).join('')}</ul>`
-      : `<div class="pg-none">None in the last ${PROGRESS.prRecentDays / 7} weeks.</div>`;
+    const [, , prDays, prName] = PR_RANGES.find(r => r[0] === state.prRange);
+    const shown = allPrs.filter(p => p.date <= today && daysBetween(p.date, today) < prDays);
+    const more = shown.length - PR_SHOW;
+    const prs = shown.length
+      ? `<ul>${shown.slice(0, PR_SHOW).map(p => `<li><b>${esc(p.name)}</b> · ${esc(p.text)} <span class="trend-ago">${esc(formatShort(p.date))}</span></li>`).join('')}</ul>${more > 0 ? `<div class="pg-none">+ ${more} older</div>` : ''}`
+      : `<div class="pg-none">None ${prName}.</div>`;
     let list;
     if (state.progressSort === 'workout') {
       list = Object.keys(SESSION_LABELS).map(Number).map(n => {
@@ -162,7 +168,7 @@ export function createTrendsView({ root, repo }) {
       ${abs.names.map(n => `${esc(n)} <b>${abs.counts[n]}</b>`).join(' · ')} · both <b>${abs.both}</b></div>` : '';
     return `<div class="card trend-card">
       <div class="trend-head"><span class="trend-name">Progress per lift</span><span class="trend-sub">deloads left out · maintain days don't count against you</span></div>
-      <div class="pg-prs"><div class="pg-sub">PRs · last ${PROGRESS.prRecentDays / 7} weeks</div>${prs}</div>
+      <div class="pg-prs"><div class="pg-prs-head"><span class="pg-sub">PRs${shown.length ? ` · ${shown.length}` : ''}</span>${segmented(state.prRange, PR_RANGES.map(([v, label]) => [v, label]), 'pr-range')}</div>${prs}</div>
       <div class="pg-sort">${segmented(state.progressSort, [['attention', 'Needs attention'], ['workout', 'By workout']], 'progress-sort')}</div>
       <div class="pg-list">${list}</div>
       ${absLine}
@@ -296,6 +302,7 @@ export function createTrendsView({ root, repo }) {
   delegate(root, 'click', {
     'range': el => setRange(el.dataset.value),
     'mode': el => { state.mode = el.dataset.value; render(); },
+    'pr-range': el => { state.prRange = el.dataset.value; render(); },
     'progress-sort': el => { state.progressSort = el.dataset.value; try { localStorage.setItem(SORT_KEY, state.progressSort); } catch { /* not saved — fine */ } render(); },
     'demo': () => { state.demo = !state.demo; render(); },
     'tip': el => showTip(el, '.trend-card'),
