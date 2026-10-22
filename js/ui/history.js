@@ -3,7 +3,7 @@ import { SESSION_LABELS, SESSION_COLORS } from '../config/program.js';
 import { exercisesForSession, findExercise, unitOf, repRangeText, setsOf } from '../core/exercises.js';
 import { todayISO, formatLong, agoText, isISODate } from '../core/dates.js';
 import { hasValue, parseWeight, parseReps } from '../core/numbers.js';
-import { STATUS, MODE, normalizeEntry, statusCounts, byNewest, setsOfEntry, meetsTarget, formatSets, sessionMode, entryMode } from '../core/records.js';
+import { STATUS, MODE, normalizeEntry, statusCounts, slotCounts, byNewest, setsOfEntry, meetsTarget, formatSets, sessionMode, entryMode } from '../core/records.js';
 import { updateEntry, setSessionDate, setSessionMode, deleteSession, mergeSessions } from '../core/log.js';
 import { createBackup, parseBackup, backupStatus, markBackedUp, deliverFile } from '../data/backup.js';
 import { CLIMB, setClimbDay, climbsOn } from '../core/climbs.js';
@@ -41,14 +41,13 @@ export function createHistoryView({ root, repo, storage, settings, onSettingsImp
   function sessionCard(s) {
     const open = expanded.has(s.id);
     const exercises = exercisesForSession(s);
-    const counts = statusCounts(s);
     const climb = climbsOn(repo.climbs, s.date)[0]?.intensity;
     return `
       <div class="card history-entry" data-session="${esc(s.id)}">
         <div class="history-hdr" data-action="toggle" aria-expanded="${open}">
           <span class="history-title">${formatLong(s.date)} ${s.program === 'old' ? '<span class="pill-muted">old program</span>' : ''}${sessionMode(s) !== MODE.NORMAL ? `<span class="${sessionMode(s)}-tag">${sessionMode(s)}</span>` : ''}${climb ? `<span class="climb-tag ${climb}">🧗 ${climb}</span>` : ''}</span>
           <span class="history-meta"><span class="history-dot" style="background:${SESSION_COLORS[s.session]}"></span>
-            <b style="color:${SESSION_COLORS[s.session]}">${SESSION_LABELS[s.session]}</b> · ${counts.complete + counts.partial}/${exercises.length} done</span>
+            <b style="color:${SESSION_COLORS[s.session]}">${SESSION_LABELS[s.session]}</b> · ${slotCounts(s).done}/${slotCounts(s).total} done</span>
           <span class="history-chevron">▾</span>
         </div>
         <div class="history-body"${open ? '' : ' hidden'}>

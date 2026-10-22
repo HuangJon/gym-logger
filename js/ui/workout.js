@@ -4,7 +4,7 @@
  * if the app is closed mid-workout.
  */
 import { PREHAB, SESSION_LABELS, SESSION_LETTERS, SESSION_FOCUS, SESSION_COLORS, DELOAD } from '../config/program.js';
-import { sessionExercises, findExercise, unitOf, programUnitOf, setUnitChoices, incrementOf, repRangeText, restOf } from '../core/exercises.js';
+import { exerciseSlots, pickOneOthers, sessionExercises, findExercise, unitOf, programUnitOf, setUnitChoices, incrementOf, repRangeText, restOf } from '../core/exercises.js';
 import { todayISO, isISODate, formatShort, agoText } from '../core/dates.js';
 import { hasValue, parseWeight, parseReps, convertWeight, UNITS } from '../core/numbers.js';
 import { STATUS, MODE, buildSessionRecord, formatSets, nextSession, lastDoneOf } from '../core/records.js';
@@ -327,8 +327,9 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   }
 
   /** Re-render one card (state lives in `scratch`, so nothing typed is lost). */
-  function refreshCard(exId) {
+  function refreshCard(exId, { siblings = true } = {}) {
     persist();
+    if (siblings) for (const o of pickOneOthers(findExercise(exId))) refreshCard(o.id, { siblings: false });
     const card = ui.exercises.querySelector(`#card-${exId}`);
     if (!card) return;
     card.outerHTML = exerciseCard(findExercise(exId));
@@ -339,6 +340,9 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
 
   /** Finished: skipped, or every set logged. Finished lifts shrink to one line until you tap them. */
   const isFinished = ex => { const st = stateOf(ex.id); return !!st.skipped || (st.done.length > 0 && openIndex(ex) === null); };
+  const isFinishedNotSkipped = ex => isFinished(ex) && !stateOf(ex.id).skipped;
+  /** For a pick-one lift (crunches or ab wheel): "optional — you did X" once another in its group is done. */
+  const coveredBy = ex => pickOneOthers(ex).find(o => (stateOf(o.id).done?.length || 0) > 0) || null;
 
   function collapsedCard(ex) {
     const st = stateOf(ex.id), mode = liftMode(ex), unit = unitOf(ex);
@@ -360,15 +364,18 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   function updateProgress() {
     const el = ui.header.querySelector('#session-progress');
     if (!el || !active) return;
-    const lifts = sessionExercises(active.sessionNum), n = lifts.filter(isFinished).length;
-    el.textContent = `${n} of ${lifts.length} lifts done`;
-    el.classList.toggle('all-done', n === lifts.length);
+    const slots = exerciseSlots(sessionExercises(active.sessionNum));   // crunches-or-ab-wheel counts once
+    const n = slots.filter(slot => slot.some(isFinishedNotSkipped) || slot.every(isFinished)).length;
+    el.textContent = `${n} of ${slots.length} lifts done`;
+    el.classList.toggle('all-done', n === slots.length);
   }
 
   function exerciseCard(ex) {
     const st = stateOf(ex.id), mode = liftMode(ex), deload = mode === MODE.DELOAD, maintain = mode === MODE.MAINTAIN;
     if (isFinished(ex) && !st.expanded) return collapsedCard(ex);
-    const tags = [deload && '<span class="deload-tag">deload</span>', maintain && '<span class="maintain-tag">maintain</span>', ex.tag && `<span class="ex-tag tag-circuit">${esc(ex.tag)}</span>`, ex.warn && `<span class="ex-tag tag-warn">${esc(ex.warn)}</span>`].filter(Boolean).join('');
+    const others = pickOneOthers(ex), covered = coveredBy(ex);
+    const pickTag = others.length ? `<span class="ex-tag tag-pick">${covered ? `optional — you did ${esc(covered.name)}` : `or ${esc(others.map(o => o.name).join(' / '))}`}</span>` : '';
+    const tags = [pickTag, deload && '<span class="deload-tag">deload</span>', maintain && '<span class="maintain-tag">maintain</span>', ex.tag && `<span class="ex-tag tag-circuit">${esc(ex.tag)}</span>`, ex.warn && `<span class="ex-tag tag-warn">${esc(ex.warn)}</span>`].filter(Boolean).join('');
     return `
       <div class="card ex-card s${active.sessionNum}${st.skipped ? ' is-skipped' : ''}${deload ? ' is-deload' : ''}${maintain ? ' is-maintain' : ''}" id="card-${ex.id}" data-ex="${ex.id}">
         <div class="ex-header">

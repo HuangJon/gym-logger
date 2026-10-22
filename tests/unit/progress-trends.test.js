@@ -6,7 +6,7 @@ import { liftSeries, isWeighted, inRange, groupingFor, groupPoints, changeOverWi
 import { session, done, partial, skipped, unrecorded } from '../helpers.js';
 
 const incline1 = findExercise('s1-incline'), incline3 = findExercise('s3-incline');
-const deadlift = findExercise('s1-deadlift'), pulldown = findExercise('s1-pulldown');
+const deadlift = findExercise('s1-deadlift'), pulldown = findExercise('s3-pulldown');
 const abwheel = findExercise('s3-abwheel'), bss = findExercise('s3-bss');
 
 // ── last time / planned weight ──

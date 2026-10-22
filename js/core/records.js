@@ -15,7 +15,7 @@
  * isn't thrown away if it's ever read by this one.
  */
 import { hasValue } from './numbers.js';
-import { sessionExercises, unitOf, exercisesForSession } from './exercises.js';
+import { sessionExercises, unitOf, exercisesForSession, exerciseSlots } from './exercises.js';
 
 /** How a session (or one lift) was trained: pushing for progress, holding steady, or recovering. */
 export const MODE = Object.freeze({ NORMAL: 'normal', MAINTAIN: 'maintain', DELOAD: 'deload' });
@@ -165,6 +165,13 @@ export function effectiveSessionMode(record, share = 0.5) {
 
 /** Was this lift deloaded in this session? */
 export const isDeloadEntry = (record, entry) => entryMode(record, entry) === MODE.DELOAD;
+
+/** "done / total" for a session, counting a pick-one group (crunches or ab wheel) as one. */
+export function slotCounts(record) {
+  const slots = exerciseSlots(exercisesForSession(record));
+  const did = ex => DID_IT.has(normalizeEntry(record.entries?.[ex.id]).status);
+  return { done: slots.filter(slot => slot.some(did)).length, total: slots.length };
+}
 
 /** { complete, partial, skip, unrecorded } counts for a record, over the exercises it shows. */
 export function statusCounts(record) {

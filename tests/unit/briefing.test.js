@@ -23,11 +23,11 @@ test('briefing: last time this workout + how it went + climbing since', () => {
 test('briefing tips: hard climb names the climbing-heavy lifts — or says go ahead when there are none', () => {
   const climbs = [{ date: '2026-10-20', intensity: 'hard' }];
   const a = sessionBriefing({ sessions: [], climbs, sessionNum: 1, date: '2026-10-21' });
-  assert.match(a.tips[0], /Hard climb yesterday — Deadlift and Single Arm Cable Pulldown lean on/);
+  assert.match(a.tips[0], /Hard climb yesterday — Deadlift leans on|Hard climb yesterday — Deadlift lean/);
   const b = sessionBriefing({ sessions: [], climbs, sessionNum: 2, date: '2026-10-22' });
   assert.match(b.tips[0], /Hard climb 2 days ago .* Bent Over Rows and Hanging Leg Raises/);
   const c = sessionBriefing({ sessions: [], climbs, sessionNum: 3, date: '2026-10-21' });
-  assert.match(c.tips[0], /don't lean much on your climbing muscles/);
+  assert.match(c.tips[0], /Single Arm Cable Pulldown/, 'each workout now has one climbing-heavy pull');
   assert.equal(sessionBriefing({ sessions: [], climbs, sessionNum: 1, date: '2026-10-20' }).tips.length, 0, 'same day = after lifting');
   assert.equal(sessionBriefing({ sessions: [], climbs, sessionNum: 1, date: '2026-10-24' }).tips.length, 0, 'recovered');
 });

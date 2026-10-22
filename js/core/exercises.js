@@ -35,6 +35,23 @@ export const restOf = ex => ex?.rest ?? (ex?.tag === 'circuit' ? CIRCUIT_REST_SE
 export const repRangeText = ([lo, hi]) => (lo === hi ? `${lo}` : `${lo}–${hi}`);
 
 /**
+ * A workout's exercises as "slots" you need to do: each exercise is its own slot, except exercises
+ * sharing a `pickOne` name, which share one slot (do at least one; the others are optional).
+ */
+export function exerciseSlots(list) {
+  const slots = new Map();
+  for (const ex of list) {
+    const key = ex.pickOne ? `pick:${ex.pickOne}` : ex.id;
+    if (!slots.has(key)) slots.set(key, []);
+    slots.get(key).push(ex);
+  }
+  return [...slots.values()];
+}
+
+/** The other exercises an exercise can stand in for (same pickOne group in its workout). */
+export const pickOneOthers = ex => (ex?.pickOne ? sessionExercises(ex.session).filter(o => o.pickOne === ex.pickOne && o.id !== ex.id) : []);
+
+/**
  * Exercises to show for a logged session: the current program for that session plus anything
  * else it logged. Sessions from an older program (program: 'old') show only what was logged.
  */

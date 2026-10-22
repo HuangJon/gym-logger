@@ -11,6 +11,7 @@
  *   unit           'lbs' (default) or 'kg'
  *   bw             true for bodyweight exercises (no weight box)
  *   rest           seconds of rest between sets for the rest timer (defaults to DEFAULT_REST_SECONDS)
+ *   pickOne        exercises in the same workout with the same pickOne name: do at least one, the rest are optional
  *   climb          true if climbing loads the same muscles (back, biceps, grip) — named in the after-climbing tip
  *   tag / warn     optional small labels on the card
  *
@@ -26,10 +27,9 @@ export const PREHAB = {
 export const SESSIONS = {
   1: [
     { id: 's1-incline',  name: 'Incline DB Press',          detail: '3×6–12',               reps: [6, 12],  defaultWeight: 50, sets: 3 },
-    { id: 's1-deadlift', name: 'Deadlift',                  detail: '2×5–8',               reps: [5, 8],   defaultWeight: 185, climb: true },
+    { id: 's1-deadlift', name: 'Deadlift',                  detail: '2×5–8',                reps: [5, 8],   defaultWeight: 185, climb: true },
     { id: 's1-lateral',  name: 'Cable Lateral Raises',      detail: '2×8–15',               reps: [8, 15],  defaultWeight: 5, tag: 'circuit' },
     { id: 's1-crunches', name: 'Cable Crunches',            detail: '2×10–15',              reps: [10, 15], defaultWeight: 45, unit: 'kg', tag: 'circuit' },
-    { id: 's1-pulldown', name: 'Single Arm Cable Pulldown', detail: '2×8–12',               reps: [8, 12],  defaultWeight: 25, unit: 'kg', climb: true },
   ],
   2: [
     { id: 's2-ohpress',   name: 'DB Shoulder Press',    detail: '3×6–12',         reps: [6, 12], defaultWeight: 30, sets: 3, warn: '⚠ zero soreness first' },
@@ -41,14 +41,16 @@ export const SESSIONS = {
   3: [
     { id: 's3-incline',  name: 'Incline DB Press',       detail: '3×6–12',                   reps: [6, 12],  defaultWeight: 50, sets: 3 },
     { id: 's3-bss',      name: 'Bulgarian Split Squats', detail: '3×5–10',                   reps: [5, 10],   defaultWeight: 15, sets: 3 },
+    { id: 's3-pulldown', name: 'Single Arm Cable Pulldown', detail: '2×8–12',                reps: [8, 12],   defaultWeight: 25, unit: 'kg', climb: true },
     { id: 's3-lateral',  name: 'Cable Lateral Raises',   detail: '2×8–15',                   reps: [8, 15],  defaultWeight: 5, tag: 'circuit' },
-    { id: 's3-crunches', name: 'Cable Crunches',         detail: '2×10–15',                  reps: [10, 15], defaultWeight: 45, unit: 'kg', tag: 'circuit' },
-    { id: 's3-abwheel',  name: 'Ab Wheel',               detail: '2×8–10 · if feeling good', reps: [8, 10],  bw: true, tag: 'circuit' },
+    { id: 's3-crunches', name: 'Cable Crunches',         detail: '2×10–15 · or ab wheel',    reps: [10, 15], defaultWeight: 45, unit: 'kg', tag: 'circuit', pickOne: 'core' },
+    { id: 's3-abwheel',  name: 'Ab Wheel',               detail: '2×8–10 · or crunches',      reps: [8, 10],   bw: true, tag: 'circuit', pickOne: 'core' },
   ],
 };
 
 /** Exercises from earlier programs: not in today's workout, but their logs still show in History and Trends. */
 export const RETIRED = [
+  { id: 's1-pulldown', name: 'Single Arm Cable Pulldown', detail: 'moved to Workout C', reps: [8, 12], unit: 'kg', climb: true },
   { id: 's2-dips',    name: 'Dips',                detail: 'old program · 3×6–12', reps: [6, 12], bw: true },
   { id: 's2-oldrows', name: 'Bent Over Rows', detail: 'old program · 3×6–12', reps: [6, 12] },   // same lift as today's rows: shares last time + Trends
 ];
@@ -70,7 +72,7 @@ export const DEFAULT_SETS = 2;
 export const SESSION_LABELS = { 1: 'Workout A', 2: 'Workout B', 3: 'Workout C' };
 export const SESSION_LETTERS = { 1: 'A', 2: 'B', 3: 'C' };
 /** One line under each workout's button so you can tell them apart. */
-export const SESSION_FOCUS = { 1: 'Incline · Deadlift · Pulldown', 2: 'Shoulder press · Rows', 3: 'Incline · Split squats' };
+export const SESSION_FOCUS = { 1: 'Incline · Deadlift', 2: 'Shoulder press · Rows', 3: 'Incline · Split squats · Pulldown' };
 export const SESSION_COLORS = { 1: 'var(--s1)', 2: 'var(--s2)', 3: 'var(--s3)' };
 
 /** A "Last time" older than this many days gets an "ease back in" note. */

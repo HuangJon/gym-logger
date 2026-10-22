@@ -26,7 +26,7 @@ function howItWent(record) {
  *            climbs: { hard: number, easy: number }, tips: string[] }}
  */
 export function sessionBriefing({ sessions, climbs, sessionNum, date }) {
-  const earlier = sessions.filter(s => s.date < date).sort(byNewest);
+  const earlier = sessions.filter(s => s.date <= date).sort(byNewest);   // saved sessions only — today's earlier ones count
   const lastSame = earlier.find(s => Number(s.session) === Number(sessionNum)) || null;
   const lastAny = earlier[0] || null;
   const last = lastSame ? { date: lastSame.date, ...howItWent(lastSame) } : null;
@@ -43,7 +43,7 @@ export function sessionBriefing({ sessions, climbs, sessionNum, date }) {
     const when = ago === 1 ? 'yesterday' : `${ago} days ago (${formatShort(hard.date)})`;
     const overlap = sessionExercises(sessionNum).filter(ex => ex.climb).map(ex => ex.name);
     tips.push(overlap.length
-      ? `Hard climb ${when} — ${listNames(overlap)} lean on the same back, biceps and grip. If ${overlap.length > 1 ? 'they feel' : 'it feels'} beat up, tap ↓ Deload on ${overlap.length > 1 ? 'those' : 'it'}.`
+      ? `Hard climb ${when} — ${listNames(overlap)} ${overlap.length > 1 ? 'lean' : 'leans'} on the same back, biceps and grip. If ${overlap.length > 1 ? 'they feel' : 'it feels'} beat up, tap ↓ Deload on ${overlap.length > 1 ? 'those' : 'it'}.`
       : `Hard climb ${when} — today's lifts don't lean much on your climbing muscles, so go ahead as planned.`);
   }
   if (last && last.total >= 3 && last.short.length * 2 >= last.total) {
