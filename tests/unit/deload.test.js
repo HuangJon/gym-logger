@@ -39,7 +39,12 @@ test('computeTarget: deload = ~10% lighter, bottom of range, half the sets', () 
 test('computeTarget: ease back after more than 14 days off', () => {
   const last = { ...done(185, 8), date: '2026-09-01' };
   const eased = computeTarget(deadlift, last, { date: '2026-09-20' });
-  assert.deepEqual(eased, { weight: 165, reps: 5, sets: 2, reason: 'ease', daysOff: 19 });
+  assert.deepEqual(eased, { weight: 165, reps: 5, sets: 2, reason: 'ease', daysOff: 19, lighter: true });
+  const bss = findExercise('s3-bss');   // 15 lbs, 5 lb steps: 10% lighter rounds back to 15
+  const same = computeTarget(bss, { ...done(15, 8), date: '2026-09-01' }, { date: '2026-09-20' });
+  assert.equal(same.weight, 15);
+  assert.doesNotMatch(targetReason(bss, same, {}, 'lbs'), /lighter/);
+  assert.match(targetReason(bss, same, {}, 'lbs'), /bottom of the range to ease back in/);
   assert.match(targetReason(deadlift, eased, last, 'lbs'), /19 days since last time — ~10% lighter/);
   // exactly 14 days → normal progression
   assert.equal(computeTarget(deadlift, last, { date: '2026-09-15' }).reason, 'bump');
