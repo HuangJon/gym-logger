@@ -264,8 +264,8 @@ try {
 
   // ── deload ──────────────────────────────────────────────
   await page.fill('#pick-date', '2026-05-05'); await page.dispatchEvent('#pick-date', 'change'); await page.selectOption('#pick-session', '1');
-  check('deload: off by default', !(await page.isChecked('#pick-deload')));
-  await page.tap('#deload-area .switch-track');
+  check('mode: Normal by default', (await page.getAttribute('#deload-area [data-mode="normal"]', 'aria-pressed')) === 'true');
+  await page.tap('#deload-area [data-mode="deload"]');
   check('deload: default style = same weight, half the sets', (await text('#session-preview-area')).toLowerCase().includes('deload targets') && (await text('#session-preview-area')).includes('177.5 lbs × 5 × 1 set') && (await page.getAttribute('#deload-area [data-style="sets"]', 'aria-pressed')) === 'true');
   await page.tap('#deload-area [data-style="lighter"]');
   check('deload: Lighter style = ~10% lighter, same sets', (await text('#session-preview-area')).includes('155 lbs × 5 × 2 sets') && (await text('#deload-area')).includes('~10% lighter, same sets'));
@@ -279,7 +279,7 @@ try {
   check('deload: saved as a deload session', dl?.deload === true && dl.entries['s1-deadlift'].status === 'complete' && JSON.stringify(dl.entries['s1-deadlift'].sets) === '[{"weight":177.5,"reps":5}]', JSON.stringify(dl));
   await tab('workout');
   await page.fill('#pick-date', '2026-05-06'); await page.dispatchEvent('#pick-date', 'change'); await page.selectOption('#pick-session', '1');
-  check('deload: picker back to normal for the next session', !(await page.isChecked('#pick-deload')));
+  check('deload: picker back to normal for the next session', (await page.getAttribute('#deload-area [data-mode="normal"]', 'aria-pressed')) === 'true');
   // climbing days
   const climbsSaved = async () => JSON.stringify((await savedLog()).climbs.map(c => [c.date, c.intensity]));
   check('climbing: None | Easy | Hard, None selected by default', (await page.getAttribute('#climb-area [data-intensity="none"]', 'aria-pressed')) === 'true');
@@ -303,39 +303,51 @@ try {
   await page.tap('#card-s1-deadlift [data-action="target-open"]');
   await page.tap('#card-s1-deadlift [data-action="target-step"][data-field="weight"][data-dir="1"]');
   await page.tap('#card-s1-deadlift [data-action="target-close"]');
-  await page.tap('#card-s1-deadlift [data-action="lift-deload"]');
+  await page.tap('#card-s1-deadlift [data-action="lift-mode"][data-mode="deload"]');
   check('your weight through deload: same weight, half the sets', (await text('#card-s1-deadlift .target-btn')).includes('180 lbs × 5 × 1 set'));
   check('deload style switch appears in the session once a lift is deloaded', await page.locator('#session-header .deload-style').count() === 1);
   await page.tap('#session-header [data-style="lighter"]');
   check('deload style mid-session: Lighter → ~10% lighter, same sets', (await text('#card-s1-deadlift .target-btn')).includes('160 lbs × 5 × 2 sets'));
   await page.tap('#session-header [data-style="sets"]');
-  await page.tap('#card-s1-deadlift [data-action="lift-deload"]');
+  await page.tap('#card-s1-deadlift [data-action="lift-mode"][data-mode="deload"]');
   check('your weight through deload: back to yours', (await text('#card-s1-deadlift .target-btn')).includes('180 lbs × 7 × 2 sets'));
   await page.tap('#card-s1-deadlift [data-action="target-open"]'); await page.tap('#card-s1-deadlift [data-action="target-reset"]'); await page.tap('#card-s1-deadlift [data-action="target-close"]');
   check('deload: next normal session builds on the session before the deload', (await text('#card-s1-deadlift .target-row')).includes('175 lbs × 7 × 2 sets') && (await text('#card-s1-deadlift .last-row')).includes('deload since'));
   // deload mid-session, or just one lift
-  await page.tap('#session-header .session-deload .switch-track');
+  await page.tap('#session-header [data-mode="deload"]');
   check('mid-session deload: targets switch to deload', (await text('#card-s1-deadlift .target-row')).includes('half the sets') && (await text('#card-s1-incline .target-row')).includes('half the sets') && await page.locator('.ex-card.is-deload').count() === 5);
-  await page.tap('#card-s1-incline [data-action="lift-deload"]');
-  check('deload session: keep one lift normal', !(await text('#card-s1-incline .target-row')).includes('half the sets') && (await page.getAttribute('#card-s1-incline [data-action="lift-deload"]', 'aria-pressed')) === 'false');
-  await page.tap('#session-header .session-deload .switch-track');
+  await page.tap('#card-s1-incline [data-action="lift-mode"][data-mode="deload"]');
+  check('deload session: keep one lift normal', !(await text('#card-s1-incline .target-row')).includes('half the sets') && (await page.getAttribute('#card-s1-incline [data-mode="deload"]', 'aria-pressed')) === 'false');
+  await page.tap('#session-header [data-mode="normal"]');
   check('mid-session deload off: all back to normal', await page.locator('.ex-card.is-deload').count() === 0 && (await text('#card-s1-deadlift .target-row')).includes('175 lbs × 7 × 2 sets'));
-  await page.tap('#card-s1-deadlift [data-action="lift-deload"]');
-  check('deload just one lift', (await text('#card-s1-deadlift .target-row')).includes('half the sets') && await page.locator('.ex-card.is-deload').count() === 1 && !(await page.isChecked('#session-deload')));
-  await page.tap('#card-s1-deadlift [data-action="lift-deload"]');
+  await page.tap('#card-s1-deadlift [data-action="lift-mode"][data-mode="deload"]');
+  check('deload just one lift', (await text('#card-s1-deadlift .target-row')).includes('half the sets') && await page.locator('.ex-card.is-deload').count() === 1 && (await page.getAttribute('#session-header [data-mode="normal"]', 'aria-pressed')) === 'true');
+  await page.tap('#card-s1-deadlift [data-action="lift-mode"][data-mode="deload"]');
+  // maintain: whole session, or one lift
+  await page.tap('#session-header [data-mode="maintain"]');
+  check('maintain: target = last time (deadlift 177.5 × 6 × 2 sets)', (await text('#card-s1-deadlift .target-row')).includes('177.5 lbs × 6 × 2 sets') && (await text('#card-s1-deadlift .target-row')).includes('maintain — same as last time') && await page.locator('.ex-card.is-maintain').count() === 5);
+  await page.tap('#card-s1-deadlift [data-action="lift-mode"][data-mode="deload"]');
+  check('maintain session: deload one lift instead', await page.locator('.ex-card.is-maintain').count() === 4 && (await text('#card-s1-deadlift .target-row')).includes('half the sets'));
+  await page.tap('#session-header [data-mode="normal"]');
+  await page.tap('#card-s1-incline [data-action="lift-mode"][data-mode="maintain"]');
+  check('maintain just one lift', await page.locator('.ex-card.is-maintain').count() === 1 && (await page.getAttribute('#card-s1-incline [data-mode="maintain"]', 'aria-pressed')) === 'true');
+  await page.tap('#card-s1-incline [data-action="lift-mode"][data-mode="maintain"]');
+  check('tap again: back to the session mode', await page.locator('.ex-card.is-maintain').count() === 0);
   await page.tap('.sa-change');
   check('nothing logged → "change" goes straight back', await page.locator('#picker-panel').isVisible());
   // too many deloads → a gentle warning
   await page.fill('#pick-date', '2026-05-20'); await page.dispatchEvent('#pick-date', 'change');
   check('deload often: no warning for a normal session', await page.locator('.deload-often').count() === 0);
-  await page.tap('#deload-area .switch-track');
+  await page.tap('#deload-area [data-mode="deload"]');
   check('deload often: 2nd deload in 6 weeks → warning', (await text('.deload-often')).includes('2 deloads in 6 weeks'));
-  await page.tap('#deload-area .switch-track');
+  await page.tap('#deload-area [data-mode="maintain"]');
+  check('maintain: picker shows what it means', (await text('#deload-area')).includes('repeat last time') && await page.locator('.deload-often').count() === 0);
+  await page.tap('#deload-area [data-mode="normal"]');
   await page.fill('#pick-date', '2026-05-06'); await page.dispatchEvent('#pick-date', 'change');
   await page.tap('[data-action="deload-week"]');
-  check('deload week: switches deload on for the week', await page.isChecked('#pick-deload') && (await text('#deload-area')).includes('Deload week until'));
+  check('deload week: switches deload on for the week', (await page.getAttribute('#deload-area [data-mode="deload"]', 'aria-pressed')) === 'true' && (await text('#deload-area')).includes('Deload week until'));
   await page.tap('[data-action="deload-week-end"]');
-  check('deload week: end', !(await page.isChecked('#pick-deload')) && !(await text('#deload-area')).includes('until'));
+  check('deload week: end', (await page.getAttribute('#deload-area [data-mode="normal"]', 'aria-pressed')) === 'true' && !(await text('#deload-area')).includes('until'));
 
   // empty-session guard
   await tab('workout');
@@ -389,10 +401,13 @@ try {
   const may5 = page.locator('.history-entry', { has: page.locator('.history-title', { hasText: 'May 5, 2026' }) }).filter({ hasText: 'Session 1' });
   check('history: deload tag', (await may5.locator('.history-hdr').innerText()).toLowerCase().includes('deload'));
   if (!(await may5.locator('.history-body').isVisible())) await may5.locator('.history-hdr').tap();
-  await may5.locator('.entry-date-row .switch-track').tap(); await wait(150);
-  check('history: deload switch off → saved as a normal session', (await sessionsOn('2026-05-05')).find(x => x.session === 1).deload === undefined);
-  await may5.locator('.entry-date-row .switch-track').tap(); await wait(150);
-  check('history: deload switch back on', (await sessionsOn('2026-05-05')).find(x => x.session === 1).deload === true);
+  const may5rec = async () => (await sessionsOn('2026-05-05')).find(x => x.session === 1);
+  await may5.locator('[data-action="entry-mode"][data-mode="maintain"]').tap(); await wait(150);
+  check('history: mode → maintain', (await may5rec()).maintain === true && (await may5rec()).deload === undefined && (await may5.locator('.history-hdr').innerText()).toLowerCase().includes('maintain'));
+  await may5.locator('[data-action="entry-mode"][data-mode="normal"]').tap(); await wait(150);
+  check('history: mode → normal', (await may5rec()).maintain === undefined && (await may5rec()).deload === undefined);
+  await may5.locator('[data-action="entry-mode"][data-mode="deload"]').tap(); await wait(150);
+  check('history: mode → deload', (await may5rec()).deload === true);
   await apr22.locator('.history-row[data-ex="s2-dips"]').tap();
   check('history edit: retired bodyweight lift has set boxes but no weight box', await page.locator('.hedit-w').count() === 0 && await page.locator('.hedit-r').count() === 2);
   await page.tap('#hedit-panel .status-btn[data-status="partial"]'); await page.fill('#hedit-r-0', '5');

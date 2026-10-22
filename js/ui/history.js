@@ -3,8 +3,8 @@ import { SESSION_LABELS, SESSION_COLORS } from '../config/program.js';
 import { exercisesForSession, findExercise, unitOf, repRangeText, setsOf } from '../core/exercises.js';
 import { todayISO, formatLong, agoText, isISODate } from '../core/dates.js';
 import { hasValue, parseWeight, parseReps } from '../core/numbers.js';
-import { STATUS, normalizeEntry, statusCounts, byNewest, setsOfEntry, meetsTarget, formatSets } from '../core/records.js';
-import { updateEntry, setSessionDate, setSessionDeload, deleteSession, mergeSessions } from '../core/log.js';
+import { STATUS, MODE, normalizeEntry, statusCounts, byNewest, setsOfEntry, meetsTarget, formatSets, sessionMode, entryMode } from '../core/records.js';
+import { updateEntry, setSessionDate, setSessionMode, deleteSession, mergeSessions } from '../core/log.js';
 import { createBackup, parseBackup, backupStatus, markBackedUp, deliverFile } from '../data/backup.js';
 import { CLIMB, setClimbDay, climbsOn } from '../core/climbs.js';
 import { esc, delegate, autoResize, confirmTap, flash } from './dom.js';
@@ -46,7 +46,7 @@ export function createHistoryView({ root, repo, storage, settings, onSettingsImp
     return `
       <div class="card history-entry" data-session="${esc(s.id)}">
         <div class="history-hdr" data-action="toggle" aria-expanded="${open}">
-          <span class="history-title">${formatLong(s.date)} ${s.program === 'old' ? '<span class="pill-muted">old program</span>' : ''}${s.deload ? '<span class="deload-tag">deload</span>' : ''}${climb ? `<span class="climb-tag ${climb}">🧗 ${climb}</span>` : ''}</span>
+          <span class="history-title">${formatLong(s.date)} ${s.program === 'old' ? '<span class="pill-muted">old program</span>' : ''}${sessionMode(s) !== MODE.NORMAL ? `<span class="${sessionMode(s)}-tag">${sessionMode(s)}</span>` : ''}${climb ? `<span class="climb-tag ${climb}">🧗 ${climb}</span>` : ''}</span>
           <span class="history-meta"><span class="history-dot" style="background:${SESSION_COLORS[s.session]}"></span>
             <b style="color:${SESSION_COLORS[s.session]}">${SESSION_LABELS[s.session]}</b> · ${counts.complete + counts.partial}/${exercises.length} done</span>
           <span class="history-chevron">▾</span>
@@ -60,9 +60,10 @@ export function createHistoryView({ root, repo, storage, settings, onSettingsImp
             <span class="entry-date-msg"></span>
           </div>
           <div class="entry-date-row">
-            <span class="hedit-label">Deload</span>
-            <label class="switch"><input type="checkbox" class="entry-deload" data-action="entry-deload"${s.deload ? ' checked' : ''}><span class="switch-track" aria-hidden="true"></span>
-              <span class="switch-label entry-deload-text">${s.deload ? 'yes — not counted for progression' : 'no'}</span></label>
+            <span class="hedit-label">Mode</span>
+            <div class="seg mode-seg" role="group" aria-label="Session mode">${[[MODE.NORMAL, 'Normal'], [MODE.MAINTAIN, 'Maintain'], [MODE.DELOAD, 'Deload']].map(([m, label]) =>
+              `<button type="button" data-action="entry-mode" data-mode="${m}" aria-pressed="${sessionMode(s) === m}">${label}</button>`).join('')}</div>
+            <span class="entry-mode-msg">${sessionMode(s) === MODE.DELOAD ? 'not counted for progression' : ''}</span>
           </div>
           <div class="entry-date-row">
             <span class="hedit-label">Climbing</span>
@@ -113,7 +114,7 @@ export function createHistoryView({ root, repo, storage, settings, onSettingsImp
       : (parts.length ? `<span class="history-wt">${parts.join(' · ')}</span>` : '') +
         (e.status === STATUS.PARTIAL ? '<span class="badge badge-partial">partial</span>' : '') +
         (e.status === STATUS.UNRECORDED ? '<span class="badge badge-unrec">not recorded</span>' : '') +
-        (e.deload === true && !s.deload ? '<span class="deload-tag">deload</span>' : '');
+        (entryMode(s, e) !== sessionMode(s) && entryMode(s, e) !== MODE.NORMAL ? `<span class="${entryMode(s, e)}-tag">${entryMode(s, e)}</span>` : '');
     const dim = e.status === STATUS.SKIP || e.status === STATUS.UNRECORDED;
     return `
       <div class="history-row${dim ? ' dim' : ''}${isEditing ? ' editing' : ''}" data-action="edit" data-ex="${ex.id}">
@@ -227,6 +228,7 @@ export function createHistoryView({ root, repo, storage, settings, onSettingsImp
     const entry = { status: editing.status || STATUS.UNRECORDED, note: $('#hedit-note').value.trim() };
     if (entry.status !== STATUS.SKIP && sets.length) { entry.sets = sets; entry.unit = previous.unit || unitOf(ex); }   // weights are edited in the unit they were logged in
     if (previous.target) entry.target = previous.target;
+    if (previous.mode) entry.mode = previous.mode;
     if (typeof previous.deload === 'boolean') entry.deload = previous.deload;
     // "Done" that falls short of the target is a partial — keeps next time's target honest
     if (entry.status === STATUS.COMPLETE && previous.target && !meetsTarget(sets, previous.target)) entry.status = STATUS.PARTIAL;
@@ -250,12 +252,11 @@ export function createHistoryView({ root, repo, storage, settings, onSettingsImp
     }
   }
 
-  async function changeDeload(input) {
+  async function changeMode(btn) {
     try {
-      await repo.commit(setSessionDeload(repo.sessions, sessionIdOf(input), input.checked));
+      await repo.commit(setSessionMode(repo.sessions, sessionIdOf(btn), btn.dataset.mode));
     } catch {
-      input.checked = !input.checked;
-      input.closest('.entry-date-row').querySelector('.entry-deload-text').textContent = 'Save failed';
+      btn.closest('.entry-date-row').querySelector('.entry-mode-msg').textContent = 'Save failed';
     }
   }
 
@@ -312,10 +313,11 @@ export function createHistoryView({ root, repo, storage, settings, onSettingsImp
     'delete': remove,
     'export': exportBackup,
     'hclimb': setClimb,
+    'entry-mode': changeMode,
     'restore': restore,
   });
   delegate(root, 'input', { 'autosize': autoResize });
-  delegate(root, 'change', { 'climb-add-date': el => { if (isISODate(el.value)) { climbDate = el.value; render(); } }, 'entry-date': changeDate, 'entry-deload': changeDeload, 'import': importBackup });
+  delegate(root, 'change', { 'climb-add-date': el => { if (isISODate(el.value)) { climbDate = el.value; render(); } }, 'entry-date': changeDate, 'import': importBackup });
 
   return {
     render,

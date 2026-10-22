@@ -2,12 +2,13 @@
  * The workout in progress, saved on every change so closing the app (or the phone killing it)
  * mid-workout loses nothing. Cleared when the session is completed or discarded.
  *
- *   { v: 1, savedAt, active: { sessionNum, date, deload? }, scratch: { [exerciseId]: {...} }, rest? }
+ *   { v: 1, savedAt, active: { sessionNum, date, mode }, scratch: { [exerciseId]: { ..., mode? } }, rest? }
  *
  * It's a scratch copy, not part of the log: if it ever can't be read it's simply ignored.
  */
 import { isISODate } from '../core/dates.js';
 import { sessionNumbers } from '../core/exercises.js';
+import { MODE, isMode } from '../core/records.js';
 
 const KEY = 'draft';
 const VERSION = 1;
@@ -28,7 +29,8 @@ export function loadDraft(storage) {
   const sessionNum = Number(raw.active.sessionNum);
   if (!sessionNumbers().includes(sessionNum) || !isISODate(raw.active.date)) return null;
   const rest = raw.rest && Number.isFinite(raw.rest.endsAt) ? { endsAt: raw.rest.endsAt, exId: String(raw.rest.exId || ''), total: Number(raw.rest.total) || 0 } : null;
-  return { savedAt: Number(raw.savedAt) || 0, active: { sessionNum, date: raw.active.date, deload: !!raw.active.deload }, scratch: cleanScratch(raw.scratch), rest };
+  const mode = isMode(raw.active.mode) ? raw.active.mode : (raw.active.deload ? MODE.DELOAD : MODE.NORMAL);   // older drafts: deload flag
+  return { savedAt: Number(raw.savedAt) || 0, active: { sessionNum, date: raw.active.date, mode }, scratch: cleanScratch(raw.scratch), rest };
 }
 
 export const clearDraft = storage => storage.remove?.(KEY);
@@ -48,7 +50,8 @@ function cleanScratch(scratch) {
     if (!st || typeof st !== 'object') continue;
     const s = { done: (Array.isArray(st.done) ? st.done : []).map(cleanSet).filter(Boolean) };
     if (st.skipped) s.skipped = true;
-    if (typeof st.deload === 'boolean') s.deload = st.deload;
+    if (isMode(st.mode)) s.mode = st.mode;
+    else if (typeof st.deload === 'boolean') s.mode = st.deload ? MODE.DELOAD : MODE.NORMAL;   // older drafts
     if (num(st.baseWeight) !== null) s.baseWeight = st.baseWeight;
     if (typeof st.note === 'string' && st.note) s.note = st.note;
     const t = st.target;

@@ -1,20 +1,26 @@
 /**
  * Session records — the shape of everything saved in the log.
  *
- *   { id, session: 1|2|3, date: "YYYY-MM-DD", ts, program?: 'old', deload?: true, note?,
+ *   { id, session: 1|2|3, date: "YYYY-MM-DD", ts, program?: 'old', deload?: true, maintain?: true, note?,
  *     entries: { [exerciseId]: Entry } }
  *
  *   Entry = { status, note,
  *             sets?: [{ weight?, reps }],         // each logged set, in order
  *             weight?, unit?, reps?,               // summary: heaviest weight, fewest reps — for charts and older logs
  *             target?: { weight?, reps, sets },    // what you were aiming for
- *             deload?: boolean }                   // only when it differs from the session's deload flag
+ *             mode?: 'normal'|'maintain'|'deload' } // only when this lift differed from the session
+ *                                                  // (older logs: deload?: boolean, same meaning)
  *
  * status is one of STATUS. Unknown fields are kept as-is, so data written by a future version
  * isn't thrown away if it's ever read by this one.
  */
 import { hasValue } from './numbers.js';
 import { sessionExercises, unitOf, exercisesForSession } from './exercises.js';
+
+/** How a session (or one lift) was trained: pushing for progress, holding steady, or recovering. */
+export const MODE = Object.freeze({ NORMAL: 'normal', MAINTAIN: 'maintain', DELOAD: 'deload' });
+const MODES = new Set(Object.values(MODE));
+export const isMode = m => MODES.has(m);
 
 export const STATUS = Object.freeze({ COMPLETE: 'complete', PARTIAL: 'partial', SKIP: 'skip', UNRECORDED: 'unrecorded' });
 export const DID_IT = new Set([STATUS.COMPLETE, STATUS.PARTIAL]);
@@ -102,10 +108,11 @@ export function meetsTarget(sets, target) {
  *   scratch:  { [exerciseId]: { skipped?, note?, done?: [{ weight?, reps }] } } — what you logged
  *   targetOf: ex => { weight, reps, sets } — the target for each exercise (yours if you changed it)
  * Logged sets → complete if they met the target, otherwise partial. No logged sets → "unrecorded".
- * Skip drops any sets. `deload` marks the session as a deload (it won't move progression); a lift can
- * differ with scratch[id].deload (deload just that lift, or keep one lift normal in a deload session).
+ * Skip drops any sets. `mode` is the session's mode (MODE); a lift can differ with scratch[id].mode
+ * (deload or maintain just that lift, or keep one lift normal). Deloaded lifts don't move progression.
  */
-export function buildSessionRecord({ sessionNum, date, scratch, targetOf, deload = false, now = Date.now() }) {
+export function buildSessionRecord({ sessionNum, date, scratch, targetOf, mode, deload = false, now = Date.now() }) {
+  const sessionMode = isMode(mode) ? mode : (deload ? MODE.DELOAD : MODE.NORMAL);
   const entries = {};
   for (const ex of sessionExercises(sessionNum)) {
     const sc = scratch[ex.id] || {}, target = targetOf(ex);
@@ -119,18 +126,28 @@ export function buildSessionRecord({ sessionNum, date, scratch, targetOf, deload
       if (hasValue(sum.weight)) { entry.weight = sum.weight; entry.unit = unitOf(ex); }
       entry.reps = sum.reps;
     }
-    const liftDeload = typeof sc.deload === 'boolean' ? sc.deload : deload;
-    if (liftDeload !== deload && DID_IT.has(entry.status)) entry.deload = liftDeload;
+    const liftMode = isMode(sc.mode) ? sc.mode : (typeof sc.deload === 'boolean' ? (sc.deload ? MODE.DELOAD : MODE.NORMAL) : sessionMode);
+    if (liftMode !== sessionMode && DID_IT.has(entry.status)) entry.mode = liftMode;
     if (target && entry.status !== STATUS.UNRECORDED) {
       entry.target = { reps: target.reps, sets: target.sets, ...(hasValue(target.weight) ? { weight: target.weight } : {}) };
     }
     entries[ex.id] = entry;
   }
-  return { id: String(now), session: Number(sessionNum), date, ts: now, ...(deload ? { deload: true } : {}), entries };
+  return { id: String(now), session: Number(sessionNum), date, ts: now, ...sessionModeFields(sessionMode), entries };
 }
 
-/** Was this lift deloaded in this session? Its own flag if it has one, else the session's. */
-export const isDeloadEntry = (record, entry) => (typeof entry?.deload === 'boolean' ? entry.deload : !!record?.deload);
+/** The session-level fields for a mode. */
+export const sessionModeFields = mode => (mode === MODE.DELOAD ? { deload: true } : mode === MODE.MAINTAIN ? { maintain: true } : {});
+/** A saved session's mode. */
+export const sessionMode = record => (record?.deload ? MODE.DELOAD : record?.maintain ? MODE.MAINTAIN : MODE.NORMAL);
+/** How one lift was trained in a session: its own mode if it differed, else the session's. */
+export function entryMode(record, entry) {
+  if (isMode(entry?.mode)) return entry.mode;
+  if (typeof entry?.deload === 'boolean') return entry.deload ? MODE.DELOAD : (record?.maintain ? MODE.MAINTAIN : MODE.NORMAL);   // older logs
+  return sessionMode(record);
+}
+/** Was this lift deloaded in this session? */
+export const isDeloadEntry = (record, entry) => entryMode(record, entry) === MODE.DELOAD;
 
 /** { complete, partial, skip, unrecorded } counts for a record, over the exercises it shows. */
 export function statusCounts(record) {

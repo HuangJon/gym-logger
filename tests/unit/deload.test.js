@@ -183,7 +183,7 @@ test('draft: saves, reloads, cleans, and ignores anything unusable', () => {
   assert.equal(saveDraft(storage, { active: { sessionNum: 1, date: '2026-10-21', deload: true }, scratch, rest: { endsAt: 1000, exId: 's1-deadlift', total: 150 } }, 42), true);
   const back = loadDraft(storage);
   assert.equal(back.savedAt, 42);
-  assert.deepEqual(back.active, { sessionNum: 1, date: '2026-10-21', deload: true });
+  assert.deepEqual(back.active, { sessionNum: 1, date: '2026-10-21', mode: 'deload' }, 'older drafts with a deload flag still load');
   assert.deepEqual(back.scratch['s1-deadlift'], { done: [{ weight: 185, reps: 6 }, { reps: 5 }], note: 'grip' });
   assert.deepEqual(back.scratch['s1-lateral'], { done: [], skipped: true });
   assert.deepEqual(back.scratch['s1-incline'].target, { weight: 55, reps: 6, sets: 3 });
@@ -288,8 +288,8 @@ test('per-lift deload: saved on the entry, skipped by progression; opting out of
   };
   const rec = buildSessionRecord({ sessionNum: 1, date: '2026-10-10', scratch, targetOf, now: 1 });
   assert.equal(rec.deload, undefined);
-  assert.equal(rec.entries['s1-deadlift'].deload, true);
-  assert.equal('deload' in rec.entries['s1-incline'], false);
+  assert.equal(rec.entries['s1-deadlift'].mode, 'deload');
+  assert.equal('mode' in rec.entries['s1-incline'], false);
   const earlier = session('2026-10-01', 1, { 's1-deadlift': done(185, 7), 's1-incline': done(45, 8) });
   const migrated = migrateLog({ schemaVersion: 3, sessions: [earlier, rec] }).sessions;
   assert.equal(lastPerformance(migrated, deadlift, '2026-10-12').weight, 185, 'deloaded lift skipped');
@@ -298,7 +298,7 @@ test('per-lift deload: saved on the entry, skipped by progression; opting out of
   // deload session, but deadlift kept normal
   const rec2 = buildSessionRecord({ sessionNum: 1, date: '2026-10-12', scratch: { 's1-deadlift': { done: [{ weight: 190, reps: 5 }], deload: false }, 's1-incline': { done: [{ weight: 45, reps: 6 }] } }, targetOf, deload: true, now: 2 });
   assert.equal(rec2.deload, true);
-  assert.equal(rec2.entries['s1-deadlift'].deload, false);
+  assert.equal(rec2.entries['s1-deadlift'].mode, 'normal');
   const all = migrateLog({ schemaVersion: 3, sessions: [earlier, rec, rec2] }).sessions;
   assert.equal(lastPerformance(all, deadlift, '2026-10-14').weight, 190);
   assert.equal(lastPerformance(all, incline, '2026-10-14').weight, 50);
@@ -374,4 +374,58 @@ test('last note, shorter rest for circuits', async () => {
   assert.equal(restOf(deadlift), 90);
   assert.equal(restOf(incline), 90);
   assert.equal(restOf(findExercise('s3-abwheel')), 45);
+});
+
+test('modes: maintain targets last time, counts as done, and the next session asks for more', async () => {
+  const { MODE, entryMode, sessionMode } = await import('../../js/core/records.js');
+  const { setSessionMode } = await import('../../js/core/log.js');
+  const last = { ...done(185, 6), sets: [{ weight: 185, reps: 7 }, { weight: 185, reps: 6 }], date: '2026-10-01', target: { weight: 185, reps: 7, sets: 2 } };
+  const m = computeTarget(deadlift, last, { date: '2026-10-03', maintain: true });
+  assert.deepEqual(m, { weight: 185, reps: 6, sets: 2, reason: 'maintain' });
+  assert.match(targetReason(deadlift, m, last, 'lbs'), /maintain — same as last time/);
+  assert.equal(computeTarget(deadlift, null, { date: '2026-10-03', maintain: true }).reason, 'first');
+  assert.equal(computeTarget(deadlift, { ...last, date: '2026-08-01' }, { date: '2026-10-03', maintain: true }).reason, 'ease', 'after a long break, easing wins');
+  // hitting the maintain target is complete, not a miss
+  const rec = buildSessionRecord({ sessionNum: 1, date: '2026-10-03', scratch: { 's1-deadlift': { done: [{ weight: 185, reps: 6 }, { weight: 185, reps: 6 }] } }, targetOf: () => m, mode: MODE.MAINTAIN, now: 7 });
+  assert.equal(rec.maintain, true);
+  assert.equal(rec.entries['s1-deadlift'].status, 'complete');
+  assert.equal(sessionMode(rec), MODE.MAINTAIN);
+  // maintain counts for progression: next normal session → one more rep
+  const next = computeTarget(deadlift, lastPerformance([rec], deadlift, '2026-10-05'), { date: '2026-10-05' });
+  assert.deepEqual(next, { weight: 185, reps: 7, sets: 2, reason: 'more' });
+  // per-lift maintain in a normal session; legacy entry.deload booleans still read
+  const one = buildSessionRecord({ sessionNum: 1, date: '2026-10-03', scratch: { 's1-deadlift': { done: [{ weight: 185, reps: 6 }], mode: 'maintain' } }, targetOf: () => m, now: 8 });
+  assert.equal(one.entries['s1-deadlift'].mode, 'maintain');
+  assert.equal(entryMode(one, one.entries['s1-deadlift']), 'maintain');
+  assert.equal(entryMode({ deload: true }, { deload: false }), 'normal');
+  assert.equal(entryMode({}, { deload: true }), 'deload');
+  // History: switch a session's mode
+  const switched = setSessionMode([rec], rec.id, MODE.DELOAD)[0];
+  assert.equal(switched.deload, true); assert.equal('maintain' in switched, false);
+  assert.equal(Object.keys(setSessionMode([switched], rec.id, MODE.NORMAL)[0]).filter(k => k === 'deload' || k === 'maintain').length, 0);
+});
+
+test('deload: only 1 set to begin with → ~10% lighter instead', () => {
+  assert.deepEqual(deloadTarget(deadlift, 185, 1), { weight: 165, reps: 5, sets: 1, reason: 'deload', style: 'lighter', lighter: true, fallback: true });
+  assert.match(targetReason(deadlift, deloadTarget(deadlift, 185, 1), {}, 'lbs'), /only 1 set to begin with/);
+  assert.deepEqual(deloadTarget(legRaise, null, 1), { weight: null, reps: 8, sets: 1, reason: 'deload', style: 'sets' }, 'bodyweight, 1 set: bottom of the range is all that is left');
+});
+
+test('maintain often: a fatigue signal that suggests a deload', async () => {
+  const { maintainCount, maintainOften } = await import('../../js/core/deload.js');
+  const m = (date) => ({ ...session(date, 1, { 's1-deadlift': done(185, 6) }), maintain: true });
+  const today = '2026-10-28';
+  const sessions = [session('2026-10-01', 1, {}), m('2026-10-05'), m('2026-10-12'), m('2026-10-19')];
+  assert.equal(maintainCount(sessions, today), 3);
+  assert.equal(maintainOften(sessions, today), false);
+  assert.equal(maintainOften(sessions, today, today), true, 'picking a 4th → warn');
+  const four = [...sessions, m('2026-10-26')];
+  const adv = deloadAdvice(four, today);
+  assert.equal(adv.suggest, true);
+  assert.match(adv.why, /4 maintain sessions in the last 4 weeks/);
+  // a deload resets the count
+  const afterDeload = [...four, { ...session('2026-10-27', 2, {}), deload: true }];
+  assert.equal(maintainCount(afterDeload, today), 0);
+  // older than 4 weeks doesn't count
+  assert.equal(maintainCount(four, '2026-11-20'), 1);
 });

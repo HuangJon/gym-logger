@@ -2,7 +2,7 @@
 import { STALE_AFTER_DAYS, EASE_BACK_FACTOR, DELOAD } from '../config/program.js';
 import { hasValue, round2, convertWeight } from './numbers.js';
 import { daysBetween } from './dates.js';
-import { normalizeEntry, DID_IT, STATUS, byNewest, setsOfEntry, meetsTarget, isDeloadEntry } from './records.js';
+import { normalizeEntry, DID_IT, STATUS, MODE, byNewest, setsOfEntry, meetsTarget, entryMode } from './records.js';
 import { exercisesForSession, incrementOf, setsOf, unitOf, defaultWeightOf } from './exercises.js';
 
 /**
@@ -21,10 +21,10 @@ export function performances(sessions, ex, beforeDate, { includeDeload = false, 
     for (const other of exercisesForSession(record)) {
       if (other.name !== ex.name) continue;
       const e = normalizeEntry(record.entries?.[other.id]);
-      const deload = isDeloadEntry(record, e);
+      const mode = entryMode(record, e), deload = mode === MODE.DELOAD;
       if (deload && !includeDeload) continue;
       if (DID_IT.has(e.status) && (hasValue(e.weight) || hasValue(e.reps))) {
-        found.push({ ...inUnit(e, ex), date: record.date, session: record.session, deload });
+        found.push({ ...inUnit(e, ex), date: record.date, session: record.session, deload, ...(mode === MODE.MAINTAIN ? { maintain: true } : {}) });
         break;
       }
     }
@@ -90,10 +90,15 @@ export const DELOAD_STYLES = Object.freeze({ SETS: 'sets', LIGHTER: 'lighter' })
  *   'sets'    → same weight, half the sets (rounded up)
  *   'lighter' → ~10% lighter, same sets — or, if the weight is too light to drop a step (or it's a
  *               bodyweight lift), half the sets instead (`fallback: true`)
+ * With only 1 set to begin with, 'sets' can't cut anything, so it goes ~10% lighter instead.
  */
 export function deloadTarget(ex, weight, sets, style = DELOAD_STYLES.SETS) {
   const [lo] = ex.reps, half = Math.max(1, Math.ceil(sets * DELOAD.setsFactor));
   const w = ex.bw ? null : (weight ?? null);
+  if (style === DELOAD_STYLES.SETS && sets <= 1) {
+    const lighter = lighterWeight(ex, w, DELOAD.weightFactor);
+    if (hasValue(w) && lighter < w) return { weight: lighter, reps: lo, sets, reason: 'deload', style: DELOAD_STYLES.LIGHTER, lighter: true, fallback: true };
+  }
   if (style === DELOAD_STYLES.LIGHTER) {
     const lighter = lighterWeight(ex, w, DELOAD.weightFactor);
     if (hasValue(w) && lighter < w) return { weight: lighter, reps: lo, sets, reason: 'deload', style, lighter: true };
@@ -105,10 +110,11 @@ export function deloadTarget(ex, weight, sets, style = DELOAD_STYLES.SETS) {
 /**
  * Today's target. Normally double progression (`progressionTarget`), adjusted for:
  *   deload        → see deloadTarget (opts.deloadStyle: 'sets' | 'lighter'; reason 'deload')
+ *   maintain      → repeat what you did last time — same weight, the reps you got, same sets (reason 'maintain')
  *   long break    → last time was over STALE_AFTER_DAYS ago: ~10% lighter, bottom of the range (reason 'ease')
  * opts.date: the workout's date; opts.lastActive: date you last did the lift at all (deloads included).
  */
-export function computeTarget(ex, last, { date, lastActive, deload = false, deloadStyle = DELOAD_STYLES.SETS } = {}) {
+export function computeTarget(ex, last, { date, lastActive, deload = false, maintain = false, deloadStyle = DELOAD_STYLES.SETS } = {}) {
   const base = progressionTarget(ex, last);
   if (!base) return null;
   const [lo] = ex.reps;
@@ -121,6 +127,11 @@ export function computeTarget(ex, last, { date, lastActive, deload = false, delo
   if (deload) {
     const t = deloadTarget(ex, easing ? easedWeight : lastWeight, base.sets, deloadStyle);
     return easing && hasValue(easedWeight) && easedWeight < lastWeight ? { ...t, afterBreak: true } : t;
+  }
+  if (maintain && last && !easing) {
+    const lastSets = setsOfEntry(last, base.sets);
+    const reps = lastSets.length ? clamp(Math.min(...lastSets.map(x => x.reps)), ex.reps[0], ex.reps[1]) : lo;
+    return { weight: ex.bw ? null : lastWeight, reps, sets: base.sets, reason: 'maintain' };
   }
   if (easing) {
     return { weight: easedWeight, reps: lo, sets: base.sets, reason: 'ease', daysOff, ...(hasValue(easedWeight) && easedWeight < lastWeight ? { lighter: true } : {}) };
@@ -194,8 +205,9 @@ export function targetReason(ex, target, last, unit) {
     case 'repeat': return 'same target — not hit last time';
     case 'top':    return ex.bw ? 'top of range — add a harder variation or a set' : 'top of range';
     case 'ease':   return `${target.daysOff} days since last time — ${target.lighter ? '~10% lighter, bottom of the range' : 'bottom of the range'} to ease back in`;
+    case 'maintain': return 'maintain — same as last time, leave 2–3 reps in the tank';
     case 'deload': return target.lighter
-      ? 'deload — ~10% lighter, bottom of the range, stop 2–3 reps short of failure'
+      ? `deload — ~10% lighter, bottom of the range, stop 2–3 reps short of failure${target.fallback ? ' (only 1 set to begin with)' : ''}`
       : `deload — ${ex.bw ? '' : target.afterBreak ? 'eased weight after the break, ' : 'same weight, '}half the sets, bottom of the range, stop 2–3 reps short of failure${target.fallback ? ' (too light to drop a step)' : ''}`;
     default:       return last ? '' : 'first time — find a weight you can do with good form';
   }

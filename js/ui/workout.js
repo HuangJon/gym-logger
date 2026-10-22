@@ -1,5 +1,5 @@
 /**
- * Workout tab: pick a date + session (normal or deload), log each set against the target,
+ * Workout tab: pick a date + session (Normal, Maintain or Deload), log each set against the target,
  * complete the session. The workout in progress is saved on every change and picked up again
  * if the app is closed mid-workout.
  */
@@ -7,10 +7,10 @@ import { PREHAB, SESSION_LABELS, SESSION_COLORS } from '../config/program.js';
 import { sessionExercises, findExercise, unitOf, programUnitOf, setUnitChoices, incrementOf, repRangeText, restOf } from '../core/exercises.js';
 import { todayISO, isISODate, formatShort, agoText } from '../core/dates.js';
 import { hasValue, parseWeight, parseReps, convertWeight, UNITS } from '../core/numbers.js';
-import { STATUS, buildSessionRecord, formatSets } from '../core/records.js';
+import { STATUS, MODE, buildSessionRecord, formatSets } from '../core/records.js';
 import { addSession } from '../core/log.js';
 import { lastNote, canStepRepsDown, canStepRepsUp, lastPerformance, computeTarget, targetReason, missedStreak, MISSES_BEFORE_HINT, lighterWeight, deloadTarget, DELOAD_STYLES, stepWeight, stepReps, stepTarget, setBadge, exerciseVerdict } from '../core/progress.js';
-import { deloadAdvice, deloadFrequency, deloadWeekActive, startDeloadWeek, endDeloadWeek, snoozeDeload } from '../core/deload.js';
+import { deloadAdvice, deloadFrequency, maintainCount, maintainOften, deloadWeekActive, startDeloadWeek, endDeloadWeek, snoozeDeload } from '../core/deload.js';
 import { saveDraft, loadDraft, clearDraft } from '../data/draft.js';
 import { setClimbDay, climbsOn, recentHardClimb, hardClimbsRecent } from '../core/climbs.js';
 import { esc, delegate, autoResize, flash, confirmTap } from './dom.js';
@@ -29,7 +29,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     completeBtn: $('#complete-btn'), status: $('#status'), deloadArea: $('#deload-area'), climbArea: $('#climb-area'), sessionClimb: $('#session-climb'),
   };
 
-  let active = null;   // { sessionNum, date, deload } while logging
+  let active = null;   // { sessionNum, date, mode } while logging
   /**
    * Per exercise, nothing saved until Complete:
    * { skipped?, note?, done: [{weight?, reps}], current?: index being edited (undefined = next set),
@@ -41,12 +41,13 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   const stateOf = id => (scratch[id] ||= { done: [] });
   /** Last normal (non-deload) session for this lift — what progression builds on. */
   const lastFor = (ex, date = active.date) => lastPerformance(repo.sessions, ex, date);
-  /** Is this lift deloaded today? Its own choice on the card, else the session's. */
-  const liftDeload = ex => scratch[ex.id]?.deload ?? active.deload;
+  /** How this lift is trained today: its own choice on the card, else the session's mode. */
+  const liftMode = ex => scratch[ex.id]?.mode ?? active.mode;
+  const liftDeload = ex => liftMode(ex) === MODE.DELOAD;
   /** How deloads are done: 'sets' (same weight, half the sets) or 'lighter' (~10% lighter, same sets). */
   const deloadStyle = () => (settings.get().deloadStyle === DELOAD_STYLES.LIGHTER ? DELOAD_STYLES.LIGHTER : DELOAD_STYLES.SETS);
-  const suggestedTarget = (ex, date = active.date, deload = liftDeload(ex)) => computeTarget(ex, lastFor(ex, date), {
-    date, deload, deloadStyle: deloadStyle(), lastActive: lastPerformance(repo.sessions, ex, date, { includeDeload: true })?.date,
+  const suggestedTarget = (ex, date = active.date, mode = liftMode(ex)) => computeTarget(ex, lastFor(ex, date), {
+    date, deload: mode === MODE.DELOAD, maintain: mode === MODE.MAINTAIN, deloadStyle: deloadStyle(), lastActive: lastPerformance(repo.sessions, ex, date, { includeDeload: true })?.date,
   });
 
   /** Fewer sets | Lighter switch, shown wherever a deload is on. */
@@ -56,6 +57,24 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     ? '~10% lighter, same sets, bottom of the rep range'
     : 'same weight, half the sets, bottom of the rep range');
   const targetFor = ex => scratch[ex.id]?.target ?? suggestedTarget(ex);
+
+  /** Normal | Maintain | Deload switch (session-wide, in the picker and the workout header). */
+  const MODE_LABELS = [[MODE.NORMAL, 'Normal'], [MODE.MAINTAIN, 'Maintain'], [MODE.DELOAD, 'Deload']];
+  const modeSwitch = (current, action) => `<div class="seg mode-seg" role="group" aria-label="Session mode">${MODE_LABELS.map(([value, label]) =>
+    `<button type="button" data-action="${action}" data-mode="${value}" aria-pressed="${current === value}">${label}</button>`).join('')}</div>`;
+  const MODE_HOW = {
+    [MODE.NORMAL]: 'push for progress — one more rep or more weight',
+    [MODE.MAINTAIN]: 'repeat last time — same weight and reps, 2–3 reps in the tank',
+  };
+
+  /** Choosing Maintain often is a fatigue signal (like deloading often). */
+  function maintainWarning(date) {
+    const n = maintainCount(repo.sessions, date, date);
+    return maintainOften(repo.sessions, date, date) ? `<div class="deload-often" role="note">
+        <b>That's ${n} maintain sessions in 4 weeks</b> — choosing Maintain this often is a fatigue signal, usually hard climbing, short sleep, or targets rising too fast.
+        A deload week may help more than another maintain day.
+      </div>` : '';
+  }
 
   const rest = createRestTimer({ el: $('#rest-bar'), onChange: () => persist() });
   const persist = () => { if (active) saveDraft(storage, { active, scratch, rest: rest.snapshot() }); };
@@ -79,17 +98,17 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   const editDraft = (ex, change) => { const st = stateOf(ex.id); st.draft = { ...draftOf(ex), ...change }; };
 
   // ── picker ──────────────────────────────────────────────
-  let pickDeload = null;   // your choice for the next session; null = follow the deload week
+  let pickMode = null;   // your choice for the next session; null = follow the deload week
 
   function resetPicker() {
     ui.pickDate.value = todayISO();
     ui.pickSession.value = '';
-    pickDeload = null;
+    pickMode = null;
     renderPicker();
   }
 
   const pickedDate = () => (isISODate(ui.pickDate.value) ? ui.pickDate.value : todayISO());
-  const deloadPicked = () => pickDeload ?? deloadWeekActive(settings.get(), pickedDate());
+  const modePicked = () => pickMode ?? (deloadWeekActive(settings.get(), pickedDate()) ? MODE.DELOAD : MODE.NORMAL);
 
   function renderPicker() {
     renderDeloadArea();
@@ -119,9 +138,9 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     catch (err) { flash(active ? ui.status : ui.hint, `Couldn't save: ${err.message}`, { error: true, ms: 0 }); }
   }
 
-  /** Deload switch, deload week, and the "consider a deload" suggestion. */
+  /** Normal | Maintain | Deload, deload week, and the "consider a deload" suggestion. */
   function renderDeloadArea() {
-    const date = pickedDate(), s = settings.get(), week = deloadWeekActive(s, date), on = deloadPicked();
+    const date = pickedDate(), s = settings.get(), week = deloadWeekActive(s, date), mode = modePicked(), on = mode === MODE.DELOAD;
     const advice = deloadAdvice(repo.sessions, todayISO(), s, repo.climbs);
     const suggestion = advice.suggest ? `<div class="card deload-suggest">
         <div class="ds-title">Consider a deload week</div>
@@ -139,30 +158,30 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
         Needing them this often usually points to hard climbing, short sleep, or targets rising too fast.
         Deload if you need to, but also consider holding your weights steady for a while (tap ✎ on a target) and leaving 2–3 reps in reserve.
       </div>` : '';
-    ui.deloadArea.innerHTML = `${suggestion}<div class="deload-row${on ? ' is-on' : ''}">
-        <label class="switch"><input type="checkbox" id="pick-deload" data-action="pick-deload"${on ? ' checked' : ''}><span class="switch-track" aria-hidden="true"></span>
-          <span class="switch-label">Deload session</span></label>
+    ui.deloadArea.innerHTML = `${suggestion}<div class="deload-row mode-${mode}">
+        ${modeSwitch(mode, 'pick-mode')}
         <span class="deload-week">${weekText}</span>
-        ${on ? `<div class="deload-style-row">${deloadStyleSwitch()}<span class="deload-how">${deloadHow()}</span></div>` : ''}
-      </div>${tooOften}`;
+        ${on ? `<div class="deload-style-row">${deloadStyleSwitch()}<span class="deload-how">${deloadHow()}</span></div>`
+          : `<span class="mode-how">${MODE_HOW[mode]}</span>`}
+      </div>${tooOften}${mode === MODE.MAINTAIN ? maintainWarning(date) : ''}`;
   }
 
   function renderPreview() {
-    const n = Number(ui.pickSession.value), deload = deloadPicked();
+    const n = Number(ui.pickSession.value), mode = modePicked();
     ui.startBtn.disabled = !n;
     ui.hint.hidden = !!n;
     if (!n) { ui.preview.innerHTML = ''; return; }
     const date = pickedDate();
     const rows = sessionExercises(n).map(ex => `<div class="preview-ex"><span class="preview-ex-name">${esc(ex.name)}</span>
-      <span class="preview-ex-detail">${esc(ex.detail)} · <b>${targetText(ex, suggestedTarget(ex, date, deload))}</b></span></div>`).join('');
+      <span class="preview-ex-detail">${esc(ex.detail)} · <b>${targetText(ex, suggestedTarget(ex, date, mode))}</b></span></div>`).join('');
     ui.preview.innerHTML = `<div class="card preview">
-      <div class="preview-header" style="color:${SESSION_COLORS[n]}">${SESSION_LABELS[n]} — ${deload ? '<span class="deload-tag">deload</span> targets' : "today's targets"}</div>
+      <div class="preview-header" style="color:${SESSION_COLORS[n]}">${SESSION_LABELS[n]} — ${mode === MODE.NORMAL ? "today's targets" : `<span class="${mode}-tag">${mode}</span> targets`}</div>
       <div class="preview-list">${rows}</div></div>`;
   }
 
   function changeDeloadWeek(patch) {
     settings.update(patch);
-    pickDeload = null;
+    pickMode = null;
     renderPicker();
   }
 
@@ -175,7 +194,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   function start() {
     const n = Number(ui.pickSession.value);
     if (!n) return;
-    active = { sessionNum: n, date: pickedDate(), deload: deloadPicked() };
+    active = { sessionNum: n, date: pickedDate(), mode: modePicked() };
     scratch = {};
     showSession();
     persist();
@@ -220,15 +239,14 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
 
   // ── active session ──────────────────────────────────────
   function renderHeader() {
-    const { sessionNum: n, date, deload } = active, restOn = settings.get().restTimer;
+    const { sessionNum: n, date, mode } = active, restOn = settings.get().restTimer;
     ui.header.innerHTML = `
       <span class="dot" style="background:${SESSION_COLORS[n]}"></span>
       <h2 style="color:${SESSION_COLORS[n]}">${SESSION_LABELS[n]}</h2>
       <input type="date" class="date-input" id="active-date" value="${date}" data-action="active-date" aria-label="Session date">
       <button type="button" class="link-btn sa-change" data-action="ask-discard">change</button>
       <div class="session-tools">
-        <label class="switch session-deload${deload ? ' is-on' : ''}"><input type="checkbox" id="session-deload" data-action="session-deload"${deload ? ' checked' : ''}><span class="switch-track" aria-hidden="true"></span>
-          <span class="switch-label">Deload</span></label>
+        ${modeSwitch(mode, 'session-mode')}
         <button type="button" class="rest-toggle" data-action="rest-toggle" aria-pressed="${restOn}">⏱ Rest timer ${restOn ? 'on' : 'off'}</button>
         ${anyDeload() ? `<div class="deload-style-row">${deloadStyleSwitch()}<span class="deload-how">${deloadHow()}</span></div>` : ''}
       </div>`;
@@ -241,7 +259,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     if (style === deloadStyle()) return;
     settings.update({ deloadStyle: style });
     if (!active) return renderPicker();
-    for (const ex of sessionExercises(active.sessionNum)) if (liftDeload(ex)) retarget(ex, true);
+    for (const ex of sessionExercises(active.sessionNum)) if (liftDeload(ex)) retarget(ex, MODE.DELOAD);
     persist();
     renderHeader();
     renderExercises();
@@ -257,7 +275,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
 
   function renderExercises() {
     const climb = recentHardClimb(repo.climbs, active.date);
-    const nudge = climb ? `<div class="climb-nudge" role="note">🧗 Hard climb yesterday — if your back, biceps or grip feel beat up, tap <b>↓ Deload this lift</b> on the pulling lifts.</div>` : '';
+    const nudge = climb ? `<div class="climb-nudge" role="note">🧗 Hard climb yesterday — if your back, biceps or grip feel beat up, tap <b>↓ Deload</b> on the pulling lifts.</div>` : '';
     ui.exercises.innerHTML = nudge + sessionExercises(active.sessionNum).map(exerciseCard).join('');
     ui.exercises.querySelectorAll('.note-input').forEach(autoResize);
   }
@@ -272,10 +290,10 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   }
 
   function exerciseCard(ex) {
-    const st = stateOf(ex.id), deload = liftDeload(ex);
-    const tags = [deload && '<span class="deload-tag">deload</span>', ex.tag && `<span class="ex-tag tag-circuit">${esc(ex.tag)}</span>`, ex.warn && `<span class="ex-tag tag-warn">${esc(ex.warn)}</span>`].filter(Boolean).join('');
+    const st = stateOf(ex.id), mode = liftMode(ex), deload = mode === MODE.DELOAD, maintain = mode === MODE.MAINTAIN;
+    const tags = [deload && '<span class="deload-tag">deload</span>', maintain && '<span class="maintain-tag">maintain</span>', ex.tag && `<span class="ex-tag tag-circuit">${esc(ex.tag)}</span>`, ex.warn && `<span class="ex-tag tag-warn">${esc(ex.warn)}</span>`].filter(Boolean).join('');
     return `
-      <div class="card ex-card s${active.sessionNum}${st.skipped ? ' is-skipped' : ''}${deload ? ' is-deload' : ''}" id="card-${ex.id}" data-ex="${ex.id}">
+      <div class="card ex-card s${active.sessionNum}${st.skipped ? ' is-skipped' : ''}${deload ? ' is-deload' : ''}${maintain ? ' is-maintain' : ''}" id="card-${ex.id}" data-ex="${ex.id}">
         <div class="ex-header">
           <div>
             <div class="ex-name">${esc(ex.name)}</div>
@@ -289,7 +307,8 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
         ${st.skipped ? '' : setLog(ex)}
         <div class="ex-row status-row">
           <button type="button" class="status-btn" data-action="skip" data-status="skip" aria-pressed="${!!st.skipped}">✕ Skip</button>
-          <button type="button" class="status-btn deload-btn" data-action="lift-deload" aria-pressed="${deload}">↓ Deload this lift</button>
+          <button type="button" class="status-btn deload-btn" data-action="lift-mode" data-mode="deload" aria-pressed="${deload}">↓ Deload</button>
+          <button type="button" class="status-btn maintain-btn" data-action="lift-mode" data-mode="maintain" aria-pressed="${maintain}">= Maintain</button>
         </div>
         <div class="ex-row note-row">
           <span class="note-icon">✎</span>
@@ -551,14 +570,15 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     onUnitsChanged?.();
   }
 
-  /** Deload the whole session (or back to normal) mid-workout. Logged sets stay; targets follow. */
-  function setSessionDeload(on) {
-    const before = Object.fromEntries(sessionExercises(active.sessionNum).map(ex => [ex.id, liftDeload(ex)]));
-    active.deload = on;
+  /** Switch the whole session's mode mid-workout. Logged sets stay; targets follow (weights you set are kept). */
+  function setSessionMode(mode) {
+    if (mode === active.mode) return;
+    const before = Object.fromEntries(sessionExercises(active.sessionNum).map(ex => [ex.id, liftMode(ex)]));
+    active.mode = mode;
     for (const ex of sessionExercises(active.sessionNum)) {
       const st = scratch[ex.id];
       if (!st) continue;
-      delete st.deload;
+      delete st.mode;
       retarget(ex, before[ex.id]);
     }
     persist();
@@ -566,30 +586,30 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     renderExercises();
   }
 
-  /** Deload just this lift (or keep this one normal in a deload session). */
-  function toggleLiftDeload(exId) {
-    const ex = findExercise(exId), st = stateOf(exId), next = !liftDeload(ex);
-    const was = liftDeload(ex);
-    if (next === active.deload) delete st.deload; else st.deload = next;
+  /** Deload or maintain just this lift (tap again to go back to the session's mode). */
+  function toggleLiftMode(exId, mode) {
+    const ex = findExercise(exId), st = stateOf(exId), was = liftMode(ex);
+    const next = was === mode ? (active.mode === mode ? MODE.NORMAL : active.mode) : mode;
+    if (next === active.mode) delete st.mode; else st.mode = next;
     retarget(ex, was);
     if (anyDeload() !== !!ui.header.querySelector('.deload-style')) renderHeader();   // show / hide the style switch
     refreshCard(exId);
   }
 
   /**
-   * After a deload switch: targets go back to suggested (so they follow the change) — except a weight
+   * After a mode switch: targets go back to suggested (so they follow the change) — except a weight
    * you set yourself is kept (as a deload of that weight while deloaded, back to your number after).
    */
-  function retarget(ex, wasDeload) {
-    const st = stateOf(ex.id), suggestedBefore = suggestedTarget(ex, active.date, wasDeload);
+  function retarget(ex, wasMode) {
+    const st = stateOf(ex.id), suggestedBefore = suggestedTarget(ex, active.date, wasMode);
     // a weight you chose: an edited target, or (when nothing was suggested) the weight you typed
     const yours = st.target?.weight ?? (hasValue(suggestedBefore?.weight) ? null : st.draft?.weight) ?? null;
-    if (!wasDeload && hasValue(yours)) st.baseWeight = yours;   // remember your normal weight
+    if (wasMode !== MODE.DELOAD && hasValue(yours)) st.baseWeight = yours;   // remember your normal weight
     delete st.target;
     st.draft = undefined;
     if (ex.bw || !hasValue(st.baseWeight)) return;
-    const normal = suggestedTarget(ex, active.date, false);
-    st.target = liftDeload(ex) ? deloadTarget(ex, st.baseWeight, normal.sets, deloadStyle()) : { ...normal, weight: st.baseWeight };
+    const normal = suggestedTarget(ex, active.date, MODE.NORMAL);
+    st.target = liftDeload(ex) ? deloadTarget(ex, st.baseWeight, normal.sets, deloadStyle()) : { ...suggestedTarget(ex), weight: st.baseWeight };
   }
 
   function toggleRestTimer() {
@@ -622,7 +642,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     btn.disabled = true;
     btn.textContent = 'Saving…';
     try {
-      const record = buildSessionRecord({ sessionNum: active.sessionNum, date: active.date, scratch, targetOf: ex => targetFor(ex), deload: active.deload });
+      const record = buildSessionRecord({ sessionNum: active.sessionNum, date: active.date, scratch, targetOf: ex => targetFor(ex), mode: active.mode });
       await repo.commit(addSession(repo.sessions, record));
       endSession();
       flash(ui.status, 'Session saved ✓');
@@ -665,7 +685,9 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     'discard-bottom': discardFromBottom,
     'rest-toggle': toggleRestTimer,
     'unit': el => setUnit(exIdOf(el), el.dataset.unit),
-    'lift-deload': el => toggleLiftDeload(exIdOf(el)),
+    'lift-mode': el => toggleLiftMode(exIdOf(el), el.dataset.mode),
+    'session-mode': el => setSessionMode(el.dataset.mode),
+    'pick-mode': el => { pickMode = el.dataset.mode; renderPicker(); },
     'climb-set': el => setClimb(el.dataset.date, el.dataset.intensity),
     'deload-style': el => setDeloadStyle(el.dataset.style),
     'rest-adjust': el => rest.adjust(Number(el.dataset.dir)),
@@ -683,10 +705,8 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   });
   delegate(root, 'change', {
     'pick-session': renderPreview,
-    'pick-date': () => { pickDeload = null; renderPicker(); },
-    'pick-deload': el => { pickDeload = el.checked; renderPicker(); },
+    'pick-date': () => { pickMode = null; renderPicker(); },
     'active-date': changeDate,
-    'session-deload': el => setSessionDeload(el.checked),
   });
 
   resetPicker();
