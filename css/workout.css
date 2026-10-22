@@ -245,6 +245,7 @@
 }
 .climb-label { font-size: 13px; font-weight: 600; flex: 1; min-width: 140px; }
 .climb-row.is-hard { border-color: var(--climb-line); background: var(--climb-bg); }
+.climb-row.is-easy { border-color: var(--good-line); background: var(--good-bg); }
 #session-climb .climb-row { margin: 4px 0 12px; }
 .climb-recent { width: 100%; font-size: 11px; color: var(--fg2); }
 .climb-nudge { margin-bottom: 10px; padding: 10px 14px; border-radius: var(--radius); font-size: 12px; line-height: 1.45; background: var(--climb-bg); color: var(--climb); }

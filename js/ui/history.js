@@ -88,7 +88,7 @@ export function createHistoryView({ root, repo, storage, settings, onSettingsImp
   /** A climbing day with no lifting session. */
   function climbRow(c) {
     const hard = c.intensity === CLIMB.HARD;
-    return `<div class="history-climb${hard ? ' hard' : ''}" data-climb="${esc(c.id)}">
+    return `<div class="history-climb ${hard ? 'hard' : 'easy'}" data-climb="${esc(c.id)}">
       <span class="hc-date">${formatLong(c.date)}</span>
       <span class="hc-what">🧗 climbing${c.note ? ` · ${esc(c.note)}` : ''}</span>
       ${climbSwitch(c.date)}

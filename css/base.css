@@ -91,7 +91,12 @@ button { font-family: var(--font); }
 
 /* Easy | Hard climbing switch (Workout and History) */
 .climb-seg button { font-size: 13px; padding: 6px 16px; min-height: 34px; touch-action: manipulation; }
-.climb-seg button[data-intensity="hard"][aria-pressed="true"] { background: var(--climb-line); color: #fff; }
+.climb-seg button[data-intensity="none"] { color: var(--fg2); }
+.climb-seg button[data-intensity="easy"] { color: var(--good); }
+.climb-seg button[data-intensity="hard"] { color: var(--climb); }
+.climb-seg button[data-intensity="none"][aria-pressed="true"] { background: var(--card); color: var(--fg); }
+.climb-seg button[data-intensity="easy"][aria-pressed="true"] { background: var(--good-line); color: var(--on-fill); }
+.climb-seg button[data-intensity="hard"][aria-pressed="true"] { background: var(--climb-line); color: var(--on-fill); }
 
 /* iPhone zooms into any text box smaller than 16px — keep them at 16px on touch screens */
 @media (pointer: coarse) {
