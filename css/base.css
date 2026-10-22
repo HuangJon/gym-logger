@@ -89,6 +89,10 @@ button { font-family: var(--font); }
 .switch input:checked + .switch-track::after { transform: translateX(16px); }
 .switch input:focus-visible + .switch-track { outline: 2px solid var(--fg); outline-offset: 2px; }
 
+/* Easy | Hard climbing switch (Workout and History) */
+.climb-seg button { font-size: 13px; padding: 6px 16px; min-height: 34px; touch-action: manipulation; }
+.climb-seg button[data-intensity="hard"][aria-pressed="true"] { background: var(--climb-line); color: #fff; }
+
 /* iPhone zooms into any text box smaller than 16px — keep them at 16px on touch screens */
 @media (pointer: coarse) {
   input, select, textarea { font-size: 16px !important; }

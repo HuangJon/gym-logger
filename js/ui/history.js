@@ -1,12 +1,12 @@
 /** History tab: backup card, saved sessions and climbing days, inline editing, date change, delete. */
 import { SESSION_LABELS, SESSION_COLORS } from '../config/program.js';
 import { exercisesForSession, findExercise, unitOf, repRangeText, setsOf } from '../core/exercises.js';
-import { todayISO, formatLong, agoText } from '../core/dates.js';
+import { todayISO, formatLong, agoText, isISODate } from '../core/dates.js';
 import { hasValue, parseWeight, parseReps } from '../core/numbers.js';
 import { STATUS, normalizeEntry, statusCounts, byNewest, setsOfEntry, meetsTarget, formatSets } from '../core/records.js';
 import { updateEntry, setSessionDate, setSessionDeload, deleteSession, mergeSessions } from '../core/log.js';
 import { createBackup, parseBackup, backupStatus, markBackedUp, deliverFile } from '../data/backup.js';
-import { CLIMB, removeClimb } from '../core/climbs.js';
+import { CLIMB, setClimbDay, climbsOn } from '../core/climbs.js';
 import { esc, delegate, autoResize, confirmTap, flash } from './dom.js';
 
 const EDIT_STATUSES = [[STATUS.COMPLETE, '✓ Done'], [STATUS.PARTIAL, '~ Partial'], [STATUS.SKIP, '✕ Skip']];
@@ -17,20 +17,23 @@ export function createHistoryView({ root, repo, storage, settings, onSettingsImp
 
   let expanded = null;   // Set of open session ids; null → open the newest
   let editing = null;    // { sessionId, exerciseId, status } while editing one exercise
+  let climbDate = null;  // date in the "log a climbing day" row (null → today)
 
   // ── rendering ───────────────────────────────────────────
   function render() {
     renderBackupCard();
     const sessions = [...repo.sessions].sort(byNewest);
     if (!sessions.length && !repo.climbs.length) {
-      ui.list.innerHTML = '<div class="empty-state">No sessions logged yet.<br>Complete a workout to see it here.</div>';
+      ui.list.innerHTML = climbAdder() + '<div class="empty-state">No sessions logged yet.<br>Complete a workout to see it here.</div>';
       return;
     }
     if (!expanded) expanded = new Set(sessions.length ? [sessions[0].id] : []);
     // sessions and climbing days together, newest first
+    // climbing on a day with a session is shown on that session; other climbing days get their own row
+    const sessionDates = new Set(sessions.map(s => s.date));
     const items = [...sessions.map(s => ({ date: s.date, ts: s.ts || 0, html: () => sessionCard(s) })),
-      ...repo.climbs.map(c => ({ date: c.date, ts: c.ts || 0, html: () => climbRow(c) }))].sort(byNewest);
-    ui.list.innerHTML = items.map(it => it.html()).join('');
+      ...repo.climbs.filter(c => !sessionDates.has(c.date)).map(c => ({ date: c.date, ts: c.ts || 0, html: () => climbRow(c) }))].sort(byNewest);
+    ui.list.innerHTML = climbAdder() + items.map(it => it.html()).join('');
     ui.list.querySelectorAll('.hedit-note').forEach(autoResize);
   }
 
@@ -38,10 +41,11 @@ export function createHistoryView({ root, repo, storage, settings, onSettingsImp
     const open = expanded.has(s.id);
     const exercises = exercisesForSession(s);
     const counts = statusCounts(s);
+    const climb = climbsOn(repo.climbs, s.date)[0]?.intensity;
     return `
       <div class="card history-entry" data-session="${esc(s.id)}">
         <div class="history-hdr" data-action="toggle" aria-expanded="${open}">
-          <span class="history-title">${formatLong(s.date)} ${s.program === 'old' ? '<span class="pill-muted">old program</span>' : ''}${s.deload ? '<span class="deload-tag">deload</span>' : ''}</span>
+          <span class="history-title">${formatLong(s.date)} ${s.program === 'old' ? '<span class="pill-muted">old program</span>' : ''}${s.deload ? '<span class="deload-tag">deload</span>' : ''}${climb ? `<span class="climb-tag ${climb}">🧗 ${climb}</span>` : ''}</span>
           <span class="history-meta"><span class="history-dot" style="background:${SESSION_COLORS[s.session]}"></span>
             <b style="color:${SESSION_COLORS[s.session]}">${SESSION_LABELS[s.session]}</b> · ${counts.complete + counts.partial}/${exercises.length} done</span>
           <span class="history-chevron">▾</span>
@@ -59,24 +63,47 @@ export function createHistoryView({ root, repo, storage, settings, onSettingsImp
             <label class="switch"><input type="checkbox" class="entry-deload" data-action="entry-deload"${s.deload ? ' checked' : ''}><span class="switch-track" aria-hidden="true"></span>
               <span class="switch-label entry-deload-text">${s.deload ? 'yes — not counted for progression' : 'no'}</span></label>
           </div>
+          <div class="entry-date-row">
+            <span class="hedit-label">Climbing</span>
+            ${climbSwitch(s.date)}
+          </div>
           <button type="button" class="delete-entry" data-action="delete">Delete this entry</button>
         </div>
       </div>`;
   }
 
+  /** Easy | Hard for a day: tap to set, the other to switch, the same again to clear. */
+  function climbSwitch(date) {
+    const current = climbsOn(repo.climbs, date)[0]?.intensity ?? null;
+    const btn = (value, label) => `<button type="button" data-action="hclimb" data-date="${date}" data-intensity="${value}" aria-pressed="${current === value}">${label}</button>`;
+    return `<div class="seg climb-seg" role="group" aria-label="Climbing on ${esc(formatLong(date))}">${btn(CLIMB.EASY, 'Easy')}${btn(CLIMB.HARD, 'Hard')}</div>`;
+  }
+
+  /** Log a climbing day for any date — rest days with no gym, or filling in after the fact. */
+  function climbAdder() {
+    const date = climbDate || todayISO();
+    return `<div class="climb-adder">
+      <span class="hc-what">🧗 Log a climbing day</span>
+      <input type="date" class="date-input" id="climb-add-date" value="${date}" max="${todayISO()}" data-action="climb-add-date" aria-label="Climbing date">
+      ${climbSwitch(date)}
+    </div>`;
+  }
+
+  /** A climbing day with no lifting session. */
   function climbRow(c) {
     const hard = c.intensity === CLIMB.HARD;
     return `<div class="history-climb${hard ? ' hard' : ''}" data-climb="${esc(c.id)}">
       <span class="hc-date">${formatLong(c.date)}</span>
-      <span class="hc-what">🧗 ${hard ? 'Hard' : 'Easy'} climb${c.note ? ` · ${esc(c.note)}` : ''}</span>
-      <button type="button" class="link-btn" data-action="climb-delete">delete</button>
+      <span class="hc-what">🧗 climbing${c.note ? ` · ${esc(c.note)}` : ''}</span>
+      ${climbSwitch(c.date)}
     </div>`;
   }
 
-  async function deleteClimb(btn) {
-    if (!confirmTap(btn, 'tap again')) return;
-    try { await repo.commitClimbs(removeClimb(repo.climbs, btn.closest('[data-climb]').dataset.climb)); }
-    catch { btn.textContent = 'failed — try again'; }
+  async function setClimb(btn) {
+    const { date, intensity } = btn.dataset;
+    const current = climbsOn(repo.climbs, date)[0]?.intensity ?? null;
+    try { await repo.commitClimbs(setClimbDay(repo.climbs, date, current === intensity ? null : intensity)); }
+    catch { btn.textContent = 'failed'; }
   }
 
   function exerciseRow(s, ex) {
@@ -289,11 +316,11 @@ export function createHistoryView({ root, repo, storage, settings, onSettingsImp
     'edit-cancel': () => { editing = null; render(); },
     'delete': remove,
     'export': exportBackup,
-    'climb-delete': deleteClimb,
+    'hclimb': setClimb,
     'restore': restore,
   });
   delegate(root, 'input', { 'autosize': autoResize });
-  delegate(root, 'change', { 'entry-date': changeDate, 'entry-deload': changeDeload, 'import': importBackup });
+  delegate(root, 'change', { 'climb-add-date': el => { if (isISODate(el.value)) { climbDate = el.value; render(); } }, 'entry-date': changeDate, 'entry-deload': changeDeload, 'import': importBackup });
 
   return {
     render,
