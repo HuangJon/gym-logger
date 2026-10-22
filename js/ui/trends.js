@@ -17,7 +17,7 @@ const RANGE_NAMES = { '1m': 'the last month', '3m': 'the last 3 months', '1y': '
 const STALE_DAYS = 14;
 const RECENT_COUNT = 6;
 const SORT_KEY = 'liftlog:progressSort';
-const PR_RANGES = [['4w', '4W', 28, 'in the last 4 weeks'], ['3m', '3M', 91, 'in the last 3 months'], ['1y', '1Y', 365, 'in the last year'], ['all', 'All', Infinity, 'yet']];
+const PR_RANGES = [['4w', '4W', 28, 'in the last 4 weeks'], ['3m', '3M', 91, 'in the last 3 months'], ['1y', '1Y', 365, 'in the last year'], ['all', 'All', Infinity, 'yet']];   // also the window for each lift's change
 const PR_SHOW = 8;
 function readSort() { try { return localStorage.getItem(SORT_KEY) === 'workout' ? 'workout' : 'attention'; } catch { return 'attention'; } }
 
@@ -28,7 +28,8 @@ export function createTrendsView({ root, repo }) {
     mode: 'weight',     // 'weight' (weight line + reps labels) | 'e1rm' (estimated 1-rep max)
     custom: null,       // { from, to } for the Custom range
     demo: false,        // preview with generated sample data (never saved)
-    prRange: '4w',      // PRs shown: last 4 weeks / 3 months / 1 year / all time
+    prRange: '4w',      // PRs and per-lift change: last 4 weeks / 3 months / 1 year / all time
+    prAll: false,       // showing every PR in the range (not just the newest few)
     progressSort: readSort(),   // 'attention' | 'workout' (remembered on this phone)
   };
 
@@ -118,13 +119,14 @@ export function createTrendsView({ root, repo }) {
   // ── progress per lift ───────────────────────────────────
   const STATUS_LABEL = { progressing: 'progressing', holding: 'holding', stalled: 'stalled', idle: 'not done lately', new: 'just started', top: 'top of range' };
   const fmtNum = v => String(round2(v));
+  const span = t => (t.weeks > 12 ? `${Math.round(t.weeks / 4.35)} mo` : `${t.weeks} wk${t.weeks === 1 ? '' : 's'}`);
   const monthDay = iso => new Date(`${iso}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });   // "Apr 19"
   function progressRow(l, today) {
     const u = l.unit;
     const trend = l.trend
       ? (l.trend.metric === 'e1rm'
-        ? `<span class="pg-trend ${l.trend.pct > 0 ? 'up' : l.trend.pct < 0 ? 'down' : ''}"${tipAttrs(`Estimated 1-rep max went from ${fmtNum(l.trend.from)} to ${fmtNum(l.trend.to)} ${u} since ${formatShort(l.trend.since)}. It combines weight and reps (weight × (1 + reps/30)), so more reps at the same weight counts too.`)}>${l.trend.pct > 0 ? '+' : ''}${l.trend.pct}% in ${l.trend.weeks} wk${l.trend.weeks === 1 ? '' : 's'}</span>`
-        : `<span class="pg-trend ${l.trend.delta > 0 ? 'up' : l.trend.delta < 0 ? 'down' : ''}">${signed(l.trend.delta)} rep${Math.abs(l.trend.delta) === 1 ? '' : 's'} in ${l.trend.weeks} wk${l.trend.weeks === 1 ? '' : 's'}</span>`)
+        ? `<span class="pg-trend ${l.trend.pct > 0 ? 'up' : l.trend.pct < 0 ? 'down' : ''}"${tipAttrs(`Estimated 1-rep max went from ${fmtNum(l.trend.from)} to ${fmtNum(l.trend.to)} ${u} since ${formatShort(l.trend.since)}. It combines weight and reps (weight × (1 + reps/30)), so more reps at the same weight counts too.`)}>${l.trend.pct > 0 ? '+' : ''}${l.trend.pct}% in ${span(l.trend)}</span>`
+        : `<span class="pg-trend ${l.trend.delta > 0 ? 'up' : l.trend.delta < 0 ? 'down' : ''}">${signed(l.trend.delta)} rep${Math.abs(l.trend.delta) === 1 ? '' : 's'} in ${span(l.trend)}</span>`)
       : '';
     const strength = l.strength === null ? '' : l.weighted
       ? `<span class="pg-est"${tipAttrs('Estimated 1-rep max from your best set last time — a single number that goes up whether you add weight or reps. You never need to test it.')}>est. max <b>${fmtNum(l.strength)} ${esc(u)}</b></span>`
@@ -146,13 +148,13 @@ export function createTrendsView({ root, repo }) {
   }
 
   function progressCard(sessions, today) {
-    const { lifts, prs: allPrs } = liftProgress(sessions, today);
-    if (!lifts.length) return '';
     const [, , prDays, prName] = PR_RANGES.find(r => r[0] === state.prRange);
+    const { lifts, prs: allPrs } = liftProgress(sessions, today, { trendDays: prDays });
+    if (!lifts.length) return '';
     const shown = allPrs.filter(p => p.date <= today && daysBetween(p.date, today) < prDays);
-    const more = shown.length - PR_SHOW;
+    const more = state.prAll ? 0 : shown.length - PR_SHOW;
     const prs = shown.length
-      ? `<ul>${shown.slice(0, PR_SHOW).map(p => `<li><b>${esc(p.name)}</b> · ${esc(p.text)} <span class="trend-ago">${esc(formatShort(p.date))}</span></li>`).join('')}</ul>${more > 0 ? `<div class="pg-none">+ ${more} older</div>` : ''}`
+      ? `<ul>${shown.slice(0, more > 0 ? PR_SHOW : undefined).map(p => `<li><b>${esc(p.name)}</b> · ${esc(p.text)} <span class="trend-ago">${esc(formatShort(p.date))}</span></li>`).join('')}</ul>${more > 0 ? `<button type="button" class="pg-more" data-action="pr-all">Show ${more} more</button>` : ''}`
       : `<div class="pg-none">None ${prName}.</div>`;
     let list;
     if (state.progressSort === 'workout') {
@@ -168,7 +170,8 @@ export function createTrendsView({ root, repo }) {
       ${abs.names.map(n => `${esc(n)} <b>${abs.counts[n]}</b>`).join(' · ')} · both <b>${abs.both}</b></div>` : '';
     return `<div class="card trend-card">
       <div class="trend-head"><span class="trend-name">Progress per lift</span><span class="trend-sub">deloads left out · maintain days don't count against you</span></div>
-      <div class="pg-prs"><div class="pg-prs-head"><span class="pg-sub">PRs${shown.length ? ` · ${shown.length}` : ''}</span>${segmented(state.prRange, PR_RANGES.map(([v, label]) => [v, label]), 'pr-range')}</div>${prs}</div>
+      <div class="pg-range"><span class="pg-range-label">PRs and changes over</span>${segmented(state.prRange, PR_RANGES.map(([v, label]) => [v, label]), 'pr-range')}</div>
+      <div class="pg-prs"><div class="pg-sub">PRs${shown.length ? ` · ${shown.length}` : ''}</div>${prs}</div>
       <div class="pg-sort">${segmented(state.progressSort, [['attention', 'Needs attention'], ['workout', 'By workout']], 'progress-sort')}</div>
       <div class="pg-list">${list}</div>
       ${absLine}
@@ -302,7 +305,8 @@ export function createTrendsView({ root, repo }) {
   delegate(root, 'click', {
     'range': el => setRange(el.dataset.value),
     'mode': el => { state.mode = el.dataset.value; render(); },
-    'pr-range': el => { state.prRange = el.dataset.value; render(); },
+    'pr-range': el => { state.prRange = el.dataset.value; state.prAll = false; render(); },
+    'pr-all': () => { state.prAll = true; render(); },
     'progress-sort': el => { state.progressSort = el.dataset.value; try { localStorage.setItem(SORT_KEY, state.progressSort); } catch { /* not saved — fine */ } render(); },
     'demo': () => { state.demo = !state.demo; render(); },
     'tip': el => showTip(el, '.trend-card'),

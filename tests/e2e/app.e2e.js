@@ -476,10 +476,11 @@ try {
   check('trends: progress per lift with statuses', await pgCard.locator('.pg-row').count() >= 5 && (await pgCard.innerText()).includes('best'));
   check('progress: est. max, trend and sparkline on weighted lifts', (await pgCard.innerText()).includes('est. max') && /[+−-]?\d+% in \d+ wks?/.test(await pgCard.innerText()) && await pgCard.locator('.pg-spark svg').count() >= 3 && /since [A-Z][a-z]{2} \d+/.test(await pgCard.innerText()));
   check('progress: PRs only from the last 4 weeks (test log is from spring)', (await pgCard.locator('.pg-prs').innerText()).includes('None in the last 4 weeks'));
-  await pgCard.locator('.pg-prs button[data-value="all"]').tap();
-  const prBox = page.locator('.trend-card', { has: page.locator('.trend-name', { hasText: 'Progress per lift' }) }).locator('.pg-prs');
-  check('progress: PR filter → All shows older PRs', await prBox.locator('li').count() > 0 && (await prBox.locator('button[aria-pressed="true"]').innerText()) === 'All');
-  await prBox.locator('button[data-value="4w"]').tap();
+  await pgCard.locator('.pg-range button[data-value="all"]').tap();
+  const pgNow = () => page.locator('.trend-card', { has: page.locator('.trend-name', { hasText: 'Progress per lift' }) });
+  check('progress: range → All shows older PRs', await pgNow().locator('.pg-prs li').count() > 0 && (await pgNow().locator('.pg-range button[aria-pressed="true"]').innerText()) === 'All');
+  check('progress: range → All measures each lift since its first session', /since your first|in \d+ (wks?|mo)/.test(await pgNow().innerText()));
+  await pgNow().locator('.pg-range button[data-value="4w"]').tap();
   check('progress: needs-attention order first', (await pgCard.locator('.pg-sort button[aria-pressed="true"]').innerText()).includes('Needs attention') && await pgCard.locator('.pg-group').count() === 0);
   await pgCard.locator('.pg-sort button[data-value="workout"]').tap();
   const pgCard2 = page.locator('.trend-card', { has: page.locator('.trend-name', { hasText: 'Progress per lift' }) });
