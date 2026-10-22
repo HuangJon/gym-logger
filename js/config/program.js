@@ -25,7 +25,7 @@ export const PREHAB = {
 export const SESSIONS = {
   1: [
     { id: 's1-incline',  name: 'Incline DB Press',          detail: '2×6–12',               reps: [6, 12],  defaultWeight: 50 },
-    { id: 's1-deadlift', name: 'Deadlift',                  detail: '2×5–8 · ~2 min rest', reps: [5, 8],   defaultWeight: 185, rest: 120 },
+    { id: 's1-deadlift', name: 'Deadlift',                  detail: '2×5–8',               reps: [5, 8],   defaultWeight: 185 },
     { id: 's1-lateral',  name: 'Cable Lateral Raises',      detail: '2×8–15',               reps: [8, 15],  defaultWeight: 5, tag: 'circuit' },
     { id: 's1-crunches', name: 'Cable Crunches',            detail: '2×10–15',              reps: [10, 15], defaultWeight: 45, unit: 'kg', tag: 'circuit' },
     { id: 's1-pulldown', name: 'Single Arm Cable Pulldown', detail: '2×8–12',               reps: [8, 12],  defaultWeight: 25, unit: 'kg' },
