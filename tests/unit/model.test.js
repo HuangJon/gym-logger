@@ -108,7 +108,7 @@ test('buildSessionRecord: only logged sets count; complete/partial from the targ
   assert.deepEqual(rec.entries['s1-incline'], { status: 'complete', note: 'felt solid', sets: [{ weight: 50, reps: 9 }, { weight: 50, reps: 9 }], weight: 50, unit: 'lbs', reps: 9, target: { reps: 9, sets: 2, weight: 50 } });
   assert.deepEqual(rec.entries['s1-deadlift'], { status: 'partial', note: '', sets: [{ weight: 185, reps: 6 }], weight: 185, unit: 'lbs', reps: 6, target: { reps: 6, sets: 2, weight: 185 } });
   assert.deepEqual(rec.entries['s1-lateral'], { status: 'skip', note: '', target: { reps: 12, sets: 2, weight: 7.5 } });
-  assert.deepEqual(rec.entries['s1-pulldown'], { status: 'complete', note: '', sets: [{ weight: 45, reps: 8 }, { weight: 45, reps: 8 }], weight: 45, unit: 'lbs', reps: 8, target: { reps: 8, sets: 2 } });
+  assert.deepEqual(rec.entries['s1-pulldown'], { status: 'complete', note: '', sets: [{ weight: 45, reps: 8 }, { weight: 45, reps: 8 }], weight: 45, unit: 'kg', reps: 8, target: { reps: 8, sets: 2 } });
   assert.deepEqual(rec.entries['s1-crunches'], { status: 'unrecorded', note: 'cable busy' });
 });
 

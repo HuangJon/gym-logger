@@ -7,7 +7,7 @@
  *   detail         sets × reps text shown under the name
  *   reps           [low, high] target rep range for double progression
  *   sets           number of working sets (defaults to DEFAULT_SETS)
- *   defaultWeight  starting weight before anything is logged (optional)
+ *   defaultWeight  starting weight before anything is logged (optional) — a rough estimate; adjust with ✎
  *   unit           'lbs' (default) or 'kg'
  *   bw             true for bodyweight exercises (no weight box)
  *   rest           seconds of rest between sets for the rest timer (defaults to DEFAULT_REST_SECONDS)
@@ -28,11 +28,11 @@ export const SESSIONS = {
     { id: 's1-deadlift', name: 'Deadlift',                  detail: '2×5–8 · 2–3 min rest', reps: [5, 8],   defaultWeight: 185, rest: 150 },
     { id: 's1-lateral',  name: 'Cable Lateral Raises',      detail: '2×12–15',              reps: [12, 15], defaultWeight: 5, tag: 'circuit' },
     { id: 's1-crunches', name: 'Cable Crunches',            detail: '2×10–15',              reps: [10, 15], unit: 'kg', tag: 'circuit' },
-    { id: 's1-pulldown', name: 'Single Arm Cable Pulldown', detail: '2×8–12',               reps: [8, 12] },
+    { id: 's1-pulldown', name: 'Single Arm Cable Pulldown', detail: '2×8–12',               reps: [8, 12],  defaultWeight: 25, unit: 'kg' },
   ],
   2: [
-    { id: 's2-ohpress',   name: 'DB Shoulder Press',    detail: '2×6–10',         reps: [6, 10], warn: '⚠ zero soreness first' },
-    { id: 's2-rows',      name: 'Bent Over Rows',       detail: '2×6–12',         reps: [6, 12] },
+    { id: 's2-ohpress',   name: 'DB Shoulder Press',    detail: '2×6–10',         reps: [6, 10], defaultWeight: 30, warn: '⚠ zero soreness first' },
+    { id: 's2-rows',      name: 'Bent Over Rows',       detail: '2×6–12',         reps: [6, 12], defaultWeight: 35 },
     { id: 's2-lateral',   name: 'Cable Lateral Raises', detail: '2×12–15',        reps: [12, 15], defaultWeight: 5, tag: 'circuit' },
     { id: 's2-pallof',    name: 'Pallof Press',         detail: '2×5 × 5s holds', reps: [5, 5], unit: 'kg', tag: 'circuit' },
     { id: 's2-legraiser', name: 'Hanging Leg Raises',   detail: '2×8–12',         reps: [8, 12], bw: true },
@@ -49,7 +49,7 @@ export const SESSIONS = {
 /** Exercises from earlier programs: not in today's workout, but their logs still show in History and Trends. */
 export const RETIRED = [
   { id: 's2-dips',    name: 'Dips',                detail: 'old program · 3×6–12', reps: [6, 12], bw: true },
-  { id: 's2-oldrows', name: 'Rows (elbow to hip)', detail: 'old program · 3×6–12', reps: [6, 12] },
+  { id: 's2-oldrows', name: 'Bent Over Rows', detail: 'old program · 3×6–12', reps: [6, 12] },   // same lift as today's rows: shares last time + Trends
 ];
 
 /** Double progression: how much to add once you hit the top of the rep range (in the exercise's unit). */
@@ -81,7 +81,9 @@ export const DELOAD = {
   weightFactor: 0.9,        // ~10% lighter, rounded to the lift's step
   setsFactor: 0.5,          // half the sets, rounded up
   weekDays: 7,              // "Deload week" covers this many days
-  breakDays: 7,             // a gap this long between sessions counts as a break (resets the count)
+  breakDays: 7,
+  frequentWindowWeeks: 6,   // warn when choosing a deload if there have been…
+  frequentStretches: 2,     // …this many separate deload stretches in that window (including this one)             // a gap this long between sessions counts as a break (resets the count)
   // Usual guidance is a deload every 4–8 weeks; this sits on the earlier side because climbing adds fatigue.
   suggestAfterWeeks: 4,     // suggest a deload after this many weeks without a break if lifts are stalling…
   stalledLifts: 2,          // …this many lifts missed target in their last 2 sessions

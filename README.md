@@ -14,7 +14,8 @@ A gym lifting log for a 3-session program with **double progression** (hit the t
 - First time: the program's default weight × the bottom of the rep range.
 - Hit the target last time → same weight, one more rep (never above the top of the range).
 - Every set at the top of the range → add the increment from `INCREMENTS`, back to the bottom of the range.
-- Missed the target (partial) → **the same target again**. No increase until you hit it.
+- Missed the target (partial) → **the same target again**. No increase until you hit it. After 3 misses in a row at the same weight, the target note suggests ~10% lighter (you decide, with ✎).
+- **Went lighter than the target on every set** (e.g. finding your weight) → the next target builds on the weight you actually used.
 - Below the range last time → same weight, aim for the bottom of the range (or go lighter).
 - **Back after a break** (more than 14 days since you last did the lift) → ~10% lighter, bottom of the range.
 - **Deload** → ~10% lighter than last time, bottom of the range, half the sets (rounded up); stop 2–3 reps short of failure. Deload sessions **don't count toward progression** — the next normal session builds on the last session before the deload.
@@ -26,7 +27,13 @@ Common guidance is a deload every 4–8 weeks, lasting about a week. Because cli
 - **6+ weeks** of training without a break, or
 - **4+ weeks** and **2+ lifts missed their target in their last 2 sessions** (stalling).
 
-A gap of 7+ days or a deload resets the count. "Not now" hides the suggestion for a week. All of these numbers are in `DELOAD` in `config/program.js`.
+A gap of 7+ days or a deload resets the count. "Not now" hides the suggestion for a week.
+
+Deloading **too often** is a signal too: turning on a deload when you've already had another deload in the last 6 weeks shows a note that it often points to hard climbing, short sleep, or targets rising too fast. All of these numbers are in `DELOAD` in `config/program.js`.
+
+## lbs or kg
+
+Each lift has a **lbs | kg** switch in its target pop-out (✎), so the numbers match the machine's labels. The choice is remembered per lift (on this device). Past entries keep the unit they were logged in; targets, "last time" and Trends convert them to the unit you use now. Starting weights for lifts you've never logged (`defaultWeight`) are rough estimates — adjust with ✎ after the first session.
 
 Only logged sets are saved. An exercise is **complete** when its logged sets meet the target (enough sets, each at least the target weight and reps), otherwise **partial**; with no sets logged it's "not recorded". Each set keeps its own weight, so drop sets are recorded as they happened. History shows what you did next to the target.
 

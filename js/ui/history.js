@@ -183,7 +183,7 @@ export function createHistoryView({ root, repo, storage }) {
       return hasValue(reps) && reps > 0 ? (weight !== null ? { weight, reps } : { reps }) : null;   // blank reps = set not done
     }).filter(Boolean);
     const entry = { status: editing.status || STATUS.UNRECORDED, note: $('#hedit-note').value.trim() };
-    if (entry.status !== STATUS.SKIP && sets.length) { entry.sets = sets; entry.unit = unitOf(ex); }
+    if (entry.status !== STATUS.SKIP && sets.length) { entry.sets = sets; entry.unit = previous.unit || unitOf(ex); }   // weights are edited in the unit they were logged in
     if (previous.target) entry.target = previous.target;
     // "Done" that falls short of the target is a partial — keeps next time's target honest
     if (entry.status === STATUS.COMPLETE && previous.target && !meetsTarget(sets, previous.target)) entry.status = STATUS.PARTIAL;

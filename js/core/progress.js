@@ -1,9 +1,9 @@
 /** Double-progression logic: "last time", today's target, and the − / + steps. */
 import { STALE_AFTER_DAYS, EASE_BACK_FACTOR, DELOAD } from '../config/program.js';
-import { hasValue, round2 } from './numbers.js';
+import { hasValue, round2, convertWeight } from './numbers.js';
 import { daysBetween } from './dates.js';
 import { normalizeEntry, DID_IT, STATUS, byNewest, setsOfEntry, meetsTarget } from './records.js';
-import { exercisesForSession, incrementOf, setsOf } from './exercises.js';
+import { exercisesForSession, incrementOf, setsOf, unitOf, defaultWeightOf } from './exercises.js';
 
 /**
  * Times this lift was actually done (complete or partial, with a weight or reps), newest first,
@@ -23,12 +23,27 @@ export function performances(sessions, ex, beforeDate, { includeDeload = false, 
       if (other.name !== ex.name) continue;
       const e = normalizeEntry(record.entries?.[other.id]);
       if (DID_IT.has(e.status) && (hasValue(e.weight) || hasValue(e.reps))) {
-        found.push({ ...e, date: record.date, session: record.session, ...(record.deload ? { deload: true } : {}) });
+        found.push({ ...inUnit(e, ex), date: record.date, session: record.session, ...(record.deload ? { deload: true } : {}) });
         break;
       }
     }
   }
   return found;
+}
+
+/**
+ * An entry with its weights in the unit you use for `ex` now (rounded to the lift's step),
+ * so a lift logged in lbs and later switched to kg still gets sensible targets.
+ */
+export function inUnit(entry, ex) {
+  const to = unitOf(ex), from = entry.unit || to;
+  if (ex.bw || from === to) return entry;
+  const conv = w => convertWeight(w, from, to, incrementOf(ex));
+  const out = { ...entry, unit: to };
+  if (hasValue(entry.weight)) out.weight = conv(entry.weight);
+  if (entry.sets) out.sets = entry.sets.map(s => (hasValue(s.weight) ? { ...s, weight: conv(s.weight) } : s));
+  if (entry.target && hasValue(entry.target.weight)) out.target = { ...entry.target, weight: conv(entry.target.weight) };
+  return out;
 }
 
 /** The most recent performance (see `performances`), or null. */
@@ -79,12 +94,13 @@ export function computeTarget(ex, last, { date, lastActive, deload = false } = {
  *   below the range last time → same weight, aim for the bottom of the range
  *   weighted lift done at bodyweight last time → program weight, bottom of the range
  *   missed target (partial)   → the same target again — no increase until you hit it
+ *   went lighter than the target weight on every set → progress from the weight you actually used
  * @returns {{ weight: number|null, reps: number, sets: number, reason: 'first'|'bump'|'more'|'low'|'repeat'|'top'|'bodyweight' } | null}
  */
 export function progressionTarget(ex, last) {
   if (!ex?.reps) return null;
   const [lo, hi] = ex.reps, sets = setsOf(ex);
-  const defaultWeight = ex.bw ? null : (ex.defaultWeight ?? null);
+  const defaultWeight = defaultWeightOf(ex);
   if (!last) return { weight: defaultWeight, reps: lo, sets, reason: 'first' };
 
   // a weighted lift done at bodyweight last time → start at the program weight, bottom of the range
@@ -92,7 +108,10 @@ export function progressionTarget(ex, last) {
   const lastWeight = ex.bw ? null : (hasValue(last.weight) ? last.weight : defaultWeight);
   const lastSets = setsOfEntry(last, sets);
   const lowest = lastSets.length ? Math.min(...lastSets.map(x => x.reps)) : null;
-  if (last.status === STATUS.PARTIAL) {
+  // Went lighter than the target on purpose (e.g. finding your weight) → build on what you did, don't repeat the target.
+  const wentLighter = !ex.bw && hasValue(last.target?.weight) && lastSets.length > 0
+    && lastSets.every(x => hasValue(x.weight) && x.weight < last.target.weight);
+  if (last.status === STATUS.PARTIAL && !wentLighter) {
     if (last.target) return { weight: ex.bw ? null : (last.target.weight ?? lastWeight), reps: clamp(last.target.reps, lo, hi), sets, reason: 'repeat' };
     return { weight: lastWeight, reps: clamp(lowest ?? lo, lo, hi), sets, reason: 'repeat' };   // older logs without a target
   }
@@ -103,6 +122,23 @@ export function progressionTarget(ex, last) {
   }
   if (lowest < lo) return { weight: lastWeight, reps: lo, sets, reason: 'low' };
   return { weight: lastWeight, reps: Math.min(hi, lowest + 1), sets, reason: 'more' };
+}
+
+/**
+ * How many sessions in a row this lift missed the same target weight (partial, at least one set at
+ * the target weight). Used to suggest going ~10% lighter after MISSES_BEFORE_HINT misses.
+ */
+export const MISSES_BEFORE_HINT = 3;
+export function missedStreak(sessions, ex, beforeDate) {
+  const recent = performances(sessions, ex, beforeDate, { limit: 6 });
+  const weight = recent[0]?.target?.weight;
+  let n = 0;
+  for (const p of recent) {
+    const triedTarget = !hasValue(weight) || (p.sets || []).some(s => hasValue(s.weight) && s.weight >= weight);
+    if (p.status !== STATUS.PARTIAL || p.target?.weight !== weight || !triedTarget) break;
+    n++;
+  }
+  return n;
 }
 
 /** One-line explanation of where today's target came from. */

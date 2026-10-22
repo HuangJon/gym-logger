@@ -6,6 +6,15 @@ export const hasValue = v => v !== '' && v !== null && v !== undefined && !(type
 /** Round to at most 2 decimals so quarter-pound weights show exactly (36.25, not 36.3). */
 export const round2 = v => Math.round(v * 100) / 100;
 
+export const UNITS = ['lbs', 'kg'];
+const LBS_PER_KG = 2.20462;
+/** Convert a weight between 'lbs' and 'kg', rounded to the nearest `step` (no rounding when step is 0). */
+export function convertWeight(weight, from, to, step = 0) {
+  if (!hasValue(weight) || from === to || !UNITS.includes(from) || !UNITS.includes(to)) return weight;
+  const raw = to === 'kg' ? weight / LBS_PER_KG : weight * LBS_PER_KG;
+  return step ? round2(Math.max(step, Math.round(raw / step) * step)) : round2(raw);
+}
+
 /** "+2.5", "−1.75", "±0" */
 export const signed = v => (v > 0 ? '+' : v < 0 ? '−' : '±') + round2(Math.abs(v));
 

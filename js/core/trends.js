@@ -3,6 +3,7 @@ import { dayNum, daysBetween, weekStart, fromDayNum, formatShort } from './dates
 import { hasValue, estimateOneRepMax } from './numbers.js';
 import { normalizeEntry, DID_IT, STATUS, byOldest } from './records.js';
 import { allExercises, exercisesForSession, unitOf } from './exercises.js';
+import { inUnit } from './progress.js';
 
 export const RANGES = { '1m': 30, '3m': 91, '1y': 365, all: Infinity };
 
@@ -18,7 +19,7 @@ export function liftSeries(sessions) {
   }
   for (const record of [...sessions].sort(byOldest)) {
     for (const ex of exercisesForSession(record)) {
-      const e = normalizeEntry(record.entries?.[ex.id]);
+      const e = inUnit(normalizeEntry(record.entries?.[ex.id]), ex);   // charted in the unit you use now
       if (!DID_IT.has(e.status) || (!hasValue(e.weight) && !hasValue(e.reps))) continue;
       const point = { date: record.date, ts: record.ts || 0, weight: e.weight, reps: e.reps, sets: e.sets, unit: e.unit, status: e.status, session: record.session, ...(record.deload ? { deload: true } : {}) };
       if (hasValue(e.weight) && hasValue(e.reps)) point.e1rm = estimateOneRepMax(e.weight, e.reps);
