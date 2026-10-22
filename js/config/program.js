@@ -25,7 +25,7 @@ export const PREHAB = {
 export const SESSIONS = {
   1: [
     { id: 's1-incline',  name: 'Incline DB Press',          detail: '2×6–12',               reps: [6, 12],  defaultWeight: 50 },
-    { id: 's1-deadlift', name: 'Deadlift',                  detail: '2×5–8 · 2–3 min rest', reps: [5, 8],   defaultWeight: 185, rest: 150 },
+    { id: 's1-deadlift', name: 'Deadlift',                  detail: '2×5–8 · ~2 min rest', reps: [5, 8],   defaultWeight: 185, rest: 120 },
     { id: 's1-lateral',  name: 'Cable Lateral Raises',      detail: '2×8–15',               reps: [8, 15],  defaultWeight: 5, tag: 'circuit' },
     { id: 's1-crunches', name: 'Cable Crunches',            detail: '2×10–15',              reps: [10, 15], defaultWeight: 45, unit: 'kg', tag: 'circuit' },
     { id: 's1-pulldown', name: 'Single Arm Cable Pulldown', detail: '2×8–12',               reps: [8, 12],  defaultWeight: 25, unit: 'kg' },
@@ -70,10 +70,11 @@ export const STALE_AFTER_DAYS = 14;
 /** Target sessions per week (dashed line on the weekly chart). */
 export const WEEKLY_GOAL = 3;
 
-/** Rest timer: seconds between sets unless an exercise sets its own `rest`. The timer is off until you turn it on. */
+/** Rest timer: seconds between sets unless an exercise sets its own `rest`. The timer is off until you turn it on.
+ *  ~90 s is where the research flattens out for muscle growth; much longer adds little. */
 export const DEFAULT_REST_SECONDS = 90;
 /** Shorter rest for exercises paired in a circuit (tag: 'circuit'). */
-export const CIRCUIT_REST_SECONDS = 60;
+export const CIRCUIT_REST_SECONDS = 45;   // you alternate exercises, so each muscle rests longer than the timer
 
 /** Coming back after this many days without doing a lift → its target is eased back. */
 export const EASE_BACK_FACTOR = 0.9;   // ~10% lighter, bottom of the rep range
