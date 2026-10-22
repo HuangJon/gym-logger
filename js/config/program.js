@@ -81,8 +81,10 @@ export const EASE_BACK_FACTOR = 0.9;   // ~10% lighter, bottom of the rep range
 
 /** Deload: lighter weight, fewer sets, easy reps. Deload sessions don't count toward progression. */
 export const DELOAD = {
-  weightFactor: 0.9,        // ~10% lighter, rounded to the lift's step
-  setsFactor: 0.5,          // half the sets, rounded up
+  // Two styles (switch in the app): 'sets' = same weight, half the sets (default);
+  // 'lighter' = ~10% lighter, same sets. Both aim for the bottom of the rep range, 2–3 reps in reserve.
+  weightFactor: 0.9,        // 'lighter': ~10% lighter, rounded to the lift's step
+  setsFactor: 0.5,          // 'sets': half the sets, rounded up
   weekDays: 7,              // "Deload week" covers this many days
   breakDays: 7,
   frequentWindowWeeks: 6,   // warn when choosing a deload if there have been…

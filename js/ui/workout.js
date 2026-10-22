@@ -3,13 +3,13 @@
  * complete the session. The workout in progress is saved on every change and picked up again
  * if the app is closed mid-workout.
  */
-import { PREHAB, SESSION_LABELS, SESSION_COLORS, DELOAD } from '../config/program.js';
+import { PREHAB, SESSION_LABELS, SESSION_COLORS } from '../config/program.js';
 import { sessionExercises, findExercise, unitOf, programUnitOf, setUnitChoices, incrementOf, repRangeText, restOf } from '../core/exercises.js';
 import { todayISO, isISODate, formatShort, agoText } from '../core/dates.js';
 import { hasValue, parseWeight, parseReps, convertWeight, UNITS } from '../core/numbers.js';
 import { STATUS, buildSessionRecord, formatSets } from '../core/records.js';
 import { addSession } from '../core/log.js';
-import { lastNote, canStepRepsDown, canStepRepsUp, lastPerformance, computeTarget, targetReason, missedStreak, MISSES_BEFORE_HINT, lighterWeight, stepWeight, stepReps, stepTarget, setBadge, exerciseVerdict } from '../core/progress.js';
+import { lastNote, canStepRepsDown, canStepRepsUp, lastPerformance, computeTarget, targetReason, missedStreak, MISSES_BEFORE_HINT, lighterWeight, deloadTarget, DELOAD_STYLES, stepWeight, stepReps, stepTarget, setBadge, exerciseVerdict } from '../core/progress.js';
 import { deloadAdvice, deloadFrequency, deloadWeekActive, startDeloadWeek, endDeloadWeek, snoozeDeload } from '../core/deload.js';
 import { saveDraft, loadDraft, clearDraft } from '../data/draft.js';
 import { setClimbDay, climbsOn, recentHardClimb, hardClimbsRecent } from '../core/climbs.js';
@@ -43,9 +43,18 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   const lastFor = (ex, date = active.date) => lastPerformance(repo.sessions, ex, date);
   /** Is this lift deloaded today? Its own choice on the card, else the session's. */
   const liftDeload = ex => scratch[ex.id]?.deload ?? active.deload;
+  /** How deloads are done: 'sets' (same weight, half the sets) or 'lighter' (~10% lighter, same sets). */
+  const deloadStyle = () => (settings.get().deloadStyle === DELOAD_STYLES.LIGHTER ? DELOAD_STYLES.LIGHTER : DELOAD_STYLES.SETS);
   const suggestedTarget = (ex, date = active.date, deload = liftDeload(ex)) => computeTarget(ex, lastFor(ex, date), {
-    date, deload, lastActive: lastPerformance(repo.sessions, ex, date, { includeDeload: true })?.date,
+    date, deload, deloadStyle: deloadStyle(), lastActive: lastPerformance(repo.sessions, ex, date, { includeDeload: true })?.date,
   });
+
+  /** Fewer sets | Lighter switch, shown wherever a deload is on. */
+  const deloadStyleSwitch = () => `<div class="seg deload-style" role="group" aria-label="How to deload">${[[DELOAD_STYLES.SETS, 'Fewer sets'], [DELOAD_STYLES.LIGHTER, 'Lighter']]
+    .map(([value, label]) => `<button type="button" data-action="deload-style" data-style="${value}" aria-pressed="${deloadStyle() === value}">${label}</button>`).join('')}</div>`;
+  const deloadHow = () => (deloadStyle() === DELOAD_STYLES.LIGHTER
+    ? '~10% lighter, same sets, bottom of the rep range'
+    : 'same weight, half the sets, bottom of the rep range');
   const targetFor = ex => scratch[ex.id]?.target ?? suggestedTarget(ex);
 
   const rest = createRestTimer({ el: $('#rest-bar'), onChange: () => persist() });
@@ -117,7 +126,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     const suggestion = advice.suggest ? `<div class="card deload-suggest">
         <div class="ds-title">Consider a deload week</div>
         <div class="ds-why">${esc(advice.why)}.</div>
-        <div class="ds-how">~10% lighter, half the sets, stop 2–3 reps short of failure. Progress picks up where you left off.</div>
+        <div class="ds-how">${deloadHow()}, stop 2–3 reps short of failure. Progress picks up where you left off.</div>
         <div class="ds-actions"><button type="button" class="btn-small ds-start" data-action="deload-week">Start deload week</button>
           <button type="button" class="link-btn" data-action="deload-snooze">Not now</button></div>
       </div>` : '';
@@ -134,6 +143,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
         <label class="switch"><input type="checkbox" id="pick-deload" data-action="pick-deload"${on ? ' checked' : ''}><span class="switch-track" aria-hidden="true"></span>
           <span class="switch-label">Deload session</span></label>
         <span class="deload-week">${weekText}</span>
+        ${on ? `<div class="deload-style-row">${deloadStyleSwitch()}<span class="deload-how">${deloadHow()}</span></div>` : ''}
       </div>${tooOften}`;
   }
 
@@ -220,7 +230,21 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
         <label class="switch session-deload${deload ? ' is-on' : ''}"><input type="checkbox" id="session-deload" data-action="session-deload"${deload ? ' checked' : ''}><span class="switch-track" aria-hidden="true"></span>
           <span class="switch-label">Deload</span></label>
         <button type="button" class="rest-toggle" data-action="rest-toggle" aria-pressed="${restOn}">⏱ Rest timer ${restOn ? 'on' : 'off'}</button>
+        ${anyDeload() ? `<div class="deload-style-row">${deloadStyleSwitch()}<span class="deload-how">${deloadHow()}</span></div>` : ''}
       </div>`;
+  }
+
+  const anyDeload = () => sessionExercises(active.sessionNum).some(liftDeload);
+
+  /** Switch deload style; deloaded lifts pick up the new targets (weights you set are kept). */
+  function setDeloadStyle(style) {
+    if (style === deloadStyle()) return;
+    settings.update({ deloadStyle: style });
+    if (!active) return renderPicker();
+    for (const ex of sessionExercises(active.sessionNum)) if (liftDeload(ex)) retarget(ex, true);
+    persist();
+    renderHeader();
+    renderExercises();
   }
 
   function askDiscard() {
@@ -548,13 +572,13 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     const was = liftDeload(ex);
     if (next === active.deload) delete st.deload; else st.deload = next;
     retarget(ex, was);
+    if (anyDeload() !== !!ui.header.querySelector('.deload-style')) renderHeader();   // show / hide the style switch
     refreshCard(exId);
   }
 
   /**
    * After a deload switch: targets go back to suggested (so they follow the change) — except a weight
-   * you set yourself on a lift with no suggested weight is kept (~10% lighter while deloaded, back
-   * to your number after).
+   * you set yourself is kept (as a deload of that weight while deloaded, back to your number after).
    */
   function retarget(ex, wasDeload) {
     const st = stateOf(ex.id), suggestedBefore = suggestedTarget(ex, active.date, wasDeload);
@@ -564,8 +588,8 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     delete st.target;
     st.draft = undefined;
     if (ex.bw || !hasValue(st.baseWeight)) return;
-    const next = suggestedTarget(ex);
-    st.target = { ...next, weight: liftDeload(ex) ? lighterWeight(ex, st.baseWeight, DELOAD.weightFactor) : st.baseWeight };
+    const normal = suggestedTarget(ex, active.date, false);
+    st.target = liftDeload(ex) ? deloadTarget(ex, st.baseWeight, normal.sets, deloadStyle()) : { ...normal, weight: st.baseWeight };
   }
 
   function toggleRestTimer() {
@@ -643,6 +667,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     'unit': el => setUnit(exIdOf(el), el.dataset.unit),
     'lift-deload': el => toggleLiftDeload(exIdOf(el)),
     'climb-set': el => setClimb(el.dataset.date, el.dataset.intensity),
+    'deload-style': el => setDeloadStyle(el.dataset.style),
     'rest-adjust': el => rest.adjust(Number(el.dataset.dir)),
     'rest-stop': () => rest.stop(),
     'deload-week': () => changeDeloadWeek(startDeloadWeek(pickedDate())),

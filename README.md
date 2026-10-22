@@ -21,7 +21,7 @@ A gym lifting log for a 3-session program with **double progression** (hit the t
 - **Went lighter than the target on every set** (e.g. finding your weight) → the next target builds on the weight you actually used.
 - Below the range last time → same weight, aim for the bottom of the range (or go lighter).
 - **Back after a break** (more than 14 days since you last did the lift) → ~10% lighter, bottom of the range.
-- **Deload** → ~10% lighter than last time, bottom of the range, half the sets (rounded up); stop 2–3 reps short of failure. Deload sessions **don't count toward progression** — the next normal session builds on the last session before the deload.
+- **Deload** → bottom of the range, stop 2–3 reps short of failure, and one of two styles (switch in the app): **Fewer sets** (default) — same weight, half the sets (rounded up); or **Lighter** — ~10% lighter, same sets (falls back to fewer sets if the weight is too light to drop a step). After a long break a deload starts from the eased weight. Deload sessions **don't count toward progression** — the next normal session builds on the last session before the deload.
 
 ### When a deload is suggested
 
