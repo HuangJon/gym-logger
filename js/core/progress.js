@@ -47,6 +47,24 @@ export function inUnit(entry, ex) {
   return out;
 }
 
+/**
+ * The note from the last time this lift appeared in a session (done, partial or skipped), if it
+ * had one — so "grip slipped" shows up next time. Older notes don't resurface.
+ * @returns {{ note: string, date: string } | null}
+ */
+export function lastNote(sessions, ex, beforeDate) {
+  for (const record of [...sessions].sort(byNewest)) {
+    if (beforeDate && record.date >= beforeDate) continue;
+    for (const other of exercisesForSession(record)) {
+      if (other.name !== ex.name) continue;
+      const e = normalizeEntry(record.entries?.[other.id]);
+      if (e.status === STATUS.UNRECORDED && !e.note) continue;
+      return e.note ? { note: e.note, date: record.date } : null;
+    }
+  }
+  return null;
+}
+
 /** The most recent performance (see `performances`), or null. */
 export const lastPerformance = (sessions, ex, beforeDate, opts = {}) => performances(sessions, ex, beforeDate, { ...opts, limit: 1 })[0] ?? null;
 

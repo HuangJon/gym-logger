@@ -62,15 +62,19 @@ export function lineChart(points, { valueOf, labelOf, zoneOf = () => 'none', tip
 
 /** Bar chart of sessions per week with a dashed goal line. weeks: [{ start: ISO date, count }] */
 export function weeklyBarsChart(weeks, goal) {
-  const W = 320, H = 80, barW = 28, gap = (W - barW * weeks.length) / (weeks.length - 1);
+  const showClimbs = weeks.some(w => w.climbs);
+  const W = 320, H = showClimbs ? 94 : 80, base = showClimbs ? 94 - 14 : 80, barW = 28, gap = (W - barW * weeks.length) / (weeks.length - 1);
   const max = Math.max(goal, ...weeks.map(w => w.count));
-  const barTop = n => H - 14 - (n / max) * (H - 26);
+  const barTop = n => base - 14 - (n / max) * (base - 26);
   const bars = weeks.map((w, i) => {
-    const x = i * (barW + gap), y = barTop(w.count), h = Math.max((w.count / max) * (H - 26), 1.5);
-    return `<g><title>Week of ${formatMonthDay(w.start)}: ${w.count} session${w.count === 1 ? '' : 's'}</title>
+    const x = i * (barW + gap), y = barTop(w.count), h = Math.max((w.count / max) * (base - 26), 1.5);
+    const climbTip = w.climbs ? `, ${w.climbs} climbing day${w.climbs === 1 ? '' : 's'}${w.hardClimbs ? ` (${w.hardClimbs} hard)` : ''}` : '';
+    const climbLbl = showClimbs && w.climbs
+      ? `<text x="${x + barW / 2}" y="${H - 2}" text-anchor="middle" class="chart-climb${w.hardClimbs ? ' hard' : ''}">▲${w.climbs}</text>` : '';
+    return `<g><title>Week of ${formatMonthDay(w.start)}: ${w.count} session${w.count === 1 ? '' : 's'}${climbTip}</title>
       <rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="3" class="${i === weeks.length - 1 ? 'bar bar-now' : 'bar'}"/>
       ${w.count ? `<text x="${x + barW / 2}" y="${y - 3}" text-anchor="middle" class="chart-lbl zone-mid">${w.count}</text>` : ''}
-      <text x="${x + barW / 2}" y="${H - 2}" text-anchor="middle" class="chart-axis">${formatMonthDay(w.start)}</text></g>`;
+      <text x="${x + barW / 2}" y="${base - 2}" text-anchor="middle" class="chart-axis">${formatMonthDay(w.start)}</text>${climbLbl}</g>`;
   }).join('');
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="sessions per week">
     <line x1="0" x2="${W}" y1="${barTop(goal)}" y2="${barTop(goal)}" class="chart-grid chart-target"/>${bars}</svg>`;

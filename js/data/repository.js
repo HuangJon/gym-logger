@@ -35,14 +35,15 @@ export function trimSnapshots(snapshots, max = MAX_SNAPSHOTS, budget = SNAPSHOT_
 
 export function createRepository(storage, { now = () => new Date().toISOString() } = {}) {
   let sessions = [];
+  let climbs = [];
   let readOnly = false;
   const listeners = new Set();
 
-  function writeLog(next) { storage.write(LOG_KEY, { schemaVersion: SCHEMA_VERSION, sessions: next }); }
+  function writeLog(nextSessions, nextClimbs) { storage.write(LOG_KEY, { schemaVersion: SCHEMA_VERSION, sessions: nextSessions, climbs: nextClimbs }); }
 
-  function keepSnapshot(previous) {
-    if (!previous.length) return;
-    const snaps = trimSnapshots([{ savedAt: now(), sessions: previous }, ...(storage.read(SNAPSHOTS_KEY) || [])]);
+  function keepSnapshot() {
+    if (!sessions.length && !climbs.length) return;
+    const snaps = trimSnapshots([{ savedAt: now(), sessions, climbs }, ...(storage.read(SNAPSHOTS_KEY) || [])]);
     try { storage.write(SNAPSHOTS_KEY, snaps); }
     catch { try { storage.write(SNAPSHOTS_KEY, snaps.slice(0, 1)); } catch { /* never block the real save */ } }
   }
@@ -53,41 +54,51 @@ export function createRepository(storage, { now = () => new Date().toISOString()
       const raw = storage.read(LOG_KEY);
       readOnly = !!raw && Number(raw.schemaVersion) > SCHEMA_VERSION;
       try {
-        sessions = migrateLog(raw).sessions;
+        ({ sessions, climbs } = migrateLog(raw));
       } catch {
         if (raw) storage.write(`unreadable-${Date.now()}`, raw);   // keep it rather than overwrite it later
         sessions = [];
+        climbs = [];
       }
       if (raw && !readOnly && raw.schemaVersion !== SCHEMA_VERSION) {
         const key = `pre-upgrade-v${raw.schemaVersion ?? 1}`;
         if (storage.read(key) == null) storage.write(key, raw);
-        writeLog(sessions);
+        writeLog(sessions, climbs);
       }
       return sessions;
     },
 
     get sessions() { return sessions; },
+    get climbs() { return climbs; },
     get readOnly() { return readOnly; },
 
-    /** Save `next` as the whole log. Throws (and changes nothing) if the save fails. */
-    async commit(next) {
+    /**
+     * Save a new log. `next` is the sessions list; pass { climbs } to change climbing days too
+     * (or commitClimbs). Throws (and changes nothing) if the save fails.
+     */
+    async commit(next, { climbs: nextClimbs = climbs } = {}) {
       if (readOnly) throw new ReadOnlyError();
-      keepSnapshot(sessions);
-      writeLog(next);
+      keepSnapshot();
+      writeLog(next, nextClimbs);
       sessions = next;
+      climbs = nextClimbs;
       listeners.forEach(fn => fn(sessions));
     },
 
+    /** Save a new list of climbing days (sessions unchanged). */
+    commitClimbs(nextClimbs) { return this.commit(sessions, { climbs: nextClimbs }); },
+
     /** Local snapshots, newest first: [{ savedAt, count }] */
     snapshots() {
-      return (storage.read(SNAPSHOTS_KEY) || []).map(s => ({ savedAt: s.savedAt, count: s.sessions?.length ?? 0 }));
+      return (storage.read(SNAPSHOTS_KEY) || []).map(s => ({ savedAt: s.savedAt, count: s.sessions?.length ?? 0, climbs: s.climbs?.length ?? 0 }));
     },
 
     /** Restore snapshot `index` (the current log is snapshotted first, so this can be undone too). */
     async restoreSnapshot(index) {
       const snap = (storage.read(SNAPSHOTS_KEY) || [])[index];
       if (!snap) throw new Error('That copy is no longer available.');
-      await this.commit(migrateLog({ sessions: snap.sessions }).sessions);
+      const restored = migrateLog({ sessions: snap.sessions || [], climbs: snap.climbs || [] });
+      await this.commit(restored.sessions, { climbs: restored.climbs });
     },
 
     /** Run `fn(sessions)` after every successful change. Returns an unsubscribe function. */

@@ -10,6 +10,7 @@ import { daysBetween, addDays, isISODate } from './dates.js';
 import { byOldest, STATUS } from './records.js';
 import { sessionNumbers, sessionExercises } from './exercises.js';
 import { performances } from './progress.js';
+import { hardClimbsRecent } from './climbs.js';
 
 /**
  * First session date of the current training block: sessions since the last break
@@ -39,22 +40,27 @@ export function stalledLifts(sessions, today) {
 
 /**
  * Should the app suggest a deload week?
+ * Lots of hard climbing lately brings both thresholds a week earlier.
  * @param settings { deloadUntil?, deloadSnoozedUntil? }
- * @returns {{ suggest: boolean, weeks: number, stalled: string[], why: string }}
+ * @param climbs   climbing days ({ date, intensity })
+ * @returns {{ suggest: boolean, weeks: number, stalled: string[], hardClimbs: number, why: string }}
  */
-export function deloadAdvice(sessions, today, settings = {}) {
-  const none = { suggest: false, weeks: 0, stalled: [], why: '' };
+export function deloadAdvice(sessions, today, settings = {}, climbs = []) {
+  const none = { suggest: false, weeks: 0, stalled: [], hardClimbs: 0, why: '' };
   if (deloadWeekActive(settings, today)) return none;
   if (isISODate(settings.deloadSnoozedUntil) && today <= settings.deloadSnoozedUntil) return none;
   const start = blockStart(sessions, today);
   if (!start) return none;
   const weeks = Math.floor(daysBetween(start, today) / 7);
   const stalled = stalledLifts(sessions, today);
-  const suggest = weeks >= DELOAD.alwaysAfterWeeks || (weeks >= DELOAD.suggestAfterWeeks && stalled.length >= DELOAD.stalledLifts);
-  if (!suggest) return { ...none, weeks, stalled };
+  const hardClimbs = hardClimbsRecent(climbs, today);
+  const early = hardClimbs >= DELOAD.hardClimbs ? 1 : 0;
+  const suggest = weeks >= DELOAD.alwaysAfterWeeks - early || (weeks >= DELOAD.suggestAfterWeeks - early && stalled.length >= DELOAD.stalledLifts);
+  if (!suggest) return { ...none, weeks, stalled, hardClimbs };
   const parts = [`${weeks} weeks of training since your last break or deload`];
   if (stalled.length) parts.push(`${listNames(stalled)} missed target ${stalled.length === 1 ? 'its' : 'their'} last 2 times`);
-  return { suggest, weeks, stalled, why: parts.join('; ') };
+  if (early) parts.push(`${hardClimbs} hard climbing days in the last 2 weeks`);
+  return { suggest, weeks, stalled, hardClimbs, why: parts.join('; ') };
 }
 
 /**

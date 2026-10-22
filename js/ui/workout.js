@@ -9,9 +9,10 @@ import { todayISO, isISODate, formatShort, agoText } from '../core/dates.js';
 import { hasValue, parseWeight, parseReps, convertWeight, UNITS } from '../core/numbers.js';
 import { STATUS, buildSessionRecord, formatSets } from '../core/records.js';
 import { addSession } from '../core/log.js';
-import { canStepRepsDown, canStepRepsUp, lastPerformance, computeTarget, targetReason, missedStreak, MISSES_BEFORE_HINT, lighterWeight, stepWeight, stepReps, stepTarget, setBadge, exerciseVerdict } from '../core/progress.js';
+import { lastNote, canStepRepsDown, canStepRepsUp, lastPerformance, computeTarget, targetReason, missedStreak, MISSES_BEFORE_HINT, lighterWeight, stepWeight, stepReps, stepTarget, setBadge, exerciseVerdict } from '../core/progress.js';
 import { deloadAdvice, deloadFrequency, deloadWeekActive, startDeloadWeek, endDeloadWeek, snoozeDeload } from '../core/deload.js';
 import { saveDraft, loadDraft, clearDraft } from '../data/draft.js';
+import { CLIMB, addClimb, removeClimb, climbsOn, recentHardClimb, hardClimbsRecent } from '../core/climbs.js';
 import { esc, delegate, autoResize, flash, confirmTap } from './dom.js';
 import { createRestTimer } from './rest-timer.js';
 
@@ -24,7 +25,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     pickDate: $('#pick-date'), pickSession: $('#pick-session'), startBtn: $('#start-btn'),
     preview: $('#session-preview-area'), hint: $('#picker-hint'),
     header: $('#session-header'), prehab: $('#prehab'), exercises: $('#exercise-area'),
-    completeBtn: $('#complete-btn'), status: $('#status'), deloadArea: $('#deload-area'),
+    completeBtn: $('#complete-btn'), status: $('#status'), deloadArea: $('#deload-area'), climbArea: $('#climb-area'),
   };
 
   let active = null;   // { sessionNum, date, deload } while logging
@@ -34,6 +35,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
    *   draft?: {weight?, reps} for the open set, target?: your edited target, targetOpen? }
    */
   let scratch = {};
+  let prehabDone = new Set();   // prehab exercises ticked off this session
   let saving = false;
 
   const stateOf = id => (scratch[id] ||= { done: [] });
@@ -47,7 +49,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   const targetFor = ex => scratch[ex.id]?.target ?? suggestedTarget(ex);
 
   const rest = createRestTimer({ el: $('#rest-bar'), onChange: () => persist() });
-  const persist = () => { if (active) saveDraft(storage, { active, scratch, rest: rest.snapshot() }); };
+  const persist = () => { if (active) saveDraft(storage, { active, scratch, prehab: [...prehabDone], rest: rest.snapshot() }); };
 
   /** Index of the open set: one you tapped to edit, else the next set to log, else null (all logged). */
   function openIndex(ex) {
@@ -82,13 +84,37 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
 
   function renderPicker() {
     renderDeloadArea();
+    renderClimbArea();
     renderPreview();
+  }
+
+  /** Log a climbing day (easy / hard) for the picked date. */
+  function renderClimbArea() {
+    const date = pickedDate(), logged = climbsOn(repo.climbs, date);
+    const hard = hardClimbsRecent(repo.climbs, date);
+    const loggedText = logged.map(c => `<span class="climb-chip ${c.intensity}">${c.intensity === CLIMB.HARD ? 'Hard' : 'Easy'} climb</span>
+      <button type="button" class="link-btn" data-action="climb-undo" data-id="${esc(c.id)}">undo</button>`).join(' ');
+    ui.climbArea.innerHTML = `<div class="climb-row">
+        <span class="climb-label">🧗 Climbed ${date === todayISO() ? 'today' : `on ${esc(formatShort(date))}`}?</span>
+        ${logged.length ? loggedText : `<span class="climb-btns">
+          <button type="button" class="btn-small" data-action="climb-log" data-intensity="easy">Easy</button>
+          <button type="button" class="btn-small climb-hard" data-action="climb-log" data-intensity="hard">Hard</button></span>`}
+        ${hard ? `<span class="climb-recent">${hard} hard climbing day${hard === 1 ? '' : 's'} in the last 2 weeks</span>` : ''}
+      </div>`;
+  }
+
+  async function logClimb(intensity) {
+    try { await repo.commitClimbs(addClimb(repo.climbs, { date: pickedDate(), intensity })); }
+    catch (err) { flash(ui.hint, `Couldn't save: ${err.message}`, { error: true, ms: 0 }); }
+  }
+  async function undoClimb(id) {
+    try { await repo.commitClimbs(removeClimb(repo.climbs, id)); } catch { /* the chip stays */ }
   }
 
   /** Deload switch, deload week, and the "consider a deload" suggestion. */
   function renderDeloadArea() {
     const date = pickedDate(), s = settings.get(), week = deloadWeekActive(s, date), on = deloadPicked();
-    const advice = deloadAdvice(repo.sessions, todayISO(), s);
+    const advice = deloadAdvice(repo.sessions, todayISO(), s, repo.climbs);
     const suggestion = advice.suggest ? `<div class="card deload-suggest">
         <div class="ds-title">Consider a deload week</div>
         <div class="ds-why">${esc(advice.why)}.</div>
@@ -142,6 +168,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     if (!n) return;
     active = { sessionNum: n, date: pickedDate(), deload: deloadPicked() };
     scratch = {};
+    prehabDone = new Set();
     showSession();
     persist();
   }
@@ -151,6 +178,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     ui.sessionPanel.hidden = false;
     flash(ui.status, '', { ms: 0 });
     renderHeader();
+    renderPrehab();
     renderExercises();
   }
 
@@ -158,6 +186,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   function endSession() {
     active = null;
     scratch = {};
+    prehabDone = new Set();
     rest.stop();
     clearDraft(storage);
     ui.sessionPanel.hidden = true;
@@ -165,7 +194,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     resetPicker();
   }
 
-  const loggedAnything = () => sessionExercises(active.sessionNum).some(ex => scratch[ex.id]?.done?.length || scratch[ex.id]?.skipped || scratch[ex.id]?.note);
+  const loggedAnything = () => prehabDone.size > 0 || sessionExercises(active.sessionNum).some(ex => scratch[ex.id]?.done?.length || scratch[ex.id]?.skipped || scratch[ex.id]?.note);
 
   /** Pick up a workout that was in progress when the app closed. */
   function resumeDraft() {
@@ -173,9 +202,13 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     if (!draft) return false;
     active = draft.active;
     scratch = draft.scratch;
+    prehabDone = new Set(draft.prehab);
     showSession();
     if (draft.rest) rest.resume(draft.rest, findExercise(draft.rest.exId)?.name);
-    if (loggedAnything()) flash(ui.status, 'Picked up your unfinished workout — Complete to save it, or Discard', { ms: 6000 });
+    if (loggedAnything()) {
+      const when = active.date === todayISO() ? 'from today' : `from ${formatShort(active.date)}`;
+      flash(ui.status, `Picked up your unfinished workout ${when} — Complete to save it, or Discard`, { ms: active.date === todayISO() ? 6000 : 0 });
+    }
     return true;
   }
 
@@ -203,7 +236,9 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   }
 
   function renderExercises() {
-    ui.exercises.innerHTML = sessionExercises(active.sessionNum).map(exerciseCard).join('');
+    const climb = recentHardClimb(repo.climbs, active.date);
+    const nudge = climb ? `<div class="climb-nudge" role="note">🧗 Hard climb ${climb.date === active.date ? 'today' : 'yesterday'} — if your back, biceps or grip feel beat up, tap <b>↓ Deload this lift</b> on the pulling lifts.</div>` : '';
+    ui.exercises.innerHTML = nudge + sessionExercises(active.sessionNum).map(exerciseCard).join('');
     ui.exercises.querySelectorAll('.note-input').forEach(autoResize);
   }
 
@@ -287,7 +322,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
 
   function lastRow(ex) {
     const last = lastFor(ex);
-    if (!last) return '<div class="ex-row last-row"><span class="row-label">Last</span><span class="last-none">no previous log</span></div>';
+    if (!last) return `<div class="ex-row last-row"><span class="row-label">Last</span><span class="last-none">no previous log</span>${memoRow(ex)}</div>`;
     const unit = last.unit || unitOf(ex);
     const value = last.sets?.length ? formatSets(last.sets, unit)
       : [!ex.bw && hasValue(last.weight) && `${last.weight} ${unit}`, hasValue(last.reps) && `${last.reps} reps`].filter(Boolean).join(' × ');
@@ -298,7 +333,14 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
       <span class="last-val">${value}${last.status === STATUS.PARTIAL ? ' <span class="badge badge-partial">partial</span>' : ''}
         <span class="last-when">${formatShort(last.date)} · ${agoText(last.date, active.date)}</span></span>
       ${deloadSince ? `<span class="last-note">deload since (${esc(formatShort(deloadSince.date))}) — targets build on this one</span>` : ''}
+      ${memoRow(ex)}
     </div>`;
+  }
+
+  /** Last session's note for this lift, if it left one. */
+  function memoRow(ex) {
+    const memo = lastNote(repo.sessions, ex, active.date);
+    return memo ? `<span class="last-memo">✎ “${esc(memo.note)}” <span class="last-when">${esc(formatShort(memo.date))}</span></span>` : '';
   }
 
   // set-by-set panel
@@ -452,7 +494,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
 
   function changeTarget(exId, change) {
     const ex = findExercise(exId), st = stateOf(exId);
-    if (change === 'reset') delete st.target;
+    if (change === 'reset') { delete st.target; delete st.baseWeight; }
     else st.target = stepTarget(ex, targetFor(ex), change.field, change.dir);
     refreshCard(exId);   // sets not started yet pick up the new numbers
   }
@@ -482,6 +524,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
       st.done = st.done.map(s => (hasValue(s.weight) ? { ...s, weight: conv(s.weight) } : s));
       if (st.draft && hasValue(st.draft.weight)) st.draft = { ...st.draft, weight: conv(st.draft.weight) };
       if (st.target && hasValue(st.target.weight)) st.target = { ...st.target, weight: convertWeight(st.target.weight, from, unit, incrementOf(ex)) };
+      if (hasValue(st.baseWeight)) st.baseWeight = convertWeight(st.baseWeight, from, unit, incrementOf(ex));
     }
     persist();
     renderExercises();
@@ -518,13 +561,14 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
    * to your number after).
    */
   function retarget(ex, wasDeload) {
-    const st = stateOf(ex.id);
-    const yours = st.target?.weight ?? st.draft?.weight ?? null;
+    const st = stateOf(ex.id), suggestedBefore = suggestedTarget(ex, active.date, wasDeload);
+    // a weight you chose: an edited target, or (when nothing was suggested) the weight you typed
+    const yours = st.target?.weight ?? (hasValue(suggestedBefore?.weight) ? null : st.draft?.weight) ?? null;
     if (!wasDeload && hasValue(yours)) st.baseWeight = yours;   // remember your normal weight
     delete st.target;
     st.draft = undefined;
+    if (ex.bw || !hasValue(st.baseWeight)) return;
     const next = suggestedTarget(ex);
-    if (ex.bw || hasValue(next.weight) || !hasValue(st.baseWeight)) return;
     st.target = { ...next, weight: liftDeload(ex) ? lighterWeight(ex, st.baseWeight, DELOAD.weightFactor) : st.baseWeight };
   }
 
@@ -558,7 +602,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     btn.disabled = true;
     btn.textContent = 'Saving…';
     try {
-      const record = buildSessionRecord({ sessionNum: active.sessionNum, date: active.date, scratch, targetOf: ex => targetFor(ex), deload: active.deload });
+      const record = buildSessionRecord({ sessionNum: active.sessionNum, date: active.date, scratch, targetOf: ex => targetFor(ex), deload: active.deload, prehab: PREHAB.exercises.filter(x => prehabDone.has(x)) });
       await repo.commit(addSession(repo.sessions, record));
       endSession();
       flash(ui.status, 'Session saved ✓');
@@ -574,9 +618,19 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   }
 
   // ── wiring ──────────────────────────────────────────────
-  ui.prehab.innerHTML = `
-    <div class="prehab-header"><span class="dot" style="background:var(--ph)"></span><h3>${esc(PREHAB.title)}</h3><span>${esc(PREHAB.sets)}</span></div>
-    <div class="prehab-pills">${PREHAB.exercises.map(x => `<span class="prehab-pill">${esc(x)}</span>`).join('')}</div>`;
+  /** Prehab: tap each one off as you do it (saved with the session). */
+  function renderPrehab() {
+    const done = PREHAB.exercises.filter(x => prehabDone.has(x)).length;
+    ui.prehab.innerHTML = `
+      <div class="prehab-header"><span class="dot" style="background:var(--ph)"></span><h3>${esc(PREHAB.title)}</h3><span>${esc(PREHAB.sets)} · ${done}/${PREHAB.exercises.length}</span></div>
+      <div class="prehab-pills">${PREHAB.exercises.map(x => `<button type="button" class="prehab-pill" data-action="prehab" data-name="${esc(x)}" aria-pressed="${prehabDone.has(x)}">${prehabDone.has(x) ? '✓ ' : ''}${esc(x)}</button>`).join('')}</div>`;
+  }
+  function togglePrehab(name) {
+    if (!PREHAB.exercises.includes(name)) return;
+    if (prehabDone.has(name)) prehabDone.delete(name); else prehabDone.add(name);
+    persist();
+    renderPrehab();
+  }
 
   const exIdOf = el => el.closest('[data-ex]').dataset.ex;
   delegate(root, 'click', {
@@ -602,6 +656,9 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     'rest-toggle': toggleRestTimer,
     'unit': el => setUnit(exIdOf(el), el.dataset.unit),
     'lift-deload': el => toggleLiftDeload(exIdOf(el)),
+    'prehab': el => togglePrehab(el.dataset.name),
+    'climb-log': el => logClimb(el.dataset.intensity),
+    'climb-undo': el => undoClimb(el.dataset.id),
     'rest-adjust': el => rest.adjust(Number(el.dataset.dir)),
     'rest-stop': () => rest.stop(),
     'deload-week': () => changeDeloadWeek(startDeloadWeek(pickedDate())),

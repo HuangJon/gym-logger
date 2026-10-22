@@ -156,7 +156,7 @@ test('mergeSessions replaces same ids and adds new ones', () => {
 
 // ── migration ──
 test('migrateLog: empty, current, legacy and bare-array inputs', () => {
-  assert.deepEqual(migrateLog(null), { schemaVersion: SCHEMA_VERSION, sessions: [], skipped: 0 });
+  assert.deepEqual(migrateLog(null), { schemaVersion: SCHEMA_VERSION, sessions: [], climbs: [], skipped: 0 });
   const s = session('2026-10-01', 1, { 's1-incline': done(50, 8) }, { id: 'a', program: 'old', note: 'injured' });
   assert.deepEqual(migrateLog({ schemaVersion: 2, sessions: [s] }).sessions[0], s);
   const legacy = { app: 'lifting-log', format: 1, entries: [{ id: 'old1', session: '3', date: '2026-05-28', ts: 5, entries: { 's3-bss': { skipped: true } } }] };
@@ -190,6 +190,14 @@ test('every past save format still loads (fixtures are permanent — never edit 
   assert.deepEqual(v3.sessions[0].entries['s1-incline'].target, { reps: 9, sets: 2, weight: 50 });
   assert.equal(v3.sessions[0].futureField, 'kept');   // unknown fields survive
   assert.equal(v3.sessions[0].entries['s1-incline'].rpe, 8);
+  const v4 = migrateLog(load('schema-v4.json'));
+  assert.equal(v4.sessions[0].deload, true);
+  assert.equal(v4.sessions[0].entries['s1-incline'].deload, false);   // one lift kept normal in a deload session
+  assert.equal(v4.sessions[0].entries['s1-pulldown'].unit, 'kg');
+  assert.deepEqual(v4.sessions[0].prehab, ['Face pulls', 'External rotation']);
+  assert.equal(v4.climbs.length, 2);
+  assert.deepEqual(v4.climbs[0], { id: 'climb-1', date: '2026-10-19', intensity: 'hard', ts: 1792500000000, note: 'projecting' });
+  assert.equal(v4.climbs[1].gym, 'future field');
 });
 
 test('retired exercises are not in the current program', () => {

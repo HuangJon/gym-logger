@@ -5,7 +5,7 @@
  *
  * When you add a file under css/ or js/, add it to APP_FILES (a unit test checks this).
  */
-const CACHE = 'liftlog-v3';
+const CACHE = 'liftlog-v4';
 const APP_FILES = [
   './', './index.html', './manifest.webmanifest',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png',
@@ -13,7 +13,7 @@ const APP_FILES = [
   './js/main.js',
   './js/config/program.js',
   './js/core/dates.js', './js/core/numbers.js', './js/core/exercises.js', './js/core/records.js',
-  './js/core/log.js', './js/core/migrate.js', './js/core/progress.js', './js/core/trends.js', './js/core/deload.js',
+  './js/core/log.js', './js/core/migrate.js', './js/core/progress.js', './js/core/trends.js', './js/core/deload.js', './js/core/climbs.js',
   './js/data/storage.js', './js/data/repository.js', './js/data/backup.js', './js/data/settings.js', './js/data/draft.js',
   './js/ui/dom.js', './js/ui/charts.js', './js/ui/tabs.js', './js/ui/workout.js', './js/ui/history.js', './js/ui/trends.js', './js/ui/rest-timer.js',
   './js/dev/demo.js',

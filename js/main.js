@@ -19,7 +19,10 @@ repo.load();
 document.getElementById('readonly-banner').hidden = !repo.readOnly;
 
 const tabs = createTabs(document, { onShow: name => { if (name === 'trends') trends.render(); } });
-const history = createHistoryView({ root: document.getElementById('tab-history'), repo, storage });
+const history = createHistoryView({
+  root: document.getElementById('tab-history'), repo, storage, settings,
+  onSettingsImported: () => { setUnitChoices(settings.get().units); workout.refresh(); },
+});
 const trends = createTrendsView({ root: document.getElementById('tab-trends'), repo });
 const workout = createWorkoutView({
   root: document.getElementById('tab-workout'),
@@ -44,6 +47,22 @@ repo.subscribe(() => {
 history.render();
 
 // Offline support: keep a copy of the app on the device (not available when opened as a file).
+// When a new version is installed while the app is open, offer a one-tap refresh (a workout in
+// progress is saved, so refreshing loses nothing). Coming back to the app checks for a new version.
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  const banner = document.getElementById('update-banner');
+  document.getElementById('update-btn').addEventListener('click', () => location.reload());
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('sw.js');
+      reg.addEventListener('updatefound', () => {
+        if (!navigator.serviceWorker.controller) return;   // first install, not an update
+        const next = reg.installing;
+        next?.addEventListener('statechange', () => {
+          if (next.state === 'installed' || next.state === 'activated') banner.hidden = false;
+        });
+      });
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+    } catch { /* offline support unavailable */ }
+  });
 }

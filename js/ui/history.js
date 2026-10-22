@@ -1,16 +1,17 @@
-/** History tab: backup card, list of saved sessions, inline editing, date change, delete. */
-import { SESSION_LABELS, SESSION_COLORS } from '../config/program.js';
+/** History tab: backup card, saved sessions and climbing days, inline editing, date change, delete. */
+import { SESSION_LABELS, SESSION_COLORS, PREHAB } from '../config/program.js';
 import { exercisesForSession, findExercise, unitOf, repRangeText, setsOf } from '../core/exercises.js';
 import { todayISO, formatLong, agoText } from '../core/dates.js';
 import { hasValue, parseWeight, parseReps } from '../core/numbers.js';
 import { STATUS, normalizeEntry, statusCounts, byNewest, setsOfEntry, meetsTarget, formatSets } from '../core/records.js';
 import { updateEntry, setSessionDate, setSessionDeload, deleteSession, mergeSessions } from '../core/log.js';
 import { createBackup, parseBackup, backupStatus, markBackedUp, deliverFile } from '../data/backup.js';
+import { CLIMB, removeClimb } from '../core/climbs.js';
 import { esc, delegate, autoResize, confirmTap, flash } from './dom.js';
 
 const EDIT_STATUSES = [[STATUS.COMPLETE, '✓ Done'], [STATUS.PARTIAL, '~ Partial'], [STATUS.SKIP, '✕ Skip']];
 
-export function createHistoryView({ root, repo, storage }) {
+export function createHistoryView({ root, repo, storage, settings, onSettingsImported }) {
   const $ = sel => root.querySelector(sel);
   const ui = { list: $('#history-list'), backupCard: $('#backup-card'), backupStatus: $('#backup-status'), backupMsg: $('#backup-msg'), snapshots: $('#snapshot-list') };
 
@@ -21,12 +22,15 @@ export function createHistoryView({ root, repo, storage }) {
   function render() {
     renderBackupCard();
     const sessions = [...repo.sessions].sort(byNewest);
-    if (!sessions.length) {
+    if (!sessions.length && !repo.climbs.length) {
       ui.list.innerHTML = '<div class="empty-state">No sessions logged yet.<br>Complete a workout to see it here.</div>';
       return;
     }
-    if (!expanded) expanded = new Set([sessions[0].id]);
-    ui.list.innerHTML = sessions.map(sessionCard).join('');
+    if (!expanded) expanded = new Set(sessions.length ? [sessions[0].id] : []);
+    // sessions and climbing days together, newest first
+    const items = [...sessions.map(s => ({ date: s.date, ts: s.ts || 0, html: () => sessionCard(s) })),
+      ...repo.climbs.map(c => ({ date: c.date, ts: c.ts || 0, html: () => climbRow(c) }))].sort(byNewest);
+    ui.list.innerHTML = items.map(it => it.html()).join('');
     ui.list.querySelectorAll('.hedit-note').forEach(autoResize);
   }
 
@@ -44,6 +48,7 @@ export function createHistoryView({ root, repo, storage }) {
         </div>
         <div class="history-body"${open ? '' : ' hidden'}>
           ${s.note ? `<div class="session-note">↳ ${esc(s.note)}</div>` : ''}
+          ${s.prehab?.length ? `<div class="session-note">Prehab ${s.prehab.length}/${PREHAB.exercises.length}: ${esc(s.prehab.join(', '))}</div>` : ''}
           ${exercises.map(ex => exerciseRow(s, ex)).join('')}
           <div class="entry-date-row">
             <span class="hedit-label">Date</span>
@@ -58,6 +63,21 @@ export function createHistoryView({ root, repo, storage }) {
           <button type="button" class="delete-entry" data-action="delete">Delete this entry</button>
         </div>
       </div>`;
+  }
+
+  function climbRow(c) {
+    const hard = c.intensity === CLIMB.HARD;
+    return `<div class="history-climb${hard ? ' hard' : ''}" data-climb="${esc(c.id)}">
+      <span class="hc-date">${formatLong(c.date)}</span>
+      <span class="hc-what">🧗 ${hard ? 'Hard' : 'Easy'} climb${c.note ? ` · ${esc(c.note)}` : ''}</span>
+      <button type="button" class="link-btn" data-action="climb-delete">delete</button>
+    </div>`;
+  }
+
+  async function deleteClimb(btn) {
+    if (!confirmTap(btn, 'tap again')) return;
+    try { await repo.commitClimbs(removeClimb(repo.climbs, btn.closest('[data-climb]').dataset.climb)); }
+    catch { btn.textContent = 'failed — try again'; }
   }
 
   function exerciseRow(s, ex) {
@@ -230,11 +250,12 @@ export function createHistoryView({ root, repo, storage }) {
 
   async function exportBackup() {
     const today = todayISO();
-    const delivered = await deliverFile(createBackup(repo.sessions, today));
+    const delivered = await deliverFile(createBackup(repo.sessions, today, { climbs: repo.climbs, settings: settings?.get() ?? {} }));
     if (!delivered) return;
     markBackedUp(storage, today);
     renderBackupCard();
-    flash(ui.backupMsg, `Exported ${repo.sessions.length} sessions. Save it to Files / iCloud Drive.`, { ms: 0 });
+    const climbs = repo.climbs.length ? ` and ${repo.climbs.length} climbing day${repo.climbs.length === 1 ? '' : 's'}` : '';
+    flash(ui.backupMsg, `Exported ${repo.sessions.length} sessions${climbs}. Save it to Files / iCloud Drive.`, { ms: 0 });
   }
 
   async function importBackup(input) {
@@ -242,13 +263,19 @@ export function createHistoryView({ root, repo, storage }) {
     input.value = '';
     if (!file) return;
     try {
-      const { sessions, skipped } = parseBackup(await file.text());
+      const { sessions, climbs, settings: prefs, skipped } = parseBackup(await file.text());
       const merged = mergeSessions(repo.sessions, sessions);
-      await repo.commit(merged.sessions);
+      const mergedClimbs = mergeSessions(repo.climbs, climbs);   // same rule: same id replaces, new ids are added
+      await repo.commit(merged.sessions, { climbs: mergedClimbs.sessions });
+      if (settings && Object.keys(prefs).length) {
+        settings.update({ ...prefs, units: { ...settings.get().units, ...(prefs.units || {}) } });
+        onSettingsImported?.();
+      }
       expanded = null;
       editing = null;
       render();
-      flash(ui.backupMsg, `Imported ${sessions.length} session${sessions.length === 1 ? '' : 's'}: ${merged.added} new, ${merged.updated} updated${skipped ? `, ${skipped} skipped (unreadable)` : ''}.`, { ms: 0 });
+      const climbText = climbs.length ? ` · ${climbs.length} climbing day${climbs.length === 1 ? '' : 's'}` : '';
+      flash(ui.backupMsg, `Imported ${sessions.length} session${sessions.length === 1 ? '' : 's'}: ${merged.added} new, ${merged.updated} updated${skipped ? `, ${skipped} skipped (unreadable)` : ''}${climbText}.`, { ms: 0 });
     } catch (err) {
       flash(ui.backupMsg, err.message || 'Import failed.', { error: true, ms: 0 });
     }
@@ -263,6 +290,7 @@ export function createHistoryView({ root, repo, storage }) {
     'edit-cancel': () => { editing = null; render(); },
     'delete': remove,
     'export': exportBackup,
+    'climb-delete': deleteClimb,
     'restore': restore,
   });
   delegate(root, 'input', { 'autosize': autoResize });
