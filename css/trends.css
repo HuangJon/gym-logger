@@ -94,6 +94,6 @@
 .chart-dot.deload { fill: var(--card); stroke: var(--deload-line); stroke-width: 1.75; }
 .rc.deload { background: var(--deload-bg); color: var(--deload); }
 .zone-legend .zone-deload { color: var(--deload); }
-.chart-climb { font-size: 9px; font-weight: 700; fill: var(--fg3); }
+.chart-climb { font-size: 9px; font-weight: 700; fill: var(--good-line); }
 .chart-climb.hard { fill: var(--climb-line); }
 .climb-key { color: var(--climb-line); font-weight: 600; }
