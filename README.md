@@ -72,7 +72,7 @@ Edit [`js/config/program.js`](js/config/program.js). Each exercise has an `id`, 
 - Exercises with the same `name` share "last time" and Trends across sessions.
 - When you drop an exercise, move it to `RETIRED` so its history still shows.
 - Weight increments (target bumps and the − / + buttons) live in `INCREMENTS`.
-- The number of working sets is `DEFAULT_SETS` (change it to 3 when the program moves to 3 sets), or `sets` on a single exercise.
+- The number of working sets is `DEFAULT_SETS` (2), or `sets` on a single exercise — the pressing lifts and split squats use 3; pulling lifts stay at 2 because climbing adds plenty of pulling.
 
 ## Development
 

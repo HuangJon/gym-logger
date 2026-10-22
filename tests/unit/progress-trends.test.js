@@ -34,44 +34,44 @@ test('lastPerformance: walks back past skipped/unrecorded, respects the date cut
 const last = (weight, reps, status = 'complete', target) => ({ status, weight, unit: 'lbs', sets: reps.map(r => ({ weight, reps: r })), reps: Math.min(...reps), ...(target ? { target } : {}) });
 
 test('computeTarget: first time uses the default weight and the bottom of the range', () => {
-  assert.deepEqual(computeTarget(incline1, null), { weight: 50, reps: 6, sets: 2, reason: 'first' });
+  assert.deepEqual(computeTarget(incline1, null), { weight: 50, reps: 6, sets: 3, reason: 'first' });
   assert.deepEqual(computeTarget(pulldown, null), { weight: 25, reps: 8, sets: 2, reason: 'first' });   // estimated starting weight (kg)
   assert.deepEqual(computeTarget(abwheel, null), { weight: null, reps: 8, sets: 2, reason: 'first' });
 });
 
 test('computeTarget: hit the target → one more rep, same weight', () => {
-  assert.deepEqual(computeTarget(incline1, last(50, [8, 8])), { weight: 50, reps: 9, sets: 2, reason: 'more' });
-  assert.deepEqual(computeTarget(incline1, last(50, [9, 8])), { weight: 50, reps: 9, sets: 2, reason: 'more' });   // goes by the lowest set
+  assert.deepEqual(computeTarget(incline1, last(50, [8, 8])), { weight: 50, reps: 9, sets: 3, reason: 'more' });
+  assert.deepEqual(computeTarget(incline1, last(50, [9, 8])), { weight: 50, reps: 9, sets: 3, reason: 'more' });   // goes by the lowest set
 });
 
 test('computeTarget: every set at the top of the range → add the increment, back to the bottom', () => {
-  assert.deepEqual(computeTarget(incline1, last(50, [12, 12])), { weight: 55, reps: 6, sets: 2, reason: 'bump' });   // incline +5
+  assert.deepEqual(computeTarget(incline1, last(50, [12, 12])), { weight: 55, reps: 6, sets: 3, reason: 'bump' });   // incline +5
   assert.deepEqual(computeTarget(deadlift, last(185, [8, 8])), { weight: 190, reps: 5, sets: 2, reason: 'bump' });
   assert.equal(computeTarget(incline1, last(50, [12, 11])).reason, 'more');   // one set short of the top → no bump
 });
 
 test('computeTarget: a partial repeats the same target — no increase', () => {
   const t = { weight: 50, reps: 9, sets: 2 };
-  assert.deepEqual(computeTarget(incline1, last(50, [9, 6], 'partial', t)), { weight: 50, reps: 9, sets: 2, reason: 'repeat' });
-  assert.deepEqual(computeTarget(incline1, last(50, [6], 'partial', { weight: 50, reps: 6, sets: 2 })), { weight: 50, reps: 6, sets: 2, reason: 'repeat' });   // a set short
+  assert.deepEqual(computeTarget(incline1, last(50, [9, 6], 'partial', t)), { weight: 50, reps: 9, sets: 3, reason: 'repeat' });
+  assert.deepEqual(computeTarget(incline1, last(50, [6], 'partial', { weight: 50, reps: 6, sets: 2 })), { weight: 50, reps: 6, sets: 3, reason: 'repeat' });   // a set short
 });
 
 test('computeTarget: went lighter than the target on every set → build on what you did', () => {
   const t = { weight: 50, reps: 6, sets: 2 };
-  assert.deepEqual(computeTarget(incline1, last(40, [8, 8], 'partial', t)), { weight: 40, reps: 9, sets: 2, reason: 'more' });
-  assert.deepEqual(computeTarget(incline1, last(45, [12, 12], 'partial', t)), { weight: 50, reps: 6, sets: 2, reason: 'bump' });
-  assert.deepEqual(computeTarget(incline1, last(40, [8], 'partial', t)), { weight: 40, reps: 9, sets: 2, reason: 'more' });   // fewer sets too
+  assert.deepEqual(computeTarget(incline1, last(40, [8, 8], 'partial', t)), { weight: 40, reps: 9, sets: 3, reason: 'more' });
+  assert.deepEqual(computeTarget(incline1, last(45, [12, 12], 'partial', t)), { weight: 50, reps: 6, sets: 3, reason: 'bump' });
+  assert.deepEqual(computeTarget(incline1, last(40, [8], 'partial', t)), { weight: 40, reps: 9, sets: 3, reason: 'more' });   // fewer sets too
   // one set at the target weight → it was a real attempt at the target → repeat
   const mixed = { status: 'partial', weight: 50, unit: 'lbs', reps: 5, sets: [{ weight: 50, reps: 5 }, { weight: 45, reps: 8 }], target: t };
   assert.equal(computeTarget(incline1, mixed).reason, 'repeat');
-  assert.deepEqual(computeTarget(incline1, { status: 'partial', weight: 50, unit: 'lbs' }), { weight: 50, reps: 6, sets: 2, reason: 'repeat' });   // old log, no reps
+  assert.deepEqual(computeTarget(incline1, { status: 'partial', weight: 50, unit: 'lbs' }), { weight: 50, reps: 6, sets: 3, reason: 'repeat' });   // old log, no reps
 });
 
 test('computeTarget: always inside the rep range', () => {
-  assert.deepEqual(computeTarget(incline1, last(50, [4, 4])), { weight: 50, reps: 6, sets: 2, reason: 'low' });
+  assert.deepEqual(computeTarget(incline1, last(50, [4, 4])), { weight: 50, reps: 6, sets: 3, reason: 'low' });
   assert.equal(computeTarget(abwheel, { status: 'complete', reps: 10 }).reps, 10);   // bodyweight at the top stays at the top
   assert.equal(computeTarget(abwheel, { status: 'complete', reps: 10 }).reason, 'top');
-  assert.deepEqual(computeTarget(bss, { status: 'partial', reps: 10, sets: [{ reps: 10 }, { reps: 10 }] }), { weight: 15, reps: 5, sets: 2, reason: 'bodyweight' });   // last time bodyweight → program weight
+  assert.deepEqual(computeTarget(bss, { status: 'partial', reps: 10, sets: [{ reps: 10 }, { reps: 10 }] }), { weight: 15, reps: 5, sets: 3, reason: 'bodyweight' });   // last time bodyweight → program weight
   for (const ex of [incline1, deadlift, abwheel, bss]) for (const r of [0, 1, 5, 9, 20]) {
     const t = computeTarget(ex, { status: 'complete', weight: 50, reps: r });
     assert.ok(t.reps >= ex.reps[0] && t.reps <= ex.reps[1], `${ex.id} ${r} → ${t.reps}`);
@@ -79,7 +79,7 @@ test('computeTarget: always inside the rep range', () => {
 });
 
 test('computeTarget: older logs with one reps value count it for every set', () => {
-  assert.deepEqual(computeTarget(incline1, { status: 'complete', weight: 50, unit: 'lbs', reps: 8 }), { weight: 50, reps: 9, sets: 2, reason: 'more' });
+  assert.deepEqual(computeTarget(incline1, { status: 'complete', weight: 50, unit: 'lbs', reps: 8 }), { weight: 50, reps: 9, sets: 3, reason: 'more' });
 });
 
 test('targetReason', () => {
