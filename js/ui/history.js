@@ -56,7 +56,7 @@ export function createHistoryView({ root, repo, storage, settings, onSettingsImp
           ${exercises.map(ex => exerciseRow(s, ex)).join('')}
           <div class="entry-date-row">
             <span class="hedit-label">Date</span>
-            <input type="date" class="date-input entry-date" value="${s.date}" data-action="entry-date" aria-label="Session date">
+            <input type="date" class="date-input entry-date" value="${s.date}" max="${todayISO()}" data-action="entry-date" aria-label="Session date">
             <span class="entry-date-msg"></span>
           </div>
           <div class="entry-date-row">
@@ -244,6 +244,11 @@ export function createHistoryView({ root, repo, storage, settings, onSettingsImp
 
   async function changeDate(input) {
     const id = sessionIdOf(input), previous = repo.sessions.find(s => s.id === id)?.date;
+    if (!isISODate(input.value) || input.value > todayISO()) {
+      input.value = previous;
+      input.parentElement.querySelector('.entry-date-msg').textContent = "Can't be in the future";
+      return;
+    }
     try {
       await repo.commit(setSessionDate(repo.sessions, id, input.value));
     } catch {
@@ -317,7 +322,7 @@ export function createHistoryView({ root, repo, storage, settings, onSettingsImp
     'restore': restore,
   });
   delegate(root, 'input', { 'autosize': autoResize });
-  delegate(root, 'change', { 'climb-add-date': el => { if (isISODate(el.value)) { climbDate = el.value; render(); } }, 'entry-date': changeDate, 'import': importBackup });
+  delegate(root, 'change', { 'climb-add-date': el => { if (isISODate(el.value)) { climbDate = el.value > todayISO() ? todayISO() : el.value; render(); } }, 'entry-date': changeDate, 'import': importBackup });
 
   return {
     render,

@@ -14,6 +14,9 @@
   padding: 8px 16px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;
 }
 .btn-primary:disabled { opacity: .35; cursor: default; }
+.pick-msg { width: 100%; font-size: 11px; color: var(--fg2); }
+.pick-msg:empty { display: none; }
+.pick-msg.error { color: var(--danger); }
 .picker-hint { text-align: center; padding: 24px 0; color: var(--fg2); font-size: 13px; }
 
 .preview { overflow: hidden; margin-bottom: 14px; }

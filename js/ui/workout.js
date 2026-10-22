@@ -24,7 +24,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   const ui = {
     pickerPanel: $('#picker-panel'), sessionPanel: $('#session-panel'),
     pickDate: $('#pick-date'), pickSession: $('#pick-session'), startBtn: $('#start-btn'),
-    preview: $('#session-preview-area'), hint: $('#picker-hint'),
+    preview: $('#session-preview-area'), hint: $('#picker-hint'), pickMsg: $('#pick-msg'),
     header: $('#session-header'), prehab: $('#prehab'), exercises: $('#exercise-area'),
     completeBtn: $('#complete-btn'), status: $('#status'), deloadArea: $('#deload-area'), climbArea: $('#climb-area'), sessionClimb: $('#session-climb'),
   };
@@ -102,12 +102,21 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
 
   function resetPicker() {
     ui.pickDate.value = todayISO();
+    ui.pickDate.max = todayISO();
     ui.pickSession.value = '';
     pickMode = null;
     renderPicker();
   }
 
-  const pickedDate = () => (isISODate(ui.pickDate.value) ? ui.pickDate.value : todayISO());
+  /** The picked date — never in the future (you log what you did, not what you plan to do). */
+  const pickedDate = () => (isISODate(ui.pickDate.value) && ui.pickDate.value <= todayISO() ? ui.pickDate.value : todayISO());
+  function checkPickDate() {
+    ui.pickDate.max = todayISO();
+    if (isISODate(ui.pickDate.value) && ui.pickDate.value > todayISO()) {
+      ui.pickDate.value = todayISO();
+      flash(ui.pickMsg, "Can't log a workout in the future — set to today.", { error: true, ms: 4000 });
+    }
+  }
   const modePicked = () => pickMode ?? (deloadWeekActive(settings.get(), pickedDate()) ? MODE.DELOAD : MODE.NORMAL);
 
   function renderPicker() {
@@ -135,7 +144,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
 
   async function setClimb(date, intensity) {
     try { await repo.commitClimbs(setClimbDay(repo.climbs, date, climbChoice(intensity))); }
-    catch (err) { flash(active ? ui.status : ui.hint, `Couldn't save: ${err.message}`, { error: true, ms: 0 }); }
+    catch (err) { flash(active ? ui.status : ui.pickMsg, `Couldn't save: ${err.message}`, { error: true, ms: 0 }); }
   }
 
   /** Normal | Maintain | Deload, deload week, and the "consider a deload" suggestion. */
@@ -243,7 +252,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     ui.header.innerHTML = `
       <span class="dot" style="background:${SESSION_COLORS[n]}"></span>
       <h2 style="color:${SESSION_COLORS[n]}">${SESSION_LABELS[n]}</h2>
-      <input type="date" class="date-input" id="active-date" value="${date}" data-action="active-date" aria-label="Session date">
+      <input type="date" class="date-input" id="active-date" value="${date}" max="${todayISO()}" data-action="active-date" aria-label="Session date">
       <button type="button" class="link-btn sa-change" data-action="ask-discard">change</button>
       <div class="session-tools">
         ${modeSwitch(mode, 'session-mode')}
@@ -543,7 +552,11 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   }
 
   function changeDate(input) {
-    if (!isISODate(input.value)) { input.value = active.date; return; }
+    if (!isISODate(input.value) || input.value > todayISO()) {
+      if (isISODate(input.value)) flash(ui.status, "Can't log a workout in the future.", { error: true, ms: 4000 });
+      input.value = active.date;
+      return;
+    }
     active.date = input.value;
     persist();
     renderExercises();   // targets depend on the date; what you logged lives in `scratch`
@@ -709,7 +722,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   });
   delegate(root, 'change', {
     'pick-session': renderPreview,
-    'pick-date': () => { pickMode = null; renderPicker(); },
+    'pick-date': () => { checkPickDate(); pickMode = null; renderPicker(); },
     'active-date': changeDate,
   });
 

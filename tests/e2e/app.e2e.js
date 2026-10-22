@@ -79,6 +79,8 @@ try {
   // ── picker ──────────────────────────────────────────────
   await tab('workout');
   check('picker: date defaults to today', (await page.inputValue('#pick-date')) === TODAY);
+  await page.fill('#pick-date', '2099-01-01'); await page.dispatchEvent('#pick-date', 'change');
+  check('picker: no future dates', (await page.inputValue('#pick-date')) === TODAY && (await text('#pick-msg')).includes('future'));
   check('picker: Start disabled until a session is picked', await page.locator('#start-btn').isDisabled());
   await page.selectOption('#pick-session', '2');
   check('picker: preview lists the session', (await text('#session-preview-area')).includes('DB Shoulder Press'));
