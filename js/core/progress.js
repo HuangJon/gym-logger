@@ -164,16 +164,20 @@ export function stepWeight(ex, weight, direction) {
   return Math.max(inc, round2(Number(weight) + direction * inc));
 }
 
+/** − / + can go this many reps past either end of the range (a set a rep or two short, or a weight that was too light). */
+export const REP_STEP_MARGIN = 2;
+const repStepLimits = ([lo, hi]) => [Math.max(1, lo - REP_STEP_MARGIN), hi + REP_STEP_MARGIN];
+
 /**
- * Reps after a − / + tap: stays inside the rep range (type a number for a set that fell short).
- * − never raises a number you typed below the range; + from below the range climbs back in.
+ * Reps after a − / + tap: within the rep range ± REP_STEP_MARGIN (type a number for anything further).
+ * A typed number outside those limits is never pulled back in by a tap the other way.
  */
-export function stepReps(reps, direction, [lo, hi]) {
-  const r = Number(reps) || lo;
-  return direction < 0 ? Math.max(Math.min(lo, r), r - 1) : Math.min(hi, Math.max(1, r + 1));
+export function stepReps(reps, direction, range) {
+  const [min, max] = repStepLimits(range), r = Number(reps) || range[0];
+  return direction < 0 ? Math.max(Math.min(min, r), r - 1) : Math.max(Math.min(max, r + 1), r);
 }
-/** Can − lower the reps any further? */
-export const canStepRepsDown = (reps, [lo]) => Number(reps) > lo;
+export const canStepRepsDown = (reps, range) => Number(reps) > repStepLimits(range)[0];
+export const canStepRepsUp = (reps, range) => Number(reps) < repStepLimits(range)[1];
 
 /** Limits for editing a target in the pop-out. */
 export const TARGET_SETS_RANGE = [1, 6];
