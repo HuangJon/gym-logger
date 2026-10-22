@@ -232,7 +232,8 @@
 .discard-btn.btn-confirm { border-color: var(--danger); color: var(--danger); }
 
 /* deload: mid-session switch + per-lift button */
-.session-tools { align-items: center; gap: 14px; }
+.session-tools { align-items: center; gap: 10px 14px; flex-wrap: wrap; }
+.rest-toggle, .deload-style button { white-space: nowrap; }
 .session-deload .switch-label { font-size: 12px; }
 .session-deload.is-on .switch-label { color: var(--deload); }
 .ex-card.is-deload .ex-header { background: var(--deload-bg); }
@@ -251,3 +252,9 @@
 .climb-nudge { margin-bottom: 10px; padding: 10px 14px; border-radius: var(--radius); font-size: 12px; line-height: 1.45; background: var(--climb-bg); color: var(--climb); }
 .last-memo { width: 100%; padding-left: 52px; font-size: 11px; color: var(--fg); font-style: italic; }
 .last-memo .last-when { font-style: normal; }
+
+/* deload style: Fewer sets | Lighter */
+.deload-style-row { width: 100%; display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; }
+.deload-style button { font-size: 12px; padding: 6px 12px; min-height: 32px; touch-action: manipulation; }
+.deload-style button[aria-pressed="true"] { background: var(--deload-line); color: var(--on-fill); }
+.deload-how { font-size: 11px; color: var(--deload); }

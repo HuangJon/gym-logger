@@ -3,7 +3,7 @@
  * Kept apart from the workout log: losing them never loses a workout, and they aren't in backups.
  */
 const KEY = 'settings';
-export const DEFAULT_SETTINGS = Object.freeze({ restTimer: false, deloadUntil: null, deloadSnoozedUntil: null, units: {} });
+export const DEFAULT_SETTINGS = Object.freeze({ restTimer: false, deloadUntil: null, deloadSnoozedUntil: null, units: {}, deloadStyle: 'sets' });
 
 export function createSettings(storage) {
   let current = { ...DEFAULT_SETTINGS, ...(isObject(storage.read(KEY)) ? storage.read(KEY) : {}) };

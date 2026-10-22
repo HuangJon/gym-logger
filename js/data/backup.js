@@ -9,7 +9,7 @@ export const BACKUP_STALE_DAYS = 14;
 const LAST_BACKUP_KEY = 'lastBackup';
 
 /** Preferences worth carrying to a new phone (lbs/kg per lift, rest timer). */
-export const BACKED_UP_SETTINGS = ['units', 'restTimer'];
+export const BACKED_UP_SETTINGS = ['units', 'restTimer', 'deloadStyle'];
 
 /** The backup file for the current log (plus climbing days and the preferences above). */
 export function createBackup(sessions, today, { climbs = [], settings = {}, exportedAt = new Date().toISOString() } = {}) {
@@ -42,6 +42,7 @@ function cleanSettings(raw) {
     out.units = Object.fromEntries(Object.entries(raw.units).filter(([k, u]) => typeof k === 'string' && (u === 'lbs' || u === 'kg')));
   }
   if (typeof raw.restTimer === 'boolean') out.restTimer = raw.restTimer;
+  if (raw.deloadStyle === 'sets' || raw.deloadStyle === 'lighter') out.deloadStyle = raw.deloadStyle;
   return out;
 }
 

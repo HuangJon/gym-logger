@@ -83,26 +83,47 @@ export function lighterWeight(ex, weight, factor) {
   return near > 0 ? Math.min(near, weight) : weight;   // never heavier than where you started
 }
 
+export const DELOAD_STYLES = Object.freeze({ SETS: 'sets', LIGHTER: 'lighter' });
+
+/**
+ * A deload target from your normal weight and set count. Always the bottom of the rep range.
+ *   'sets'    → same weight, half the sets (rounded up)
+ *   'lighter' → ~10% lighter, same sets — or, if the weight is too light to drop a step (or it's a
+ *               bodyweight lift), half the sets instead (`fallback: true`)
+ */
+export function deloadTarget(ex, weight, sets, style = DELOAD_STYLES.SETS) {
+  const [lo] = ex.reps, half = Math.max(1, Math.ceil(sets * DELOAD.setsFactor));
+  const w = ex.bw ? null : (weight ?? null);
+  if (style === DELOAD_STYLES.LIGHTER) {
+    const lighter = lighterWeight(ex, w, DELOAD.weightFactor);
+    if (hasValue(w) && lighter < w) return { weight: lighter, reps: lo, sets, reason: 'deload', style, lighter: true };
+    return { weight: w, reps: lo, sets: half, reason: 'deload', style: DELOAD_STYLES.SETS, fallback: true };
+  }
+  return { weight: w, reps: lo, sets: half, reason: 'deload', style: DELOAD_STYLES.SETS };
+}
+
 /**
  * Today's target. Normally double progression (`progressionTarget`), adjusted for:
- *   deload        → ~10% lighter than last time, bottom of the range, half the sets (reason 'deload')
+ *   deload        → see deloadTarget (opts.deloadStyle: 'sets' | 'lighter'; reason 'deload')
  *   long break    → last time was over STALE_AFTER_DAYS ago: ~10% lighter, bottom of the range (reason 'ease')
  * opts.date: the workout's date; opts.lastActive: date you last did the lift at all (deloads included).
  */
-export function computeTarget(ex, last, { date, lastActive, deload = false } = {}) {
+export function computeTarget(ex, last, { date, lastActive, deload = false, deloadStyle = DELOAD_STYLES.SETS } = {}) {
   const base = progressionTarget(ex, last);
   if (!base) return null;
   const [lo] = ex.reps;
   const lastWeight = ex.bw ? null : (hasValue(last?.weight) ? last.weight : base.weight);
-  if (deload) {
-    const weight = ex.bw ? null : lighterWeight(ex, lastWeight, DELOAD.weightFactor);
-    return { weight, reps: lo, sets: Math.max(1, Math.ceil(base.sets * DELOAD.setsFactor)), reason: 'deload', ...(hasValue(weight) && weight < lastWeight ? { lighter: true } : {}) };
-  }
   const since = [lastActive, last?.date].filter(Boolean).sort().pop();
   const daysOff = since && date ? daysBetween(since, date) : 0;
-  if (last && daysOff > STALE_AFTER_DAYS) {
-    const weight = ex.bw ? null : lighterWeight(ex, lastWeight, EASE_BACK_FACTOR);
-    return { weight, reps: lo, sets: base.sets, reason: 'ease', daysOff, ...(hasValue(weight) && weight < lastWeight ? { lighter: true } : {}) };
+  const easing = !!last && daysOff > STALE_AFTER_DAYS;
+  const easedWeight = ex.bw ? null : lighterWeight(ex, lastWeight, EASE_BACK_FACTOR);
+  // a deload after a long break starts from the eased weight, so it's never heavier than a normal session
+  if (deload) {
+    const t = deloadTarget(ex, easing ? easedWeight : lastWeight, base.sets, deloadStyle);
+    return easing && hasValue(easedWeight) && easedWeight < lastWeight ? { ...t, afterBreak: true } : t;
+  }
+  if (easing) {
+    return { weight: easedWeight, reps: lo, sets: base.sets, reason: 'ease', daysOff, ...(hasValue(easedWeight) && easedWeight < lastWeight ? { lighter: true } : {}) };
   }
   return base;
 }
@@ -173,7 +194,9 @@ export function targetReason(ex, target, last, unit) {
     case 'repeat': return 'same target — not hit last time';
     case 'top':    return ex.bw ? 'top of range — add a harder variation or a set' : 'top of range';
     case 'ease':   return `${target.daysOff} days since last time — ${target.lighter ? '~10% lighter, bottom of the range' : 'bottom of the range'} to ease back in`;
-    case 'deload': return `deload — ${target.lighter ? '~10% lighter, ' : ''}half the sets, bottom of the range, stop 2–3 reps short of failure`;
+    case 'deload': return target.lighter
+      ? 'deload — ~10% lighter, bottom of the range, stop 2–3 reps short of failure'
+      : `deload — ${ex.bw ? '' : target.afterBreak ? 'eased weight after the break, ' : 'same weight, '}half the sets, bottom of the range, stop 2–3 reps short of failure${target.fallback ? ' (too light to drop a step)' : ''}`;
     default:       return last ? '' : 'first time — find a weight you can do with good form';
   }
 }
