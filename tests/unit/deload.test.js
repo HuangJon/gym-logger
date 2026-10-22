@@ -16,7 +16,7 @@ import { session, done, partial } from '../helpers.js';
 
 const deadlift = findExercise('s1-deadlift');     // 5–8, +5
 const incline = findExercise('s1-incline');       // 6–12, +5
-const lateral = findExercise('s1-lateral');       // 12–15, +2.5
+const lateral = findExercise('s1-lateral');       // 8–15, +2.5
 const legRaise = findExercise('s2-legraiser');    // bodyweight 8–12
 
 test('lighterWeight: ~10% down to the lift step, never a huge cut on light weights', () => {

@@ -95,7 +95,7 @@ try {
   check('workout: Session 1 has 5 exercises', await page.locator('.ex-card').count() === 5);
   check('target: partial last time → same target again', (await text('#card-s1-incline .target-row')).includes('47.5 lbs × 6 × 2 sets') && (await text('#card-s1-incline .target-row')).includes('not hit last time'));
   check('target: hit last time → one more rep', (await text('#card-s1-deadlift .target-row')).includes('175 lbs × 7 × 2 sets') && (await text('#card-s1-deadlift .target-row')).includes('one more rep'));
-  check('target: below range last time → bottom of range', (await text('#card-s1-lateral .target-row')).includes('7.5 lbs × 12 × 2 sets') && (await text('#card-s1-lateral .target-row')).includes('below range'));
+  check('target: in the (wide) range last time → one more rep', (await text('#card-s1-lateral .target-row')).includes('7.5 lbs × 12 × 2 sets') && (await text('#card-s1-lateral .target-row')).includes('one more rep'));
   check('target: kg lift', (await text('#card-s1-crunches .target-row')).includes('45 kg × 13 × 2 sets'));
   check('target: first time starts at the estimated weight (cable, kg)', (await text('#card-s1-pulldown .target-row')).includes('25 kg × 8 × 2 sets'));
   check('last: shows last time', (await text('#card-s1-deadlift .last-row')).includes('175 lbs × 6 reps') && (await text('#card-s1-deadlift .last-row')).includes('Apr 20'));
