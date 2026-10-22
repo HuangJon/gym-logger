@@ -7,10 +7,13 @@
  */
 import { DELOAD } from '../config/program.js';
 import { daysBetween, addDays, isISODate } from './dates.js';
-import { byOldest, STATUS, MODE, sessionMode } from './records.js';
+import { byOldest, STATUS, MODE, effectiveSessionMode } from './records.js';
 import { sessionNumbers, sessionExercises } from './exercises.js';
 import { performances } from './progress.js';
 import { hardClimbsRecent } from './climbs.js';
+
+/** What a session amounted to (see effectiveSessionMode): more than half the lifts on Maintain / Deload. */
+const dayMode = record => effectiveSessionMode(record, DELOAD.easyShare);
 
 /**
  * First session date of the current training block: sessions since the last break
@@ -20,7 +23,7 @@ export function blockStart(sessions, today) {
   let start = null, prev = null;
   for (const record of [...sessions].sort(byOldest)) {
     if (record.date > today) break;
-    if (record.deload) { start = null; prev = record.date; continue; }
+    if (dayMode(record) === MODE.DELOAD) { start = null; prev = record.date; continue; }
     if (start === null || daysBetween(prev, record.date) >= DELOAD.breakDays) start = record.date;
     prev = record.date;
   }
@@ -67,15 +70,15 @@ export function deloadAdvice(sessions, today, settings = {}, climbs = []) {
 }
 
 /**
- * Maintain sessions (whole session on Maintain) in the last DELOAD.maintainWindowDays, counted
+ * Maintain days (more than half the lifts on Maintain) in the last DELOAD.maintainWindowDays, counted
  * since your last deload. Choosing Maintain a lot is a fatigue signal. Pass `plannedDate` to count
  * one you're about to start.
  */
 export function maintainCount(sessions, today, plannedDate = null) {
   const from = addDays(today, -DELOAD.maintainWindowDays + 1);
   const recent = sessions.filter(s => s.date >= from && s.date <= today);
-  const lastDeload = recent.filter(s => sessionMode(s) === MODE.DELOAD).map(s => s.date).sort().pop() ?? '';
-  const n = recent.filter(s => sessionMode(s) === MODE.MAINTAIN && s.date > lastDeload).length;
+  const lastDeload = recent.filter(s => dayMode(s) === MODE.DELOAD).map(s => s.date).sort().pop() ?? '';
+  const n = recent.filter(s => dayMode(s) === MODE.MAINTAIN && s.date > lastDeload).length;
   return n + (plannedDate ? 1 : 0);
 }
 export const maintainOften = (sessions, today, plannedDate = null) => maintainCount(sessions, today, plannedDate) >= DELOAD.maintainSessions;
@@ -88,7 +91,7 @@ export const maintainOften = (sessions, today, plannedDate = null) => maintainCo
  */
 export function deloadFrequency(sessions, today, plannedDate = null) {
   const weeks = DELOAD.frequentWindowWeeks, from = addDays(today, -weeks * 7 + 1);
-  const dates = sessions.filter(s => s.deload && s.date >= from && s.date <= today).map(s => s.date);
+  const dates = sessions.filter(s => s.date >= from && s.date <= today && dayMode(s) === MODE.DELOAD).map(s => s.date);
   if (plannedDate) dates.push(plannedDate);
   dates.sort();
   let stretches = 0, prev = null;

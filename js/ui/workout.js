@@ -3,13 +3,13 @@
  * complete the session. The workout in progress is saved on every change and picked up again
  * if the app is closed mid-workout.
  */
-import { PREHAB, SESSION_LABELS, SESSION_COLORS } from '../config/program.js';
+import { PREHAB, SESSION_LABELS, SESSION_COLORS, DELOAD } from '../config/program.js';
 import { sessionExercises, findExercise, unitOf, programUnitOf, setUnitChoices, incrementOf, repRangeText, restOf } from '../core/exercises.js';
 import { todayISO, isISODate, formatShort, agoText } from '../core/dates.js';
 import { hasValue, parseWeight, parseReps, convertWeight, UNITS } from '../core/numbers.js';
 import { STATUS, MODE, buildSessionRecord, formatSets } from '../core/records.js';
 import { addSession } from '../core/log.js';
-import { lastNote, canStepRepsDown, canStepRepsUp, lastPerformance, computeTarget, targetReason, missedStreak, MISSES_BEFORE_HINT, lighterWeight, deloadTarget, DELOAD_STYLES, stepWeight, stepReps, stepTarget, setBadge, exerciseVerdict } from '../core/progress.js';
+import { liftEasedStreak, lastNote, canStepRepsDown, canStepRepsUp, lastPerformance, computeTarget, targetReason, missedStreak, MISSES_BEFORE_HINT, lighterWeight, deloadTarget, DELOAD_STYLES, stepWeight, stepReps, stepTarget, setBadge, exerciseVerdict } from '../core/progress.js';
 import { deloadAdvice, deloadFrequency, maintainCount, maintainOften, deloadWeekActive, startDeloadWeek, endDeloadWeek, snoozeDeload } from '../core/deload.js';
 import { saveDraft, loadDraft, clearDraft } from '../data/draft.js';
 import { setClimbDay, climbsOn, recentHardClimb, hardClimbsRecent } from '../core/climbs.js';
@@ -328,12 +328,16 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
       reason += ` · missed ${misses} times in a row — consider ${ex.bw || !hasValue(target.weight) ? 'an easier variation' : `~10% lighter (${lighterWeight(ex, target.weight, 0.9)} ${unit}, tap ✎)`}`;
     }
     const needsWeight = !ex.bw && !hasValue(target.weight);
+    const eased = liftEasedStreak(repo.sessions, ex, active.date);
+    const easedNote = eased >= DELOAD.liftEasedStreak ? `<span class="target-note">⚠ Eased off this lift the last ${eased} times — usually it (or what it works) is beat up, e.g. from climbing, or its target is too high.
+      ${ex.bw || !hasValue(target.weight) ? 'Consider an easier variation for a fresh run.' : `Consider ~10% lighter for a fresh run (${lighterWeight(ex, lastFor(ex)?.weight ?? target.weight, 0.9)} ${unit}, tap ✎).`}</span>` : '';
     return `<div class="ex-row target-row">
       <span class="row-label">Target</span>
       <button type="button" class="target-btn" data-action="target-open" aria-expanded="${!!st.targetOpen}">
         <b>${targetText(ex, target)}</b>${needsWeight ? ' <span class="last-when">· set a weight</span>' : ''} <span class="target-edit">✎</span>
       </button>
       ${reason ? `<span class="target-reason">${reason}</span>` : ''}
+      ${easedNote}
       ${st.targetOpen ? targetPop(ex, target) : ''}
     </div>`;
   }
