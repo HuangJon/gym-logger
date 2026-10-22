@@ -39,7 +39,7 @@ export const SESSIONS = {
   ],
   3: [
     { id: 's3-incline',  name: 'Incline DB Press',       detail: '2×6–12',                   reps: [6, 12],  defaultWeight: 50 },
-    { id: 's3-bss',      name: 'Bulgarian Split Squats', detail: '2×5–8',                    reps: [5, 8],   defaultWeight: 15 },
+    { id: 's3-bss',      name: 'Bulgarian Split Squats', detail: '2×5–10',                   reps: [5, 10],   defaultWeight: 15 },
     { id: 's3-lateral',  name: 'Cable Lateral Raises',   detail: '2×8–15',                   reps: [8, 15],  defaultWeight: 5, tag: 'circuit' },
     { id: 's3-crunches', name: 'Cable Crunches',         detail: '2×10–15',                  reps: [10, 15], unit: 'kg', tag: 'circuit' },
     { id: 's3-abwheel',  name: 'Ab Wheel',               detail: '2×8–10 · if feeling good', reps: [8, 10],  bw: true },
