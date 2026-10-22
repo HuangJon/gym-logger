@@ -31,9 +31,12 @@ test('lighterWeight: ~10% down to the lift step, never a huge cut on light weigh
 
 test('computeTarget: deload = ~10% lighter, bottom of range, half the sets', () => {
   const last = { ...done(185, 7), sets: [{ weight: 185, reps: 7 }, { weight: 185, reps: 7 }], date: '2026-10-01' };
-  assert.deepEqual(computeTarget(deadlift, last, { date: '2026-10-03', deload: true }), { weight: 165, reps: 5, sets: 1, reason: 'deload' });
+  assert.deepEqual(computeTarget(deadlift, last, { date: '2026-10-03', deload: true }), { weight: 165, reps: 5, sets: 1, reason: 'deload', lighter: true });
+  const bssDeload = computeTarget(findExercise('s3-bss'), { ...done(15, 8), date: '2026-10-01' }, { date: '2026-10-03', deload: true });
+  assert.deepEqual(bssDeload, { weight: 15, reps: 5, sets: 1, reason: 'deload' }, 'light weight: same weight, but half the sets and bottom of the range');
+  assert.doesNotMatch(targetReason(findExercise('s3-bss'), bssDeload, {}, 'lbs'), /lighter/);
   assert.deepEqual(computeTarget(legRaise, { ...done(null, 10), date: '2026-10-01' }, { date: '2026-10-03', deload: true }), { weight: null, reps: 8, sets: 1, reason: 'deload' });
-  assert.match(targetReason(deadlift, { reason: 'deload' }, last, 'lbs'), /deload — ~10% lighter, half the sets/);
+  assert.match(targetReason(deadlift, { reason: 'deload', lighter: true }, last, 'lbs'), /deload — ~10% lighter, half the sets/);
 });
 
 test('computeTarget: ease back after more than 14 days off', () => {
