@@ -8,6 +8,7 @@ import { updateEntry, setSessionDate, setSessionDeload, deleteSession, mergeSess
 import { createBackup, parseBackup, backupStatus, markBackedUp, deliverFile } from '../data/backup.js';
 import { CLIMB, setClimbDay, climbsOn } from '../core/climbs.js';
 import { esc, delegate, autoResize, confirmTap, flash } from './dom.js';
+import { climbSwitch as switchHtml, climbChoice } from './climb-switch.js';
 
 const EDIT_STATUSES = [[STATUS.COMPLETE, '✓ Done'], [STATUS.PARTIAL, '~ Partial'], [STATUS.SKIP, '✕ Skip']];
 
@@ -72,12 +73,7 @@ export function createHistoryView({ root, repo, storage, settings, onSettingsImp
       </div>`;
   }
 
-  /** Easy | Hard for a day: tap to set, the other to switch, the same again to clear. */
-  function climbSwitch(date) {
-    const current = climbsOn(repo.climbs, date)[0]?.intensity ?? null;
-    const btn = (value, label) => `<button type="button" data-action="hclimb" data-date="${date}" data-intensity="${value}" aria-pressed="${current === value}">${label}</button>`;
-    return `<div class="seg climb-seg" role="group" aria-label="Climbing on ${esc(formatLong(date))}">${btn(CLIMB.EASY, 'Easy')}${btn(CLIMB.HARD, 'Hard')}</div>`;
-  }
+  const climbSwitch = date => switchHtml(date, climbsOn(repo.climbs, date)[0]?.intensity ?? null, 'hclimb', `Climbing on ${formatLong(date)}`);
 
   /** Log a climbing day for any date — rest days with no gym, or filling in after the fact. */
   function climbAdder() {
@@ -101,8 +97,7 @@ export function createHistoryView({ root, repo, storage, settings, onSettingsImp
 
   async function setClimb(btn) {
     const { date, intensity } = btn.dataset;
-    const current = climbsOn(repo.climbs, date)[0]?.intensity ?? null;
-    try { await repo.commitClimbs(setClimbDay(repo.climbs, date, current === intensity ? null : intensity)); }
+    try { await repo.commitClimbs(setClimbDay(repo.climbs, date, climbChoice(intensity))); }
     catch { btn.textContent = 'failed'; }
   }
 
