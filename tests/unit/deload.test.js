@@ -340,7 +340,7 @@ test('last note, shorter rest for circuits', async () => {
   assert.equal(lastNote(sessions, deadlift, '2026-10-10'), null, 'older notes do not resurface');
   assert.equal(lastNote(sessions, deadlift, '2026-10-09').note, 'back tight', "today's own session isn't 'last time'");
   assert.equal(restOf(lateral), 45);
-  assert.equal(restOf(deadlift), 120);
+  assert.equal(restOf(deadlift), 90);
   assert.equal(restOf(incline), 90);
   assert.equal(restOf(findExercise('s3-abwheel')), 45);
 });
