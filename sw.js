@@ -15,7 +15,7 @@ const APP_FILES = [
   './js/core/dates.js', './js/core/numbers.js', './js/core/exercises.js', './js/core/records.js',
   './js/core/log.js', './js/core/migrate.js', './js/core/progress.js', './js/core/trends.js', './js/core/deload.js', './js/core/climbs.js',
   './js/data/storage.js', './js/data/repository.js', './js/data/backup.js', './js/data/settings.js', './js/data/draft.js',
-  './js/ui/dom.js', './js/ui/charts.js', './js/ui/tabs.js', './js/ui/workout.js', './js/ui/history.js', './js/ui/trends.js', './js/ui/rest-timer.js',
+  './js/ui/dom.js', './js/ui/charts.js', './js/ui/tabs.js', './js/ui/workout.js', './js/ui/history.js', './js/ui/trends.js', './js/ui/rest-timer.js', './js/ui/climb-switch.js',
   './js/dev/demo.js',
 ];
 

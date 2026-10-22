@@ -12,9 +12,10 @@ import { addSession } from '../core/log.js';
 import { lastNote, canStepRepsDown, canStepRepsUp, lastPerformance, computeTarget, targetReason, missedStreak, MISSES_BEFORE_HINT, lighterWeight, stepWeight, stepReps, stepTarget, setBadge, exerciseVerdict } from '../core/progress.js';
 import { deloadAdvice, deloadFrequency, deloadWeekActive, startDeloadWeek, endDeloadWeek, snoozeDeload } from '../core/deload.js';
 import { saveDraft, loadDraft, clearDraft } from '../data/draft.js';
-import { CLIMB, setClimbDay, climbsOn, recentHardClimb, hardClimbsRecent } from '../core/climbs.js';
+import { setClimbDay, climbsOn, recentHardClimb, hardClimbsRecent } from '../core/climbs.js';
 import { esc, delegate, autoResize, flash, confirmTap } from './dom.js';
 import { createRestTimer } from './rest-timer.js';
+import { climbSwitch, climbChoice } from './climb-switch.js';
 
 const COMPLETE_LABEL = 'Complete Session';
 
@@ -88,17 +89,15 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   }
 
   /**
-   * Easy | Hard switch for a climbing day: tap one to log it, the other to change it, the same one
-   * again to clear it. Shown under the picker (any date) and at the end of a workout (you climb after).
+   * None | Easy | Hard for a day's climbing. Shown under the picker (any date) and at the end of a workout (you climb after).
    */
   function climbRow(date, { after = false } = {}) {
     const current = climbsOn(repo.climbs, date)[0]?.intensity ?? null;
     const hard = hardClimbsRecent(repo.climbs, date);
     const when = date === todayISO() ? 'today' : `on ${esc(formatShort(date))}`;
-    const btn = (value, label) => `<button type="button" data-action="climb-set" data-date="${date}" data-intensity="${value}" aria-pressed="${current === value}">${label}</button>`;
     return `<div class="climb-row${current ? ` is-${current}` : ''}">
         <span class="climb-label">🧗 ${after ? `Climbing ${when} too?` : `Climbed ${when}?`}</span>
-        <div class="seg climb-seg" role="group" aria-label="Climbing ${when}">${btn(CLIMB.EASY, 'Easy')}${btn(CLIMB.HARD, 'Hard')}</div>
+        ${climbSwitch(date, current, 'climb-set', `Climbing ${when}`)}
         ${hard ? `<span class="climb-recent">${hard} hard climbing day${hard === 1 ? '' : 's'} in the last 2 weeks</span>` : ''}
       </div>`;
   }
@@ -107,8 +106,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   function renderSessionClimb() { ui.sessionClimb.innerHTML = active ? climbRow(active.date, { after: true }) : ''; }
 
   async function setClimb(date, intensity) {
-    const current = climbsOn(repo.climbs, date)[0]?.intensity ?? null;
-    try { await repo.commitClimbs(setClimbDay(repo.climbs, date, current === intensity ? null : intensity)); }
+    try { await repo.commitClimbs(setClimbDay(repo.climbs, date, climbChoice(intensity))); }
     catch (err) { flash(active ? ui.status : ui.hint, `Couldn't save: ${err.message}`, { error: true, ms: 0 }); }
   }
 

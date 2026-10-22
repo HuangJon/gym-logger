@@ -278,20 +278,23 @@ try {
   check('deload: picker back to normal for the next session', !(await page.isChecked('#pick-deload')));
   // climbing days
   const climbsSaved = async () => JSON.stringify((await savedLog()).climbs.map(c => [c.date, c.intensity]));
+  check('climbing: None | Easy | Hard, None selected by default', (await page.getAttribute('#climb-area [data-intensity="none"]', 'aria-pressed')) === 'true');
   check('climbing: easy | hard switch for the picked date', (await text('#climb-area')).includes('Climbed on Wed, May 6?'));
   await page.tap('#climb-area [data-intensity="easy"]'); await wait(150);
   check('climbing: easy saved', (await climbsSaved()) === '[["2026-05-06","easy"]]' && (await page.getAttribute('#climb-area [data-intensity="easy"]', 'aria-pressed')) === 'true');
   await page.tap('#climb-area [data-intensity="hard"]'); await wait(150);
   check('climbing: switch to hard (still one day)', (await climbsSaved()) === '[["2026-05-06","hard"]]');
   await page.tap('#climb-area [data-intensity="hard"]'); await wait(150);
-  check('climbing: tap again to clear', (await climbsSaved()) === '[]');
+  check('climbing: tapping the selected one again keeps it', (await climbsSaved()) === '[["2026-05-06","hard"]]');
+  await page.tap('#climb-area [data-intensity="none"]'); await wait(150);
+  check('climbing: None clears it (and is selected)', (await climbsSaved()) === '[]' && (await page.getAttribute('#climb-area [data-intensity="none"]', 'aria-pressed')) === 'true');
   await page.tap('#climb-area [data-intensity="hard"]'); await wait(150);
   await page.fill('#pick-date', '2026-05-07'); await page.dispatchEvent('#pick-date', 'change');
   await page.tap('#start-btn');
   check('climbing: hard climb yesterday → nudge to deload pulling lifts', (await text('.climb-nudge')).includes('Hard climb yesterday'));
   await page.tap('#session-climb [data-intensity="easy"]'); await wait(150);
   check('climbing: log after lifting, from the workout', (await climbsSaved()) === '[["2026-05-06","hard"],["2026-05-07","easy"]]' && (await text('#session-climb')).includes('Climbing on Thu, May 7 too?'));
-  await page.tap('#session-climb [data-intensity="easy"]'); await wait(150);
+  await page.tap('#session-climb [data-intensity="none"]'); await wait(150);
   // a weight you set survives deload on/off
   await page.tap('#card-s1-deadlift [data-action="target-open"]');
   await page.tap('#card-s1-deadlift [data-action="target-step"][data-field="weight"][data-dir="1"]');
@@ -364,8 +367,8 @@ try {
   check('history: mark a session day as a hard climb', (await climbDates()) === '[["2026-05-04","hard"],["2026-05-06","hard"]]' && (await oct20.locator('.history-hdr').innerText()).toLowerCase().includes('hard'));
   await oct20.locator('[data-action="hclimb"][data-intensity="easy"]').tap(); await wait(150);
   check('history: switch it to easy', (await climbDates()) === '[["2026-05-04","easy"],["2026-05-06","hard"]]');
-  await oct20.locator('[data-action="hclimb"][data-intensity="easy"]').tap(); await wait(150);
-  check('history: tap again to clear', (await climbDates()) === '[["2026-05-06","hard"]]');
+  await oct20.locator('[data-action="hclimb"][data-intensity="none"]').tap(); await wait(150);
+  check('history: None clears it', (await climbDates()) === '[["2026-05-06","hard"]]');
   await page.fill('#climb-add-date', '2026-05-09'); await page.dispatchEvent('#climb-add-date', 'change');
   await page.tap('.climb-adder [data-intensity="easy"]'); await wait(150);
   check('history: log a climbing day with no gym', (await climbDates()) === '[["2026-05-06","hard"],["2026-05-09","easy"]]');
@@ -373,8 +376,8 @@ try {
   check('history: a climbing day with no session has its own row', await climbOnly.count() === 1 && (await climbOnly.innerText()).includes('May 9'));
   await climbOnly.locator('[data-intensity="hard"]').tap(); await wait(150);
   check('history: climbing-only day switched to hard', (await climbDates()) === '[["2026-05-06","hard"],["2026-05-09","hard"]]');
-  await page.locator('.history-climb [data-intensity="hard"]').tap(); await wait(150);
-  check('history: cleared (row goes away)', (await climbDates()) === '[["2026-05-06","hard"]]' && await page.locator('.history-climb').count() === 0);
+  await page.locator('.history-climb [data-intensity="none"]').tap(); await wait(150);
+  check('history: None clears it (row goes away)', (await climbDates()) === '[["2026-05-06","hard"]]' && await page.locator('.history-climb').count() === 0);
   const may5 = page.locator('.history-entry', { has: page.locator('.history-title', { hasText: 'May 5, 2026' }) }).filter({ hasText: 'Session 1' });
   check('history: deload tag', (await may5.locator('.history-hdr').innerText()).toLowerCase().includes('deload'));
   if (!(await may5.locator('.history-body').isVisible())) await may5.locator('.history-hdr').tap();
