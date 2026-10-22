@@ -12,7 +12,8 @@ import { addSession } from '../core/log.js';
 import { liftEasedStreak, lastNote, canStepRepsDown, canStepRepsUp, lastPerformance, computeTarget, targetReason, missedStreak, MISSES_BEFORE_HINT, lighterWeight, deloadTarget, DELOAD_STYLES, stepWeight, stepReps, stepTarget, setBadge, exerciseVerdict } from '../core/progress.js';
 import { deloadAdvice, deloadFrequency, maintainCount, maintainOften, deloadWeekActive, startDeloadWeek, endDeloadWeek, snoozeDeload } from '../core/deload.js';
 import { saveDraft, loadDraft, clearDraft } from '../data/draft.js';
-import { setClimbDay, climbsOn, recentHardClimb, hardClimbsRecent } from '../core/climbs.js';
+import { setClimbDay, climbsOn, hardClimbsRecent } from '../core/climbs.js';
+import { sessionBriefing } from '../core/briefing.js';
 import { esc, delegate, autoResize, flash, confirmTap } from './dom.js';
 import { createRestTimer } from './rest-timer.js';
 import { climbSwitch, climbChoice } from './climb-switch.js';
@@ -300,9 +301,26 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
       <button type="button" data-action="keep">Keep going</button></div>`);
   }
 
+  /** "Before you start": last time, climbing since, and tips that apply today. Hidden when there's nothing to say. */
+  function briefingCard() {
+    const b = sessionBriefing({ sessions: repo.sessions, climbs: repo.climbs, sessionNum: active.sessionNum, date: active.date });
+    const lines = [];
+    if (b.last) {
+      const how = b.last.total ? ` · ${b.last.hit} of ${b.last.total} hit target${b.last.short.length ? ` (short: ${esc(b.last.short.join(', '))})` : ''}` : '';
+      lines.push(`<div class="bf-line"><b>Last ${esc(b.label)}:</b> ${esc(formatShort(b.last.date))} · ${esc(agoText(b.last.date, active.date))}${how}</div>`);
+    }
+    if (b.climbs.hard || b.climbs.easy) {
+      lines.push(`<div class="bf-line"><b>Climbing since:</b> ${[b.climbs.hard && `${b.climbs.hard} hard`, b.climbs.easy && `${b.climbs.easy} easy`].filter(Boolean).join(', ')}</div>`);
+    }
+    if (!lines.length && !b.tips.length) return '';
+    return `<div class="card briefing" role="note">
+      <div class="bf-title">Before you start</div>${lines.join('')}
+      ${b.tips.map(t => `<div class="bf-tip">→ ${esc(t)}</div>`).join('')}
+    </div>`;
+  }
+
   function renderExercises() {
-    const climb = recentHardClimb(repo.climbs, active.date);
-    const nudge = climb ? `<div class="climb-nudge" role="note">🧗 Hard climb yesterday — if your back, biceps or grip feel beat up, tap <b>↓ Deload</b> on the pulling lifts.</div>` : '';
+    const nudge = briefingCard();
     ui.exercises.innerHTML = nudge + sessionExercises(active.sessionNum).map(exerciseCard).join('');
     ui.exercises.querySelectorAll('.note-input').forEach(autoResize);
     updateProgress();

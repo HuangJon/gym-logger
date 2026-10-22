@@ -307,7 +307,7 @@ try {
   await page.tap('#climb-area [data-intensity="hard"]'); await wait(150);
   await page.fill('#pick-date', '2026-05-07'); await page.dispatchEvent('#pick-date', 'change');
   await page.tap('#start-btn');
-  check('climbing: hard climb yesterday → nudge to deload pulling lifts', (await text('.climb-nudge')).includes('Hard climb yesterday'));
+  check('climbing: hard climb yesterday → nudge to deload pulling lifts', (await text('.briefing')).includes('Hard climb yesterday — Deadlift and Single Arm Cable Pulldown') && (await text('.briefing')).includes('Last Workout A'));
   await page.tap('#session-climb [data-intensity="easy"]'); await wait(150);
   check('climbing: log after lifting, from the workout', (await climbsSaved()) === '[["2026-05-06","hard"],["2026-05-07","easy"]]' && (await text('#session-climb')).includes('Climbing on Thu, May 7 too?'));
   await page.tap('#session-climb [data-intensity="none"]'); await wait(150);

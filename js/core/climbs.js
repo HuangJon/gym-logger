@@ -31,10 +31,16 @@ export function hardClimbsRecent(climbs, today, days = 14) {
   return new Set(climbs.filter(c => c.intensity === CLIMB.HARD && c.date <= today && daysBetween(c.date, today) < days).map(c => c.date)).size;
 }
 
-/** A hard climb the day before `date` — fatigue that likely carries into that day's lifting (you lift before climbing). */
-export function recentHardClimb(climbs, date) {
-  const yesterday = addDays(date, -1);
-  return climbs.find(c => c.intensity === CLIMB.HARD && c.date === yesterday) || null;
+/** Back, biceps and grip usually need ~48 h after hard climbing. */
+export const CLIMB_RECOVERY_DAYS = 2;
+
+/**
+ * The most recent hard climb in the CLIMB_RECOVERY_DAYS days before `date` (not the same day — you
+ * lift before climbing), or null.
+ */
+export function recentHardClimb(climbs, date, days = CLIMB_RECOVERY_DAYS) {
+  return climbs.filter(c => c.intensity === CLIMB.HARD && c.date < date && daysBetween(c.date, date) <= days)
+    .sort((a, b) => b.date.localeCompare(a.date))[0] || null;
 }
 
 export const climbsByNewest = (a, b) => String(b.date).localeCompare(String(a.date)) || (b.ts || 0) - (a.ts || 0);
