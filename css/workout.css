@@ -46,11 +46,7 @@
 .prehab-header h3 { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ph); flex: 1; }
 .prehab-header span { font-size: 11px; color: var(--fg2); }
 .prehab-pills { display: flex; flex-wrap: wrap; gap: 5px; padding: 9px 14px; }
-.prehab-pill {
-  font-size: 12px; font-weight: 500; padding: 6px 11px; min-height: 32px; border-radius: 20px; cursor: pointer; touch-action: manipulation;
-  background: var(--ph-pill); color: var(--ph); border: 1px solid transparent; font-family: var(--font);
-}
-.prehab-pill[aria-pressed="true"] { background: var(--ph); color: var(--ph-bg); font-weight: 700; }
+.prehab-pill { font-size: 11px; font-weight: 500; padding: 2px 9px; border-radius: 20px; background: var(--ph-pill); color: var(--ph); }
 
 /* ── exercise card ── */
 .ex-card { overflow: hidden; margin-bottom: 10px; }
@@ -248,11 +244,10 @@
   margin: -6px 0 14px; padding: 8px 14px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--border);
 }
 .climb-label { font-size: 13px; font-weight: 600; flex: 1; min-width: 140px; }
-.climb-btns { display: flex; gap: 8px; }
-.climb-btns .btn-small { min-height: 32px; min-width: 56px; }
-.climb-hard { border-color: var(--climb-line); color: var(--climb); }
-.climb-chip { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; background: var(--climb-bg); color: var(--climb); }
-.climb-chip.easy { background: var(--input-bg); color: var(--fg2); }
+.climb-seg button { font-size: 13px; padding: 6px 16px; min-height: 34px; touch-action: manipulation; }
+.climb-seg button[data-intensity="hard"][aria-pressed="true"] { background: var(--climb-line); color: #fff; }
+.climb-row.is-hard { border-color: var(--climb-line); background: var(--climb-bg); }
+#session-climb .climb-row { margin: 4px 0 12px; }
 .climb-recent { width: 100%; font-size: 11px; color: var(--fg2); }
 .climb-nudge { margin-bottom: 10px; padding: 10px 14px; border-radius: var(--radius); font-size: 12px; line-height: 1.45; background: var(--climb-bg); color: var(--climb); }
 .last-memo { width: 100%; padding-left: 52px; font-size: 11px; color: var(--fg); font-style: italic; }

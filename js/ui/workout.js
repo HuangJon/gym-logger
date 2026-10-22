@@ -12,7 +12,7 @@ import { addSession } from '../core/log.js';
 import { lastNote, canStepRepsDown, canStepRepsUp, lastPerformance, computeTarget, targetReason, missedStreak, MISSES_BEFORE_HINT, lighterWeight, stepWeight, stepReps, stepTarget, setBadge, exerciseVerdict } from '../core/progress.js';
 import { deloadAdvice, deloadFrequency, deloadWeekActive, startDeloadWeek, endDeloadWeek, snoozeDeload } from '../core/deload.js';
 import { saveDraft, loadDraft, clearDraft } from '../data/draft.js';
-import { CLIMB, addClimb, removeClimb, climbsOn, recentHardClimb, hardClimbsRecent } from '../core/climbs.js';
+import { CLIMB, setClimbDay, climbsOn, recentHardClimb, hardClimbsRecent } from '../core/climbs.js';
 import { esc, delegate, autoResize, flash, confirmTap } from './dom.js';
 import { createRestTimer } from './rest-timer.js';
 
@@ -25,7 +25,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     pickDate: $('#pick-date'), pickSession: $('#pick-session'), startBtn: $('#start-btn'),
     preview: $('#session-preview-area'), hint: $('#picker-hint'),
     header: $('#session-header'), prehab: $('#prehab'), exercises: $('#exercise-area'),
-    completeBtn: $('#complete-btn'), status: $('#status'), deloadArea: $('#deload-area'), climbArea: $('#climb-area'),
+    completeBtn: $('#complete-btn'), status: $('#status'), deloadArea: $('#deload-area'), climbArea: $('#climb-area'), sessionClimb: $('#session-climb'),
   };
 
   let active = null;   // { sessionNum, date, deload } while logging
@@ -35,7 +35,6 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
    *   draft?: {weight?, reps} for the open set, target?: your edited target, targetOpen? }
    */
   let scratch = {};
-  let prehabDone = new Set();   // prehab exercises ticked off this session
   let saving = false;
 
   const stateOf = id => (scratch[id] ||= { done: [] });
@@ -49,7 +48,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   const targetFor = ex => scratch[ex.id]?.target ?? suggestedTarget(ex);
 
   const rest = createRestTimer({ el: $('#rest-bar'), onChange: () => persist() });
-  const persist = () => { if (active) saveDraft(storage, { active, scratch, prehab: [...prehabDone], rest: rest.snapshot() }); };
+  const persist = () => { if (active) saveDraft(storage, { active, scratch, rest: rest.snapshot() }); };
 
   /** Index of the open set: one you tapped to edit, else the next set to log, else null (all logged). */
   function openIndex(ex) {
@@ -88,27 +87,29 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     renderPreview();
   }
 
-  /** Log a climbing day (easy / hard) for the picked date. */
-  function renderClimbArea() {
-    const date = pickedDate(), logged = climbsOn(repo.climbs, date);
+  /**
+   * Easy | Hard switch for a climbing day: tap one to log it, the other to change it, the same one
+   * again to clear it. Shown under the picker (any date) and at the end of a workout (you climb after).
+   */
+  function climbRow(date, { after = false } = {}) {
+    const current = climbsOn(repo.climbs, date)[0]?.intensity ?? null;
     const hard = hardClimbsRecent(repo.climbs, date);
-    const loggedText = logged.map(c => `<span class="climb-chip ${c.intensity}">${c.intensity === CLIMB.HARD ? 'Hard' : 'Easy'} climb</span>
-      <button type="button" class="link-btn" data-action="climb-undo" data-id="${esc(c.id)}">undo</button>`).join(' ');
-    ui.climbArea.innerHTML = `<div class="climb-row">
-        <span class="climb-label">🧗 Climbed ${date === todayISO() ? 'today' : `on ${esc(formatShort(date))}`}?</span>
-        ${logged.length ? loggedText : `<span class="climb-btns">
-          <button type="button" class="btn-small" data-action="climb-log" data-intensity="easy">Easy</button>
-          <button type="button" class="btn-small climb-hard" data-action="climb-log" data-intensity="hard">Hard</button></span>`}
+    const when = date === todayISO() ? 'today' : `on ${esc(formatShort(date))}`;
+    const btn = (value, label) => `<button type="button" data-action="climb-set" data-date="${date}" data-intensity="${value}" aria-pressed="${current === value}">${label}</button>`;
+    return `<div class="climb-row${current ? ` is-${current}` : ''}">
+        <span class="climb-label">🧗 ${after ? `Climbing ${when} too?` : `Climbed ${when}?`}</span>
+        <div class="seg climb-seg" role="group" aria-label="Climbing ${when}">${btn(CLIMB.EASY, 'Easy')}${btn(CLIMB.HARD, 'Hard')}</div>
         ${hard ? `<span class="climb-recent">${hard} hard climbing day${hard === 1 ? '' : 's'} in the last 2 weeks</span>` : ''}
       </div>`;
   }
 
-  async function logClimb(intensity) {
-    try { await repo.commitClimbs(addClimb(repo.climbs, { date: pickedDate(), intensity })); }
-    catch (err) { flash(ui.hint, `Couldn't save: ${err.message}`, { error: true, ms: 0 }); }
-  }
-  async function undoClimb(id) {
-    try { await repo.commitClimbs(removeClimb(repo.climbs, id)); } catch { /* the chip stays */ }
+  function renderClimbArea() { ui.climbArea.innerHTML = climbRow(pickedDate()); }
+  function renderSessionClimb() { ui.sessionClimb.innerHTML = active ? climbRow(active.date, { after: true }) : ''; }
+
+  async function setClimb(date, intensity) {
+    const current = climbsOn(repo.climbs, date)[0]?.intensity ?? null;
+    try { await repo.commitClimbs(setClimbDay(repo.climbs, date, current === intensity ? null : intensity)); }
+    catch (err) { flash(active ? ui.status : ui.hint, `Couldn't save: ${err.message}`, { error: true, ms: 0 }); }
   }
 
   /** Deload switch, deload week, and the "consider a deload" suggestion. */
@@ -168,7 +169,6 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     if (!n) return;
     active = { sessionNum: n, date: pickedDate(), deload: deloadPicked() };
     scratch = {};
-    prehabDone = new Set();
     showSession();
     persist();
   }
@@ -178,15 +178,14 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     ui.sessionPanel.hidden = false;
     flash(ui.status, '', { ms: 0 });
     renderHeader();
-    renderPrehab();
     renderExercises();
+    renderSessionClimb();
   }
 
   /** Back to the picker; the workout in progress is gone (saved to the log first, or discarded). */
   function endSession() {
     active = null;
     scratch = {};
-    prehabDone = new Set();
     rest.stop();
     clearDraft(storage);
     ui.sessionPanel.hidden = true;
@@ -194,7 +193,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     resetPicker();
   }
 
-  const loggedAnything = () => prehabDone.size > 0 || sessionExercises(active.sessionNum).some(ex => scratch[ex.id]?.done?.length || scratch[ex.id]?.skipped || scratch[ex.id]?.note);
+  const loggedAnything = () => sessionExercises(active.sessionNum).some(ex => scratch[ex.id]?.done?.length || scratch[ex.id]?.skipped || scratch[ex.id]?.note);
 
   /** Pick up a workout that was in progress when the app closed. */
   function resumeDraft() {
@@ -202,7 +201,6 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     if (!draft) return false;
     active = draft.active;
     scratch = draft.scratch;
-    prehabDone = new Set(draft.prehab);
     showSession();
     if (draft.rest) rest.resume(draft.rest, findExercise(draft.rest.exId)?.name);
     if (loggedAnything()) {
@@ -237,7 +235,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
 
   function renderExercises() {
     const climb = recentHardClimb(repo.climbs, active.date);
-    const nudge = climb ? `<div class="climb-nudge" role="note">🧗 Hard climb ${climb.date === active.date ? 'today' : 'yesterday'} — if your back, biceps or grip feel beat up, tap <b>↓ Deload this lift</b> on the pulling lifts.</div>` : '';
+    const nudge = climb ? `<div class="climb-nudge" role="note">🧗 Hard climb yesterday — if your back, biceps or grip feel beat up, tap <b>↓ Deload this lift</b> on the pulling lifts.</div>` : '';
     ui.exercises.innerHTML = nudge + sessionExercises(active.sessionNum).map(exerciseCard).join('');
     ui.exercises.querySelectorAll('.note-input').forEach(autoResize);
   }
@@ -602,7 +600,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     btn.disabled = true;
     btn.textContent = 'Saving…';
     try {
-      const record = buildSessionRecord({ sessionNum: active.sessionNum, date: active.date, scratch, targetOf: ex => targetFor(ex), deload: active.deload, prehab: PREHAB.exercises.filter(x => prehabDone.has(x)) });
+      const record = buildSessionRecord({ sessionNum: active.sessionNum, date: active.date, scratch, targetOf: ex => targetFor(ex), deload: active.deload });
       await repo.commit(addSession(repo.sessions, record));
       endSession();
       flash(ui.status, 'Session saved ✓');
@@ -618,19 +616,9 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   }
 
   // ── wiring ──────────────────────────────────────────────
-  /** Prehab: tap each one off as you do it (saved with the session). */
-  function renderPrehab() {
-    const done = PREHAB.exercises.filter(x => prehabDone.has(x)).length;
-    ui.prehab.innerHTML = `
-      <div class="prehab-header"><span class="dot" style="background:var(--ph)"></span><h3>${esc(PREHAB.title)}</h3><span>${esc(PREHAB.sets)} · ${done}/${PREHAB.exercises.length}</span></div>
-      <div class="prehab-pills">${PREHAB.exercises.map(x => `<button type="button" class="prehab-pill" data-action="prehab" data-name="${esc(x)}" aria-pressed="${prehabDone.has(x)}">${prehabDone.has(x) ? '✓ ' : ''}${esc(x)}</button>`).join('')}</div>`;
-  }
-  function togglePrehab(name) {
-    if (!PREHAB.exercises.includes(name)) return;
-    if (prehabDone.has(name)) prehabDone.delete(name); else prehabDone.add(name);
-    persist();
-    renderPrehab();
-  }
+  ui.prehab.innerHTML = `
+    <div class="prehab-header"><span class="dot" style="background:var(--ph)"></span><h3>${esc(PREHAB.title)}</h3><span>${esc(PREHAB.sets)}</span></div>
+    <div class="prehab-pills">${PREHAB.exercises.map(x => `<span class="prehab-pill">${esc(x)}</span>`).join('')}</div>`;
 
   const exIdOf = el => el.closest('[data-ex]').dataset.ex;
   delegate(root, 'click', {
@@ -656,9 +644,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     'rest-toggle': toggleRestTimer,
     'unit': el => setUnit(exIdOf(el), el.dataset.unit),
     'lift-deload': el => toggleLiftDeload(exIdOf(el)),
-    'prehab': el => togglePrehab(el.dataset.name),
-    'climb-log': el => logClimb(el.dataset.intensity),
-    'climb-undo': el => undoClimb(el.dataset.id),
+    'climb-set': el => setClimb(el.dataset.date, el.dataset.intensity),
     'rest-adjust': el => rest.adjust(Number(el.dataset.dir)),
     'rest-stop': () => rest.stop(),
     'deload-week': () => changeDeloadWeek(startDeloadWeek(pickedDate())),
@@ -685,6 +671,6 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
 
   return {
     /** Re-render anything that depends on the saved log (called after History edits). */
-    refresh() { if (active) renderExercises(); else renderPicker(); },
+    refresh() { if (active) { renderExercises(); renderSessionClimb(); } else renderPicker(); },
   };
 }

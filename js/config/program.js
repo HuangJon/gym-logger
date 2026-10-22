@@ -35,14 +35,14 @@ export const SESSIONS = {
     { id: 's2-rows',      name: 'Bent Over Rows',       detail: '2×6–12',         reps: [6, 12], defaultWeight: 35 },
     { id: 's2-lateral',   name: 'Cable Lateral Raises', detail: '2×8–15',         reps: [8, 15],  defaultWeight: 5, tag: 'circuit' },
     { id: 's2-pallof',    name: 'Pallof Press',         detail: '2×5 × 5s holds', reps: [5, 5], defaultWeight: 20, unit: 'kg', tag: 'circuit' },
-    { id: 's2-legraiser', name: 'Hanging Leg Raises',   detail: '2×8–12',         reps: [8, 12], bw: true },
+    { id: 's2-legraiser', name: 'Hanging Leg Raises',   detail: '2×8–12',         reps: [8, 12], bw: true, tag: 'circuit' },
   ],
   3: [
     { id: 's3-incline',  name: 'Incline DB Press',       detail: '2×6–12',                   reps: [6, 12],  defaultWeight: 50 },
     { id: 's3-bss',      name: 'Bulgarian Split Squats', detail: '2×5–10',                   reps: [5, 10],   defaultWeight: 15 },
     { id: 's3-lateral',  name: 'Cable Lateral Raises',   detail: '2×8–15',                   reps: [8, 15],  defaultWeight: 5, tag: 'circuit' },
     { id: 's3-crunches', name: 'Cable Crunches',         detail: '2×10–15',                  reps: [10, 15], defaultWeight: 45, unit: 'kg', tag: 'circuit' },
-    { id: 's3-abwheel',  name: 'Ab Wheel',               detail: '2×8–10 · if feeling good', reps: [8, 10],  bw: true },
+    { id: 's3-abwheel',  name: 'Ab Wheel',               detail: '2×8–10 · if feeling good', reps: [8, 10],  bw: true, tag: 'circuit' },
   ],
 };
 

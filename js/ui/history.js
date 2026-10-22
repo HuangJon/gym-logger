@@ -1,5 +1,5 @@
 /** History tab: backup card, saved sessions and climbing days, inline editing, date change, delete. */
-import { SESSION_LABELS, SESSION_COLORS, PREHAB } from '../config/program.js';
+import { SESSION_LABELS, SESSION_COLORS } from '../config/program.js';
 import { exercisesForSession, findExercise, unitOf, repRangeText, setsOf } from '../core/exercises.js';
 import { todayISO, formatLong, agoText } from '../core/dates.js';
 import { hasValue, parseWeight, parseReps } from '../core/numbers.js';
@@ -48,7 +48,6 @@ export function createHistoryView({ root, repo, storage, settings, onSettingsImp
         </div>
         <div class="history-body"${open ? '' : ' hidden'}>
           ${s.note ? `<div class="session-note">↳ ${esc(s.note)}</div>` : ''}
-          ${s.prehab?.length ? `<div class="session-note">Prehab ${s.prehab.length}/${PREHAB.exercises.length}: ${esc(s.prehab.join(', '))}</div>` : ''}
           ${exercises.map(ex => exerciseRow(s, ex)).join('')}
           <div class="entry-date-row">
             <span class="hedit-label">Date</span>
