@@ -123,3 +123,12 @@ test('pick one: how often crunches vs ab wheel vs both', () => {
   assert.deepEqual(pickOneUsage(log, 'core'), { names: ['Cable Crunches', 'Ab Wheel'], counts: { 'Cable Crunches': 1, 'Ab Wheel': 1 }, both: 1, total: 3, session: 3 });
   assert.equal(pickOneUsage([], 'core'), null);
 });
+
+test('progress: change window follows the chosen range (All = since the first session)', () => {
+  const s = (date, w, r) => session(date, 1, { 's1-deadlift': done(w, r) });
+  const log = [s('2026-01-10', 150, 5), s('2026-08-20', 185, 5), s('2026-10-15', 195, 6)];
+  const pick = days => liftProgress(log, '2026-10-22', { trendDays: days }).lifts.find(l => l.name === 'Deadlift').trend;
+  assert.equal(pick(56).since, '2026-08-20');
+  assert.equal(pick(Infinity).since, '2026-01-10');
+  assert.equal(pick(Infinity).pct, 34);   // 175 → 234
+});

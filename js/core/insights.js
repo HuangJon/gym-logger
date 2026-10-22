@@ -115,10 +115,11 @@ function topOf(p, weighted) {
  * the window start (or your first, if you're newer than that — `short`).
  * Weighted lifts: % change in estimated 1RM. Bodyweight: change in reps.
  */
-function strengthTrend(points, weighted, today) {
+function strengthTrend(points, weighted, today, days = PROGRESS.trendDays) {
   const usable = points.map(p => ({ date: p.date, v: strengthOf(p, weighted) })).filter(x => x.v !== null);
   if (usable.length < 2) return null;
-  const last = usable[usable.length - 1], start = addDays(last.date < today ? last.date : today, -PROGRESS.trendDays);   // a lift you haven't done lately: its last 8 weeks
+  const last = usable[usable.length - 1];
+  const start = Number.isFinite(days) ? addDays(last.date < today ? last.date : today, -days) : '';   // a lift you haven't done lately: up to its last session; All → since your first
   let base = null;
   for (const x of usable) if (x.date <= start) base = x;
   const short = !base;
@@ -135,14 +136,14 @@ function strengthTrend(points, weighted, today) {
  * sessions don't count as "no progress" (holding steady was the plan).
  *   status: 'new' (fewer than 2 sessions) | 'progressing' | 'holding' | 'stalled' | 'idle' (not done in 3+ weeks)
  *           | 'top' (a bodyweight lift at the top of its rep range — time for a harder variation)
- *   strength: latest est. 1RM (weighted) or reps (bodyweight); trend: change over PROGRESS.trendDays;
+ *   strength: latest est. 1RM (weighted) or reps (bodyweight); trend: change over `trendDays` (Infinity = since the first);
  *   startNow: first → latest top weight / reps; spark: recent strength values; workouts: session numbers.
  * Lifts come sorted "needs attention first" (stalled, top of range, holding, progressing, new, idle).
  * PRs: weight PRs, and rep PRs of +PROGRESS.repPrStep or reaching the top of the range; `recentPrs`
  * keeps only the last PROGRESS.prRecentDays.
  * @returns {{ lifts: object[], prs: object[], recentPrs: object[] }}
  */
-export function liftProgress(sessions, today, { stallSessions = 4, idleDays = 21 } = {}) {
+export function liftProgress(sessions, today, { stallSessions = 4, idleDays = 21, trendDays = PROGRESS.trendDays } = {}) {
   const lifts = [], prs = [];
   for (const series of liftSeries(sessions)) {
     if (series.retired) continue;
@@ -191,7 +192,7 @@ export function liftProgress(sessions, today, { stallSessions = 4, idleDays = 21
       name: series.name, unit: series.unit, weighted, best, lastProgress, sinceProgress, lastDate: last.date, status, sessions: points.length,
       workouts: [...series.sessions].sort(),
       strength: [...points].reverse().map(p => strengthOf(p, weighted)).find(v => v !== null) ?? null,   // latest session with reps recorded
-      trend: strengthTrend(points, weighted, today),
+      trend: strengthTrend(points, weighted, today, trendDays),
       startNow: points.length > 1 && firstTop !== null && lastTop !== null ? { from: firstTop, to: lastTop, since: first.date } : null,
       spark: points.slice(-PROGRESS.sparkPoints).map(p => strengthOf(p, weighted)).filter(v => v !== null),
     });
