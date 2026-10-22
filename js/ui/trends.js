@@ -83,7 +83,7 @@ export function createTrendsView({ root, repo }) {
       return '<div class="trend-explain"><b>Strength</b> = estimated 1-rep max, weight × (1 + reps ÷ 30). A single number that goes up when you add reps <i>or</i> weight — useful for comparing across rep ranges, but it’s an estimate, not a lift you did. Hollow dot = partial.</div>';
     }
     return `<div class="trend-explain">The line is your working weight; the number on each dot is the reps you hit.
-      <span class="zone-legend"><span class="zone-top">● top of range: add weight</span><span class="zone-mid">● in range: keep going</span><span class="zone-low">● below range</span><span>○ partial</span></span></div>`;
+      <span class="zone-legend"><span class="zone-top">● top of range: add weight</span><span class="zone-mid">● in range: keep going</span><span class="zone-low">● below range</span><span>○ partial</span><span class="zone-deload">○ deload</span></span></div>`;
   }
 
   // ── one card per lift ───────────────────────────────────
@@ -137,7 +137,7 @@ export function createTrendsView({ root, repo }) {
     const { points, by } = groupPoints(shown, mode, grouping);
     const target = series.reps ? ` · target ${repRangeText(series.reps)}` : '';
     const tip = p => `${formatShort(p.date)}: ${p.sets?.length ? formatSets(p.sets, weighted ? (p.unit || unit) : '') : [hasValue(p.weight) && `${p.weight} ${p.unit || unit}`, hasValue(p.reps) && `${p.reps} reps`].filter(Boolean).join(' × ')}` +
-      `${mode === 'e1rm' && p.e1rm ? ` → est. 1RM ${p.e1rm}` : ''}${p.status === STATUS.PARTIAL ? ' (partial)' : ''}${p.n > 1 ? ` — best of ${p.n} sessions, ${p.bucketLabel}` : ''}`;
+      `${mode === 'e1rm' && p.e1rm ? ` → est. 1RM ${p.e1rm}` : ''}${p.status === STATUS.PARTIAL ? ' (partial)' : ''}${p.deload ? ' (deload)' : ''}${p.n > 1 ? ` — best of ${p.n} sessions, ${p.bucketLabel}` : ''}`;
     const zone = p => repZone(p.reps, series.reps);
 
     let legend, svg;
@@ -160,8 +160,8 @@ export function createTrendsView({ root, repo }) {
     if (!recent.length) return '';
     return `<div class="recent"><span class="recent-lbl">Recent →</span>${recent.map((p, i) => {
       const value = weighted ? `${round2(p.weight)}${hasValue(p.reps) ? `×${p.reps}` : ''}` : `${p.reps} reps`;
-      const cls = ['rc', `zone-${repZone(p.reps, series.reps)}`, p.status === STATUS.PARTIAL && 'partial', i === recent.length - 1 && 'latest'].filter(Boolean).join(' ');
-      return `<span class="${cls}" title="${esc(formatShort(p.date))}${p.status === STATUS.PARTIAL ? ' (partial)' : ''}"><i>${formatMonthDay(p.date)}</i>${value}</span>`;
+      const cls = ['rc', `zone-${repZone(p.reps, series.reps)}`, p.status === STATUS.PARTIAL && 'partial', p.deload && 'deload', i === recent.length - 1 && 'latest'].filter(Boolean).join(' ');
+      return `<span class="${cls}" title="${esc(formatShort(p.date))}${p.status === STATUS.PARTIAL ? ' (partial)' : ''}${p.deload ? ' (deload)' : ''}"><i>${formatMonthDay(p.date)}</i>${value}</span>`;
     }).join('')}</div>`;
   }
 

@@ -15,6 +15,9 @@ export function createLocalStorage(prefix = 'liftlog:', backend = globalThis.loc
     write(key, value) {
       backend.setItem(prefix + key, JSON.stringify(value));
     },
+    remove(key) {
+      try { backend.removeItem(prefix + key); } catch { /* blocked storage */ }
+    },
   };
 }
 
@@ -24,6 +27,7 @@ export function createMemoryStorage(initial = {}) {
   return {
     read: key => (data.has(key) ? JSON.parse(data.get(key)) : null),
     write: (key, value) => { data.set(key, JSON.stringify(value)); },
+    remove: key => { data.delete(key); },
     dump: () => Object.fromEntries([...data].map(([k, v]) => [k, JSON.parse(v)])),
   };
 }

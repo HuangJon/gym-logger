@@ -15,6 +15,14 @@ export function setSessionDate(sessions, sessionId, date) {
   return sessions.map(s => s.id === sessionId ? { ...s, date } : s);
 }
 
+/** Mark or unmark a session as a deload (deloads don't move progression). */
+export const setSessionDeload = (sessions, sessionId, deload) =>
+  sessions.map(s => {
+    if (s.id !== sessionId) return s;
+    const { deload: _old, ...rest } = s;
+    return deload ? { ...rest, deload: true } : rest;
+  });
+
 export const deleteSession = (sessions, sessionId) => sessions.filter(s => s.id !== sessionId);
 
 /** Merge imported sessions: same id replaces, new ids are added. */

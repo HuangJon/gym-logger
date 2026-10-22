@@ -177,3 +177,50 @@
 /* Done / Skip on exercise cards: same thumb-sized targets as the steppers */
 .ex-card .status-row { gap: 8px; }
 .ex-card .status-btn { min-height: 36px; padding: 6px 18px; font-size: 13px; touch-action: manipulation; }
+
+/* ── deload ── */
+.deload-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+  margin: -6px 0 14px; padding: 8px 14px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--border);
+}
+.deload-row.is-on { border-color: var(--deload-line); background: var(--deload-bg); }
+.deload-week { font-size: 11px; color: var(--fg2); }
+.deload-week-on { font-weight: 600; color: var(--deload); }
+.deload-suggest { padding: 12px 14px; margin-bottom: 14px; border-left: 3px solid var(--deload-line); display: flex; flex-direction: column; gap: 4px; }
+.ds-title { font-size: 13px; font-weight: 700; color: var(--deload); }
+.ds-why { font-size: 12px; color: var(--fg); }
+.ds-how { font-size: 11px; color: var(--fg2); }
+.ds-actions { display: flex; align-items: center; gap: 14px; margin-top: 6px; }
+.last-note { font-size: 10px; font-weight: 600; color: var(--deload); width: 100%; padding-left: 52px; }
+
+/* ── session tools: rest timer toggle ── */
+.session-tools { width: 100%; display: flex; gap: 8px; }
+.rest-toggle {
+  font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 20px; cursor: pointer; touch-action: manipulation;
+  border: 1px solid var(--input-border); background: var(--input-bg); color: var(--fg2);
+}
+.rest-toggle[aria-pressed="true"] { border-color: var(--fg); color: var(--fg); }
+
+/* ── rest timer bar (fixed above the bottom edge) ── */
+#session-panel:has(.rest-bar:not([hidden])) { padding-bottom: 72px; }
+.rest-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; overflow: hidden;
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px max(14px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px));
+  background: var(--fg); color: var(--bg); box-shadow: 0 -4px 16px rgba(0, 0, 0, .18);
+}
+.rest-bar.is-done { background: var(--good-line); color: #fff; }
+.rest-progress { position: absolute; left: 0; top: 0; height: 3px; background: var(--deload-line); transition: width .25s linear; }
+.rest-label { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rest-clock { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.rest-btn {
+  min-width: 40px; height: 34px; padding: 0 8px; border-radius: 8px; border: 1px solid currentColor; background: none; color: inherit;
+  font-size: 12px; font-weight: 700; cursor: pointer; touch-action: manipulation; opacity: .9;
+}
+
+/* ── discard (below Complete) ── */
+.discard-btn {
+  display: block; margin: 0 auto 24px; padding: 8px 16px; background: none; border: 1px solid var(--border); border-radius: 8px;
+  color: var(--fg2); font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.discard-btn.btn-confirm { border-color: var(--danger); color: var(--danger); }

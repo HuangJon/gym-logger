@@ -3,6 +3,9 @@
 A gym lifting log for a 3-session program with **double progression** (hit the top of the rep range → add weight → drop back to the bottom). It installs to your phone's home screen, works offline, and keeps your data on your device.
 
 - **Workout** — pick a date and session; each exercise shows today's **target** (weight × reps × sets — tap it to adjust) and what you did last time. Log **one set at a time**: weight and reps start at the target, adjust with − / +, tap **Log set**. The set collapses into a ✓ tab and the next one opens pre-filled with what you just did. Tap a ✓ tab to fix a set, **+** to add one, or **Skip** the exercise.
+- **Unfinished workouts are kept** — what you've logged is saved as you go, so closing the app mid-workout loses nothing; reopen and carry on. **Discard workout** (two taps) throws it away.
+- **Rest timer** (optional, off by default) — turn it on in the session header; after each logged set a countdown runs at the bottom (90 s, deadlift 150 s; −15 / +15 / ✕). It beeps and vibrates where the phone allows — only while the app is open.
+- **Deloads** — flip **Deload session** before starting, or **Deload week…** to keep it on for 7 days. The app also suggests a deload week when you've trained a while without a break (see below). Deload sessions are tagged in History (where you can also mark or unmark one) and shown as hollow teal dots in Trends.
 - **History** — every session, editable after the fact (status, weight, reps, notes, date), plus **Export / Import** backups.
 - **Trends** — sessions per week, and for each lift: weight over time with reps on every dot, change over 1 month / 3 months / 1 year, and your last six sessions.
 
@@ -13,6 +16,17 @@ A gym lifting log for a 3-session program with **double progression** (hit the t
 - Every set at the top of the range → add the increment from `INCREMENTS`, back to the bottom of the range.
 - Missed the target (partial) → **the same target again**. No increase until you hit it.
 - Below the range last time → same weight, aim for the bottom of the range (or go lighter).
+- **Back after a break** (more than 14 days since you last did the lift) → ~10% lighter, bottom of the range.
+- **Deload** → ~10% lighter than last time, bottom of the range, half the sets (rounded up); stop 2–3 reps short of failure. Deload sessions **don't count toward progression** — the next normal session builds on the last session before the deload.
+
+### When a deload is suggested
+
+Common guidance is a deload every 4–8 weeks, lasting about a week. Because climbing adds fatigue, the app sits on the earlier side and suggests a deload week when either:
+
+- **6+ weeks** of training without a break, or
+- **4+ weeks** and **2+ lifts missed their target in their last 2 sessions** (stalling).
+
+A gap of 7+ days or a deload resets the count. "Not now" hides the suggestion for a week. All of these numbers are in `DELOAD` in `config/program.js`.
 
 Only logged sets are saved. An exercise is **complete** when its logged sets meet the target (enough sets, each at least the target weight and reps), otherwise **partial**; with no sets logged it's "not recorded". Each set keeps its own weight, so drop sets are recorded as they happened. History shows what you did next to the target.
 
@@ -82,12 +96,15 @@ js/
     migrate.js          reads any saved or exported format → current schema
     progress.js         last time, today's target, − / + steps, the live badge
     trends.js           series, grouping, change over time, weekly counts
+    deload.js           when to suggest a deload, deload week on/off
   data/
     storage.js          localStorage wrapper (+ in-memory version for tests)
     repository.js       the one place the log is saved: save-then-update, local copies, read-only guard
     backup.js           export / import files, backup reminder
+    draft.js            the workout in progress (saved on every change, cleared on complete/discard)
+    settings.js         per-device preferences (rest timer, deload week) — not in backups
   ui/                   one module per screen, plus shared helpers
-    dom.js  charts.js  tabs.js  workout.js  history.js  trends.js
+    dom.js  charts.js  tabs.js  workout.js  history.js  trends.js  rest-timer.js
   dev/demo.js           sample data for the Trends preview (never saved)
 tests/
   unit/                 logic tests

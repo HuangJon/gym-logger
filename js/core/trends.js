@@ -20,7 +20,7 @@ export function liftSeries(sessions) {
     for (const ex of exercisesForSession(record)) {
       const e = normalizeEntry(record.entries?.[ex.id]);
       if (!DID_IT.has(e.status) || (!hasValue(e.weight) && !hasValue(e.reps))) continue;
-      const point = { date: record.date, ts: record.ts || 0, weight: e.weight, reps: e.reps, sets: e.sets, unit: e.unit, status: e.status, session: record.session };
+      const point = { date: record.date, ts: record.ts || 0, weight: e.weight, reps: e.reps, sets: e.sets, unit: e.unit, status: e.status, session: record.session, ...(record.deload ? { deload: true } : {}) };
       if (hasValue(e.weight) && hasValue(e.reps)) point.e1rm = estimateOneRepMax(e.weight, e.reps);
       byName.get(ex.name).points.push(point);
     }

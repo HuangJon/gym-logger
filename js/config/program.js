@@ -10,6 +10,7 @@
  *   defaultWeight  starting weight before anything is logged (optional)
  *   unit           'lbs' (default) or 'kg'
  *   bw             true for bodyweight exercises (no weight box)
+ *   rest           seconds of rest between sets for the rest timer (defaults to DEFAULT_REST_SECONDS)
  *   tag / warn     optional small labels on the card
  *
  * Removing an exercise from the program? Move it to RETIRED so old logs still show up.
@@ -24,7 +25,7 @@ export const PREHAB = {
 export const SESSIONS = {
   1: [
     { id: 's1-incline',  name: 'Incline DB Press',          detail: '2×6–12',               reps: [6, 12],  defaultWeight: 50 },
-    { id: 's1-deadlift', name: 'Deadlift',                  detail: '2×5–8 · 2–3 min rest', reps: [5, 8],   defaultWeight: 185 },
+    { id: 's1-deadlift', name: 'Deadlift',                  detail: '2×5–8 · 2–3 min rest', reps: [5, 8],   defaultWeight: 185, rest: 150 },
     { id: 's1-lateral',  name: 'Cable Lateral Raises',      detail: '2×12–15',              reps: [12, 15], defaultWeight: 5, tag: 'circuit' },
     { id: 's1-crunches', name: 'Cable Crunches',            detail: '2×10–15',              reps: [10, 15], unit: 'kg', tag: 'circuit' },
     { id: 's1-pulldown', name: 'Single Arm Cable Pulldown', detail: '2×8–12',               reps: [8, 12] },
@@ -68,3 +69,22 @@ export const SESSION_COLORS = { 1: 'var(--s1)', 2: 'var(--s2)', 3: 'var(--s3)' }
 export const STALE_AFTER_DAYS = 14;
 /** Target sessions per week (dashed line on the weekly chart). */
 export const WEEKLY_GOAL = 3;
+
+/** Rest timer: seconds between sets unless an exercise sets its own `rest`. The timer is off until you turn it on. */
+export const DEFAULT_REST_SECONDS = 90;
+
+/** Coming back after this many days without doing a lift → its target is eased back. */
+export const EASE_BACK_FACTOR = 0.9;   // ~10% lighter, bottom of the rep range
+
+/** Deload: lighter weight, fewer sets, easy reps. Deload sessions don't count toward progression. */
+export const DELOAD = {
+  weightFactor: 0.9,        // ~10% lighter, rounded to the lift's step
+  setsFactor: 0.5,          // half the sets, rounded up
+  weekDays: 7,              // "Deload week" covers this many days
+  breakDays: 7,             // a gap this long between sessions counts as a break (resets the count)
+  // Usual guidance is a deload every 4–8 weeks; this sits on the earlier side because climbing adds fatigue.
+  suggestAfterWeeks: 4,     // suggest a deload after this many weeks without a break if lifts are stalling…
+  stalledLifts: 2,          // …this many lifts missed target in their last 2 sessions
+  alwaysAfterWeeks: 6,      // …or after this many weeks regardless
+  snoozeDays: 7,            // "Not now" hides the suggestion this long
+};

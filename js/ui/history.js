@@ -4,7 +4,7 @@ import { exercisesForSession, findExercise, unitOf, repRangeText, setsOf } from 
 import { todayISO, formatLong, agoText } from '../core/dates.js';
 import { hasValue, parseWeight, parseReps } from '../core/numbers.js';
 import { STATUS, normalizeEntry, statusCounts, byNewest, setsOfEntry, meetsTarget, formatSets } from '../core/records.js';
-import { updateEntry, setSessionDate, deleteSession, mergeSessions } from '../core/log.js';
+import { updateEntry, setSessionDate, setSessionDeload, deleteSession, mergeSessions } from '../core/log.js';
 import { createBackup, parseBackup, backupStatus, markBackedUp, deliverFile } from '../data/backup.js';
 import { esc, delegate, autoResize, confirmTap, flash } from './dom.js';
 
@@ -37,7 +37,7 @@ export function createHistoryView({ root, repo, storage }) {
     return `
       <div class="card history-entry" data-session="${esc(s.id)}">
         <div class="history-hdr" data-action="toggle" aria-expanded="${open}">
-          <span class="history-title">${formatLong(s.date)} ${s.program === 'old' ? '<span class="pill-muted">old program</span>' : ''}</span>
+          <span class="history-title">${formatLong(s.date)} ${s.program === 'old' ? '<span class="pill-muted">old program</span>' : ''}${s.deload ? '<span class="deload-tag">deload</span>' : ''}</span>
           <span class="history-meta"><span class="history-dot" style="background:${SESSION_COLORS[s.session]}"></span>
             <b style="color:${SESSION_COLORS[s.session]}">${SESSION_LABELS[s.session]}</b> · ${counts.complete + counts.partial}/${exercises.length} done</span>
           <span class="history-chevron">▾</span>
@@ -49,6 +49,11 @@ export function createHistoryView({ root, repo, storage }) {
             <span class="hedit-label">Date</span>
             <input type="date" class="date-input entry-date" value="${s.date}" data-action="entry-date" aria-label="Session date">
             <span class="entry-date-msg"></span>
+          </div>
+          <div class="entry-date-row">
+            <span class="hedit-label">Deload</span>
+            <label class="switch"><input type="checkbox" class="entry-deload" data-action="entry-deload"${s.deload ? ' checked' : ''}><span class="switch-track" aria-hidden="true"></span>
+              <span class="switch-label entry-deload-text">${s.deload ? 'yes — not counted for progression' : 'no'}</span></label>
           </div>
           <button type="button" class="delete-entry" data-action="delete">Delete this entry</button>
         </div>
@@ -202,6 +207,15 @@ export function createHistoryView({ root, repo, storage }) {
     }
   }
 
+  async function changeDeload(input) {
+    try {
+      await repo.commit(setSessionDeload(repo.sessions, sessionIdOf(input), input.checked));
+    } catch {
+      input.checked = !input.checked;
+      input.closest('.entry-date-row').querySelector('.entry-deload-text').textContent = 'Save failed';
+    }
+  }
+
   async function remove(btn) {
     if (!confirmTap(btn, 'Tap again to confirm delete')) return;
     const id = sessionIdOf(btn);
@@ -250,7 +264,7 @@ export function createHistoryView({ root, repo, storage }) {
     'restore': restore,
   });
   delegate(root, 'input', { 'autosize': autoResize });
-  delegate(root, 'change', { 'entry-date': changeDate, 'import': importBackup });
+  delegate(root, 'change', { 'entry-date': changeDate, 'entry-deload': changeDeload, 'import': importBackup });
 
   return {
     render,

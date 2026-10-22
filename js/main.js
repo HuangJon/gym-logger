@@ -1,6 +1,7 @@
 /** App entry point: wires storage, the saved log and the three screens together. */
 import { createLocalStorage, requestPersistentStorage } from './data/storage.js';
 import { createRepository } from './data/repository.js';
+import { createSettings } from './data/settings.js';
 import { createTabs } from './ui/tabs.js';
 import { createWorkoutView } from './ui/workout.js';
 import { createHistoryView } from './ui/history.js';
@@ -11,6 +12,7 @@ const SWITCH_TO_HISTORY_MS = 600;
 const storage = createLocalStorage();
 requestPersistentStorage();
 const repo = createRepository(storage);
+const settings = createSettings(storage);
 repo.load();
 document.getElementById('readonly-banner').hidden = !repo.readOnly;
 
@@ -20,6 +22,8 @@ const trends = createTrendsView({ root: document.getElementById('tab-trends'), r
 const workout = createWorkoutView({
   root: document.getElementById('tab-workout'),
   repo,
+  storage,
+  settings,
   onSaved: () => {
     history.showNewest();
     history.render();

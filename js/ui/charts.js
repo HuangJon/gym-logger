@@ -51,7 +51,7 @@ export function lineChart(points, { valueOf, labelOf, zoneOf = () => 'none', tip
   const dotsSvg = pts.map((p, i) => {
     const x = X(xs[i]).toFixed(1), y = Y(ys[i]), zone = `zone-${zoneOf(p)}`, label = showLabels ? labelOf(p) : '';
     return `<g><title>${esc(tipOf(p))}</title>
-      <circle cx="${x}" cy="${y.toFixed(1)}" r="4" class="chart-dot ${zone}${p.status === 'partial' ? ' partial' : ''}"/>
+      <circle cx="${x}" cy="${y.toFixed(1)}" r="4" class="chart-dot ${zone}${p.status === 'partial' ? ' partial' : ''}${p.deload ? ' deload' : ''}"/>
       ${hasValue(label) && label !== '' ? `<text x="${x}" y="${(y - 7).toFixed(1)}" text-anchor="middle" class="chart-lbl ${zone}">${esc(label)}</text>` : ''}</g>`;
   }).join('');
   const datesSvg = `<text x="${L}" y="${H - 4}" class="chart-axis">${formatShort(pts[0].date)}</text>` +

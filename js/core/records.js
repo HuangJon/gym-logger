@@ -1,7 +1,7 @@
 /**
  * Session records — the shape of everything saved in the log.
  *
- *   { id, session: 1|2|3, date: "YYYY-MM-DD", ts, program?: 'old', note?,
+ *   { id, session: 1|2|3, date: "YYYY-MM-DD", ts, program?: 'old', deload?: true, note?,
  *     entries: { [exerciseId]: Entry } }
  *
  *   Entry = { status, note,
@@ -101,9 +101,9 @@ export function meetsTarget(sets, target) {
  *   scratch:  { [exerciseId]: { skipped?, note?, done?: [{ weight?, reps }] } } — what you logged
  *   targetOf: ex => { weight, reps, sets } — the target for each exercise (yours if you changed it)
  * Logged sets → complete if they met the target, otherwise partial. No logged sets → "unrecorded".
- * Skip drops any sets.
+ * Skip drops any sets. `deload` marks the session as a deload (it won't move progression).
  */
-export function buildSessionRecord({ sessionNum, date, scratch, targetOf, now = Date.now() }) {
+export function buildSessionRecord({ sessionNum, date, scratch, targetOf, deload = false, now = Date.now() }) {
   const entries = {};
   for (const ex of sessionExercises(sessionNum)) {
     const sc = scratch[ex.id] || {}, target = targetOf(ex);
@@ -122,7 +122,7 @@ export function buildSessionRecord({ sessionNum, date, scratch, targetOf, now = 
     }
     entries[ex.id] = entry;
   }
-  return { id: String(now), session: Number(sessionNum), date, ts: now, entries };
+  return { id: String(now), session: Number(sessionNum), date, ts: now, ...(deload ? { deload: true } : {}), entries };
 }
 
 /** { complete, partial, skip, unrecorded } counts for a record, over the exercises it shows. */
