@@ -1,7 +1,7 @@
 /**
  * Session records — the shape of everything saved in the log.
  *
- *   { id, session: 1|2|3, date: "YYYY-MM-DD", ts, program?: 'old', deload?: true, note?, prehab?: string[],
+ *   { id, session: 1|2|3, date: "YYYY-MM-DD", ts, program?: 'old', deload?: true, note?,
  *     entries: { [exerciseId]: Entry } }
  *
  *   Entry = { status, note,
@@ -105,7 +105,7 @@ export function meetsTarget(sets, target) {
  * Skip drops any sets. `deload` marks the session as a deload (it won't move progression); a lift can
  * differ with scratch[id].deload (deload just that lift, or keep one lift normal in a deload session).
  */
-export function buildSessionRecord({ sessionNum, date, scratch, targetOf, deload = false, prehab = [], now = Date.now() }) {
+export function buildSessionRecord({ sessionNum, date, scratch, targetOf, deload = false, now = Date.now() }) {
   const entries = {};
   for (const ex of sessionExercises(sessionNum)) {
     const sc = scratch[ex.id] || {}, target = targetOf(ex);
@@ -126,7 +126,7 @@ export function buildSessionRecord({ sessionNum, date, scratch, targetOf, deload
     }
     entries[ex.id] = entry;
   }
-  return { id: String(now), session: Number(sessionNum), date, ts: now, ...(deload ? { deload: true } : {}), ...(prehab.length ? { prehab: [...prehab] } : {}), entries };
+  return { id: String(now), session: Number(sessionNum), date, ts: now, ...(deload ? { deload: true } : {}), entries };
 }
 
 /** Was this lift deloaded in this session? Its own flag if it has one, else the session's. */

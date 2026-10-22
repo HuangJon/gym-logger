@@ -274,13 +274,21 @@ test('per-lift deload: saved on the entry, skipped by progression; opting out of
 });
 
 test('climbs: add, remove, recent hard days, the day-before nudge', async () => {
-  const { addClimb, removeClimb, climbsOn, hardClimbsRecent, recentHardClimb } = await import('../../js/core/climbs.js');
+  const { addClimb, removeClimb, climbsOn, hardClimbsRecent, recentHardClimb, setClimbDay } = await import('../../js/core/climbs.js');
   let climbs = addClimb([], { date: '2026-10-20', intensity: 'hard', now: 1 });
   climbs = addClimb(climbs, { date: '2026-10-21', intensity: 'whatever', now: 2 });
   assert.deepEqual(climbs.map(c => [c.date, c.intensity]), [['2026-10-20', 'hard'], ['2026-10-21', 'easy']]);
   assert.equal(climbsOn(climbs, '2026-10-21').length, 1);
   assert.equal(recentHardClimb(climbs, '2026-10-21').date, '2026-10-20');
+  assert.equal(recentHardClimb(climbs, '2026-10-20'), null, 'same-day climbing comes after lifting');
   assert.equal(recentHardClimb(climbs, '2026-10-22'), null);
+  // one climbing day per date: switch easy ↔ hard, clear
+  let day = setClimbDay([], '2026-10-22', 'easy', 5);
+  const id = day[0].id;
+  day = setClimbDay(day, '2026-10-22', 'hard', 6);
+  assert.deepEqual(day.map(c => [c.id, c.intensity]), [[id, 'hard']], 'same entry, switched');
+  assert.deepEqual(setClimbDay(day, '2026-10-22', null), []);
+  assert.equal(setClimbDay([...climbs, ...day], '2026-10-22', null).length, 2, 'other days untouched');
   const many = ['2026-10-01', '2026-10-05', '2026-10-09', '2026-10-09', '2026-10-12'].map((date, i) => ({ id: `c${i}`, date, intensity: 'hard' }));
   assert.equal(hardClimbsRecent(many, '2026-10-14'), 4, 'one per day; 14-day window');
   assert.equal(removeClimb(climbs, climbs[0].id).length, 1);
@@ -320,7 +328,7 @@ test('repository: climbing days are saved, snapshotted and restored with the log
   assert.equal(old.dump().log.schemaVersion, 4);
 });
 
-test('last note, prehab on the record, shorter rest for circuits', async () => {
+test('last note, shorter rest for circuits', async () => {
   const { lastNote } = await import('../../js/core/progress.js');
   const { restOf } = await import('../../js/core/exercises.js');
   const sessions = [
@@ -331,9 +339,8 @@ test('last note, prehab on the record, shorter rest for circuits', async () => {
   sessions.push(session('2026-10-09', 1, { 's1-deadlift': done(185, 7) }));
   assert.equal(lastNote(sessions, deadlift, '2026-10-10'), null, 'older notes do not resurface');
   assert.equal(lastNote(sessions, deadlift, '2026-10-09').note, 'back tight', "today's own session isn't 'last time'");
-  const rec = buildSessionRecord({ sessionNum: 1, date: '2026-10-21', scratch: {}, targetOf: () => null, prehab: ['Face pulls'], now: 9 });
-  assert.deepEqual(rec.prehab, ['Face pulls']);
   assert.equal(restOf(lateral), 60);
   assert.equal(restOf(deadlift), 150);
   assert.equal(restOf(incline), 90);
+  assert.equal(restOf(findExercise('s3-abwheel')), 60);
 });

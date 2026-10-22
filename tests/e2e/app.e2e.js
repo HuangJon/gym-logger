@@ -270,24 +270,28 @@ try {
   await page.tap('#start-btn');
   check('deload: header tag + reason', (await text('#session-header')).toLowerCase().includes('deload') && (await text('#card-s1-deadlift .target-row')).includes('half the sets'));
   await log('s1-deadlift');
-  await page.tap('#prehab [data-name="Face pulls"]');
-  check('prehab: tap to tick off', (await page.getAttribute('#prehab [data-name="Face pulls"]', 'aria-pressed')) === 'true' && (await text('#prehab .prehab-header')).includes('1/4'));
   await page.tap('#complete-btn'); await wait(1000);
   const dl = (await sessionsOn('2026-05-05')).find(x => x.session === 1);
-  check('prehab: saved with the session', JSON.stringify(dl?.prehab) === '["Face pulls"]');
   check('deload: saved as a deload session', dl?.deload === true && dl.entries['s1-deadlift'].status === 'complete' && JSON.stringify(dl.entries['s1-deadlift'].sets) === '[{"weight":155,"reps":5}]', JSON.stringify(dl));
   await tab('workout');
   await page.fill('#pick-date', '2026-05-06'); await page.dispatchEvent('#pick-date', 'change'); await page.selectOption('#pick-session', '1');
   check('deload: picker back to normal for the next session', !(await page.isChecked('#pick-deload')));
   // climbing days
-  check('climbing: easy / hard buttons for the picked date', (await text('#climb-area')).includes('Climbed on Wed, May 6?'));
+  const climbsSaved = async () => JSON.stringify((await savedLog()).climbs.map(c => [c.date, c.intensity]));
+  check('climbing: easy | hard switch for the picked date', (await text('#climb-area')).includes('Climbed on Wed, May 6?'));
+  await page.tap('#climb-area [data-intensity="easy"]'); await wait(150);
+  check('climbing: easy saved', (await climbsSaved()) === '[["2026-05-06","easy"]]' && (await page.getAttribute('#climb-area [data-intensity="easy"]', 'aria-pressed')) === 'true');
   await page.tap('#climb-area [data-intensity="hard"]'); await wait(150);
-  check('climbing: hard climb saved', JSON.stringify((await savedLog()).climbs.map(c => [c.date, c.intensity])) === '[["2026-05-06","hard"]]' && (await text('#climb-area')).includes('Hard climb'));
-  await page.tap('#climb-area [data-action="climb-undo"]'); await wait(150);
-  check('climbing: undo', (await savedLog()).climbs.length === 0);
+  check('climbing: switch to hard (still one day)', (await climbsSaved()) === '[["2026-05-06","hard"]]');
   await page.tap('#climb-area [data-intensity="hard"]'); await wait(150);
+  check('climbing: tap again to clear', (await climbsSaved()) === '[]');
+  await page.tap('#climb-area [data-intensity="hard"]'); await wait(150);
+  await page.fill('#pick-date', '2026-05-07'); await page.dispatchEvent('#pick-date', 'change');
   await page.tap('#start-btn');
-  check('climbing: nudge to deload pulling lifts after a hard climb', (await text('.climb-nudge')).includes('Hard climb today'));
+  check('climbing: hard climb yesterday → nudge to deload pulling lifts', (await text('.climb-nudge')).includes('Hard climb yesterday'));
+  await page.tap('#session-climb [data-intensity="easy"]'); await wait(150);
+  check('climbing: log after lifting, from the workout', (await climbsSaved()) === '[["2026-05-06","hard"],["2026-05-07","easy"]]' && (await text('#session-climb')).includes('Climbing on Thu, May 7 too?'));
+  await page.tap('#session-climb [data-intensity="easy"]'); await wait(150);
   // a weight you set survives deload on/off
   await page.tap('#card-s1-deadlift [data-action="target-open"]');
   await page.tap('#card-s1-deadlift [data-action="target-step"][data-field="weight"][data-dir="1"]');

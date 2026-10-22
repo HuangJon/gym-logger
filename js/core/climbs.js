@@ -12,6 +12,15 @@ export const CLIMB = Object.freeze({ EASY: 'easy', HARD: 'hard' });
 export const addClimb = (climbs, { date, intensity, now = Date.now() }) =>
   [...climbs, { id: `climb-${now}`, date, intensity: intensity === CLIMB.HARD ? CLIMB.HARD : CLIMB.EASY, ts: now }];
 
+/** One climbing day per date: set it to 'easy' / 'hard' (keeping its id and note), or clear it with null. */
+export function setClimbDay(climbs, date, intensity, now = Date.now()) {
+  const existing = climbs.find(c => c.date === date);
+  const others = climbs.filter(c => c.date !== date);
+  if (!intensity) return others;
+  if (existing) return [...others, { ...existing, intensity: intensity === CLIMB.HARD ? CLIMB.HARD : CLIMB.EASY }];
+  return addClimb(others, { date, intensity, now });
+}
+
 export const removeClimb = (climbs, id) => climbs.filter(c => c.id !== id);
 
 /** Climbs on one date. */
@@ -22,11 +31,10 @@ export function hardClimbsRecent(climbs, today, days = 14) {
   return new Set(climbs.filter(c => c.intensity === CLIMB.HARD && c.date <= today && daysBetween(c.date, today) < days).map(c => c.date)).size;
 }
 
-/** The most recent hard climb on `date` or the day before (fatigue that likely carries into today's lifting). */
+/** A hard climb the day before `date` — fatigue that likely carries into that day's lifting (you lift before climbing). */
 export function recentHardClimb(climbs, date) {
   const yesterday = addDays(date, -1);
-  return climbs.filter(c => c.intensity === CLIMB.HARD && (c.date === date || c.date === yesterday))
-    .sort((a, b) => b.date.localeCompare(a.date))[0] || null;
+  return climbs.find(c => c.intensity === CLIMB.HARD && c.date === yesterday) || null;
 }
 
 export const climbsByNewest = (a, b) => String(b.date).localeCompare(String(a.date)) || (b.ts || 0) - (a.ts || 0);
