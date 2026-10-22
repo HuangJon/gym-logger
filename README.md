@@ -129,6 +129,7 @@ tests/
 - **Saves go through `repository.commit(next)`**, which saves first and only updates the screens if the save worked. Log operations in `core/log.js` return new arrays and never mutate.
 - **Escape user text** with `esc()` before putting it in HTML.
 - **Adding a file under `js/` or `css/`?** Add it to `APP_FILES` in `sw.js` (a unit test fails if you forget).
+- **Releasing?** Bump `CACHE` in `sw.js` (e.g. `liftlog-v5` → `liftlog-v6`) so phones with the app open see the "new version — Refresh" banner.
 - **Changing the saved shape?** Bump `SCHEMA_VERSION` in `core/migrate.js` and handle the old shape there.
 
 ## Deploying
