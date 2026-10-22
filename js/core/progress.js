@@ -100,7 +100,8 @@ export function computeTarget(ex, last, { date, lastActive, deload = false } = {
   const since = [lastActive, last?.date].filter(Boolean).sort().pop();
   const daysOff = since && date ? daysBetween(since, date) : 0;
   if (last && daysOff > STALE_AFTER_DAYS) {
-    return { weight: ex.bw ? null : lighterWeight(ex, lastWeight, EASE_BACK_FACTOR), reps: lo, sets: base.sets, reason: 'ease', daysOff };
+    const weight = ex.bw ? null : lighterWeight(ex, lastWeight, EASE_BACK_FACTOR);
+    return { weight, reps: lo, sets: base.sets, reason: 'ease', daysOff, ...(hasValue(weight) && weight < lastWeight ? { lighter: true } : {}) };
   }
   return base;
 }
@@ -170,7 +171,7 @@ export function targetReason(ex, target, last, unit) {
     case 'low':    return 'below range last time — aim for the bottom of the range (or go lighter)';
     case 'repeat': return 'same target — not hit last time';
     case 'top':    return ex.bw ? 'top of range — add a harder variation or a set' : 'top of range';
-    case 'ease':   return `${target.daysOff} days since last time — ${ex.bw ? 'bottom of the range' : '~10% lighter'} to ease back in`;
+    case 'ease':   return `${target.daysOff} days since last time — ${target.lighter ? '~10% lighter, bottom of the range' : 'bottom of the range'} to ease back in`;
     case 'deload': return `deload — ${ex.bw ? '' : '~10% lighter, '}half the sets, stop 2–3 reps short of failure`;
     default:       return last ? '' : 'first time — find a weight you can do with good form';
   }
