@@ -32,7 +32,10 @@ Common guidance is a deload every 4–8 weeks, lasting about a week. Because cli
 
 A gap of 7+ days or a deload resets the count. "Not now" hides the suggestion for a week.
 
-Choosing **Maintain** often is a fatigue signal as well: picking it for the 4th time in 4 weeks (since your last deload) shows a warning, and 4 maintain sessions in 4 weeks triggers the deload suggestion. Deloading **too often** is a signal too: turning on a deload when you've already had another deload in the last 6 weeks shows a note that it often points to hard climbing, short sleep, or targets rising too fast. All of these numbers are in `DELOAD` in `config/program.js`.
+Easing off is a signal too, at two levels:
+
+- **Whole-body** — a session counts as a *maintain day* (or *deload day*) when **more than half the lifts you did** were on Maintain (or Deload), whether set for the session or lift by lift. Picking Maintain for the 4th time in 4 weeks (since your last deload) shows a warning, and 4 maintain days in 4 weeks triggers the deload suggestion.
+- **One lift** — if the same lift was eased off on its own (Maintain / Deload on just that lift) **3 sessions in a row**, its card says that lift may be beat up (e.g. from climbing) or its target too high, and suggests ~10% lighter for a fresh run. Whole-session easy days are passed over, so a deload week doesn't trigger it. Deloading **too often** is a signal too: turning on a deload when you've already had another deload in the last 6 weeks shows a note that it often points to hard climbing, short sleep, or targets rising too fast. All of these numbers are in `DELOAD` in `config/program.js`.
 
 ## lbs or kg
 

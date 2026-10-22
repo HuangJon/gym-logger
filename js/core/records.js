@@ -146,6 +146,23 @@ export function entryMode(record, entry) {
   if (typeof entry?.deload === 'boolean') return entry.deload ? MODE.DELOAD : (record?.maintain ? MODE.MAINTAIN : MODE.NORMAL);   // older logs
   return sessionMode(record);
 }
+/**
+ * What a session amounted to, by share of the lifts you actually did: a maintain (or deload) day
+ * when more than DELOAD.easyShare of them were on Maintain (or Deload) — whether you set it for
+ * the session or lift by lift. With nothing done, the session's own mode.
+ */
+export function effectiveSessionMode(record, share = 0.5) {
+  const modes = exercisesForSession(record)
+    .map(ex => [normalizeEntry(record.entries?.[ex.id]), ex])
+    .filter(([e]) => DID_IT.has(e.status))
+    .map(([e]) => entryMode(record, e));
+  if (!modes.length) return sessionMode(record);
+  const n = m => modes.filter(x => x === m).length;
+  if (n(MODE.DELOAD) > modes.length * share) return MODE.DELOAD;
+  if (n(MODE.MAINTAIN) > modes.length * share) return MODE.MAINTAIN;
+  return MODE.NORMAL;
+}
+
 /** Was this lift deloaded in this session? */
 export const isDeloadEntry = (record, entry) => entryMode(record, entry) === MODE.DELOAD;
 

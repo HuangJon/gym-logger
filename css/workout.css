@@ -266,3 +266,4 @@
 .ex-card.is-maintain .ex-header { background: var(--maintain-bg); }
 .ex-card .maintain-btn[aria-pressed="true"] { border-color: var(--maintain-line); color: var(--maintain); background: var(--maintain-bg); }
 .ex-card .status-row { flex-wrap: wrap; }
+.target-note { width: 100%; padding-left: 52px; font-size: 10px; font-weight: 600; line-height: 1.4; color: var(--warn); }

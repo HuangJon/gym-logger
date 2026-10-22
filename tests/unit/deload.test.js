@@ -429,3 +429,38 @@ test('maintain often: a fatigue signal that suggests a deload', async () => {
   // older than 4 weeks doesn't count
   assert.equal(maintainCount(four, '2026-11-20'), 1);
 });
+
+test('a session counts as a maintain / deload day by share of the lifts you did', async () => {
+  const { effectiveSessionMode } = await import('../../js/core/records.js');
+  const { maintainCount, deloadFrequency } = await import('../../js/core/deload.js');
+  const lifts = (modes, extra = {}) => ({ ...session('2026-10-20', 1, Object.fromEntries(
+    ['s1-incline', 's1-deadlift', 's1-lateral', 's1-crunches', 's1-pulldown'].map((id, i) => [id, { ...done(50, 8), ...(modes[i] ? { mode: modes[i] } : {}) }]))), ...extra });
+  assert.equal(effectiveSessionMode(lifts([])), 'normal');
+  assert.equal(effectiveSessionMode(lifts(['maintain', 'maintain', 'maintain'])), 'maintain', '3 of 5 lifts on Maintain, session left on Normal');
+  assert.equal(effectiveSessionMode(lifts(['maintain', 'maintain'])), 'normal', '2 of 5 is not more than half');
+  assert.equal(effectiveSessionMode(lifts([null, null, null, 'normal', 'normal'], { maintain: true })), 'maintain', 'session Maintain, 2 lifts kept normal');
+  assert.equal(effectiveSessionMode(lifts(['normal', 'normal', 'normal'], { maintain: true })), 'normal', 'session Maintain but most lifts were normal');
+  assert.equal(effectiveSessionMode(lifts(['deload', 'deload', 'deload'])), 'deload');
+  assert.equal(effectiveSessionMode({ ...session('2026-10-20', 1, {}), deload: true }), 'deload', 'nothing done → the session mode');
+  // lift-by-lift maintain days count toward the fatigue signal; so do lift-by-lift deload days
+  const day = (date, modes) => ({ ...lifts(modes), id: date, date });
+  const sessions = ['2026-10-05', '2026-10-12', '2026-10-19', '2026-10-26'].map(d => day(d, ['maintain', 'maintain', 'maintain']));
+  assert.equal(maintainCount(sessions, '2026-10-28'), 4);
+  const deloads = [day('2026-10-01', ['deload', 'deload', 'deload']), day('2026-10-20', ['deload', 'deload', 'deload'])];
+  assert.equal(deloadFrequency(deloads, '2026-10-28').stretches, 2);
+});
+
+test('one lift eased off 3 sessions in a row → a note (whole-session easy days are passed over)', async () => {
+  const { liftEasedStreak } = await import('../../js/core/progress.js');
+  const s = (date, entries, extra = {}) => ({ ...session(date, 1, entries), id: date, ...extra });
+  const others = { 's1-incline': done(50, 8), 's1-lateral': done(7, 10), 's1-crunches': done(45, 10) };
+  const easedDl = mode => ({ ...others, 's1-deadlift': { ...done(185, 6), mode } });
+  const log = [s('2026-10-01', easedDl('maintain')), s('2026-10-05', easedDl('deload')), s('2026-10-09', easedDl('maintain'))];
+  assert.equal(liftEasedStreak(log, deadlift, '2026-10-12'), 3);
+  assert.equal(liftEasedStreak(log, incline, '2026-10-12'), 0);
+  // a whole deload week in between doesn't count, and doesn't break the streak
+  const week = s('2026-10-07', { ...others, 's1-deadlift': done(185, 5) }, { deload: true });
+  assert.equal(liftEasedStreak([...log, week], deadlift, '2026-10-12'), 3);
+  // a normal session breaks it
+  assert.equal(liftEasedStreak([...log, s('2026-10-10', { ...others, 's1-deadlift': done(185, 7) })], deadlift, '2026-10-12'), 0);
+});

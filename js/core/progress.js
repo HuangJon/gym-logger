@@ -2,7 +2,7 @@
 import { STALE_AFTER_DAYS, EASE_BACK_FACTOR, DELOAD } from '../config/program.js';
 import { hasValue, round2, convertWeight } from './numbers.js';
 import { daysBetween } from './dates.js';
-import { normalizeEntry, DID_IT, STATUS, MODE, byNewest, setsOfEntry, meetsTarget, entryMode } from './records.js';
+import { normalizeEntry, DID_IT, STATUS, MODE, byNewest, setsOfEntry, meetsTarget, entryMode, effectiveSessionMode } from './records.js';
 import { exercisesForSession, incrementOf, setsOf, unitOf, defaultWeightOf } from './exercises.js';
 
 /**
@@ -24,7 +24,8 @@ export function performances(sessions, ex, beforeDate, { includeDeload = false, 
       const mode = entryMode(record, e), deload = mode === MODE.DELOAD;
       if (deload && !includeDeload) continue;
       if (DID_IT.has(e.status) && (hasValue(e.weight) || hasValue(e.reps))) {
-        found.push({ ...inUnit(e, ex), date: record.date, session: record.session, deload, ...(mode === MODE.MAINTAIN ? { maintain: true } : {}) });
+        found.push({ ...inUnit(e, ex), date: record.date, session: record.session, deload, ...(mode === MODE.MAINTAIN ? { maintain: true } : {}),
+          ...(effectiveSessionMode(record, DELOAD.easyShare) !== MODE.NORMAL ? { easyDay: true } : {}) });
         break;
       }
     }
@@ -190,6 +191,20 @@ export function missedStreak(sessions, ex, beforeDate) {
     const triedTarget = !hasValue(weight) || (p.sets || []).some(s => hasValue(s.weight) && s.weight >= weight);
     if (p.status !== STATUS.PARTIAL || p.target?.weight !== weight || !triedTarget) break;
     n++;
+  }
+  return n;
+}
+
+/**
+ * How many sessions in a row this lift was eased off on its own (Maintain or Deload on just that
+ * lift). Whole-session maintain / deload days are passed over — that's whole-body fatigue, counted
+ * elsewhere; this looks for one lift (or what it works) being beat up.
+ */
+export function liftEasedStreak(sessions, ex, beforeDate) {
+  let n = 0;
+  for (const p of performances(sessions, ex, beforeDate, { includeDeload: true, limit: 12 })) {
+    if (p.easyDay) continue;
+    if (p.deload || p.maintain) n++; else break;
   }
   return n;
 }

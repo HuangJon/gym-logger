@@ -94,6 +94,8 @@ export const DELOAD = {
   stalledLifts: 2,          // …this many lifts missed target in their last 2 sessions
   alwaysAfterWeeks: 6,      // …or after this many weeks regardless
   snoozeDays: 7,            // "Not now" hides the suggestion this long
+  easyShare: 0.5,           // a session counts as a maintain / deload day when more than this share of the lifts you did were
+  liftEasedStreak: 3,       // the same lift eased off (Maintain / Deload on just that lift) this many sessions in a row → a note on its card
   maintainWindowDays: 28,   // choosing Maintain this many times in this many days (since your last deload)…
   maintainSessions: 4,      // …is a fatigue signal: warns when you pick it, and suggests a deload
   hardClimbs: 4,            // this many hard climbing days in the last 2 weeks (~2 a week) brings suggestions a week earlier
