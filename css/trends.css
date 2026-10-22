@@ -180,3 +180,6 @@ g.is-tipped rect.bar, g.is-tipped rect.bar-pct { stroke: var(--fg); stroke-width
 .pg-abs { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 11px; color: var(--fg2); }
 .pg-abs .pg-sub { color: var(--fg3); display: block; }
 .pg-abs b { color: var(--fg); }
+.pg-prs-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.pg-prs-head .pg-sub { margin-bottom: 0; }
+.pg-prs-head .seg button { font-size: 10px; padding: 2px 8px; }
