@@ -97,7 +97,7 @@ try {
   check('target: hit last time → one more rep', (await text('#card-s1-deadlift .target-row')).includes('175 lbs × 7 × 2 sets') && (await text('#card-s1-deadlift .target-row')).includes('one more rep'));
   check('target: below range last time → bottom of range', (await text('#card-s1-lateral .target-row')).includes('7.5 lbs × 12 × 2 sets') && (await text('#card-s1-lateral .target-row')).includes('below range'));
   check('target: kg lift', (await text('#card-s1-crunches .target-row')).includes('45 kg × 13 × 2 sets'));
-  check('target: first time asks for a weight', (await text('#card-s1-pulldown .target-row')).includes('set a weight'));
+  check('target: first time starts at the estimated weight (cable, kg)', (await text('#card-s1-pulldown .target-row')).includes('25 kg × 8 × 2 sets'));
   check('last: shows last time', (await text('#card-s1-deadlift .last-row')).includes('175 lbs × 6 reps') && (await text('#card-s1-deadlift .last-row')).includes('Apr 20'));
   check('set 1 open, pre-filled with the target', (await text('#wv-s1-deadlift')) === '175' && (await page.inputValue('#reps-s1-deadlift')) === '7' && (await text('#card-s1-deadlift .set-title')) === 'Set 1');
   check('tabs: set 1 current, set 2 locked', JSON.stringify(await tabState('s1-deadlift')) === '["current","locked"]');
@@ -151,12 +151,9 @@ try {
   check('remove a set', (await summary('s1-deadlift')) === '177.5 lbs × 7, 6' && await page.locator('#setlog-s1-deadlift.is-collapsed').count() === 1);
 
   // first-time lift: weight from nothing; type then tap Log right away (phone)
-  check('weight: nothing yet → − disabled', await page.locator('#card-s1-pulldown [data-action="weight-step"][data-dir="-1"]').isDisabled());
-  await page.tap('#card-s1-pulldown [data-action="weight-step"][data-dir="1"]');
-  check('weight: first + gives one increment', (await text('#wv-s1-pulldown')) === '2.5');
   await page.tap('#wv-s1-pulldown'); await page.fill('#inp-s1-pulldown', '45');
   await log('s1-pulldown');
-  check('phone: type weight then tap Log → logged with that weight', (await summary('s1-pulldown')) === '45 lbs × 8');
+  check('phone: type weight then tap Log → logged with that weight', (await summary('s1-pulldown')) === '45 kg × 8');
   await log('s1-pulldown');
 
   // phone: type weight then tap into notes
@@ -179,6 +176,15 @@ try {
   check('target: back to suggested', (await text('#card-s1-crunches .target-btn')).includes('45 kg × 13 × 2 sets') && (await tabState('s1-crunches')).length === 2);
   await page.tap('#card-s1-crunches [data-action="target-close"]');
   check('target pop-out closes', await page.locator('#card-s1-crunches .target-pop').count() === 0);
+
+  // lbs / kg per lift
+  await page.tap('#card-s1-deadlift [data-action="target-open"]');
+  await page.tap('#card-s1-deadlift [data-action="unit"][data-unit="kg"]');
+  check('units: deadlift switched to kg — target and logged sets converted', (await text('#card-s1-deadlift .target-btn')).includes('80 kg × 7 × 2 sets') && (await summary('s1-deadlift')).startsWith('80.5 kg'));
+  check('units: choice remembered', (await page.evaluate(() => JSON.parse(localStorage.getItem('liftlog:settings')).units)).Deadlift === 'kg');
+  await page.tap('#card-s1-deadlift [data-action="unit"][data-unit="lbs"]');
+  check('units: back to lbs', (await text('#card-s1-deadlift .target-btn')).includes('lbs') && (await page.evaluate(() => JSON.parse(localStorage.getItem('liftlog:settings')).units)).Deadlift === undefined);
+  await page.tap('#card-s1-deadlift [data-action="target-close"]');
 
   // skip
   await page.tap('#card-s1-lateral [data-action="skip"]');
@@ -268,6 +274,13 @@ try {
   check('deload: next normal session builds on the session before the deload', (await text('#card-s1-deadlift .target-row')).includes('175 lbs × 7 × 2 sets') && (await text('#card-s1-deadlift .last-row')).includes('deload since'));
   await page.tap('.sa-change');
   check('nothing logged → "change" goes straight back', await page.locator('#picker-panel').isVisible());
+  // too many deloads → a gentle warning
+  await page.fill('#pick-date', '2026-05-20'); await page.dispatchEvent('#pick-date', 'change');
+  check('deload often: no warning for a normal session', await page.locator('.deload-often').count() === 0);
+  await page.tap('#deload-area .switch-track');
+  check('deload often: 2nd deload in 6 weeks → warning', (await text('.deload-often')).includes('2 deloads in 6 weeks'));
+  await page.tap('#deload-area .switch-track');
+  await page.fill('#pick-date', '2026-05-06'); await page.dispatchEvent('#pick-date', 'change');
   await page.tap('[data-action="deload-week"]');
   check('deload week: switches deload on for the week', await page.isChecked('#pick-deload') && (await text('#deload-area')).includes('Deload week until'));
   await page.tap('[data-action="deload-week-end"]');
@@ -359,9 +372,9 @@ try {
   // ── trends ──────────────────────────────────────────────
   await tab('trends');
   const pressed = async () => (await page.locator('.seg button[aria-pressed="true"]').first().innerText()).trim();
-  check('trends: opens on 3M when there is something recent', (await pressed()) === '3M');
+  check('trends: opens on All when nothing is from the last 3 months (the test log is from spring)', (await pressed()) === 'All');
   const names = await page.locator('.trend-name').allInnerTexts();
-  check('trends: current and old-program lifts', names.includes('Deadlift') && names.includes('Dips') && names.includes('Rows (elbow to hip)'));
+  check('trends: current and old-program lifts', names.includes('Deadlift') && names.includes('Dips') && names.includes('Bent Over Rows') && !names.includes('Rows (elbow to hip)'));
   await page.tap('.seg button[data-value="all"]');
   check('trends: All shows charts', await page.locator('.trend-card svg').count() > 5);
   const deadliftCard = page.locator('.trend-card', { has: page.locator('.trend-name', { hasText: /^Deadlift$/ }) });

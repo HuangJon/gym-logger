@@ -130,6 +130,7 @@
 .tp-row { display: flex; align-items: center; gap: 8px; }
 .tp-val { min-width: 44px; text-align: center; font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .tp-suffix { font-size: 11px; color: var(--fg3); }
+.unit-seg button { font-size: 13px; padding: 6px 14px; touch-action: manipulation; }
 .tp-actions { display: flex; justify-content: space-between; align-items: center; }
 
 /* set-by-set panel */
@@ -186,6 +187,11 @@
 .deload-row.is-on { border-color: var(--deload-line); background: var(--deload-bg); }
 .deload-week { font-size: 11px; color: var(--fg2); }
 .deload-week-on { font-weight: 600; color: var(--deload); }
+.deload-often {
+  margin: -8px 0 14px; padding: 10px 14px; border-radius: var(--radius); font-size: 12px; line-height: 1.45;
+  background: var(--warn-bg); color: var(--warn);
+}
+.deload-often b { display: block; margin-bottom: 2px; }
 .deload-suggest { padding: 12px 14px; margin-bottom: 14px; border-left: 3px solid var(--deload-line); display: flex; flex-direction: column; gap: 4px; }
 .ds-title { font-size: 13px; font-weight: 700; color: var(--deload); }
 .ds-why { font-size: 12px; color: var(--fg); }

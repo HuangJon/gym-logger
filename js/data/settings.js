@@ -1,9 +1,9 @@
 /**
- * Small per-device preferences (rest timer on/off, deload week, snoozed suggestion).
+ * Small per-device preferences (rest timer on/off, deload week, snoozed suggestion, lbs/kg per lift).
  * Kept apart from the workout log: losing them never loses a workout, and they aren't in backups.
  */
 const KEY = 'settings';
-export const DEFAULT_SETTINGS = Object.freeze({ restTimer: false, deloadUntil: null, deloadSnoozedUntil: null });
+export const DEFAULT_SETTINGS = Object.freeze({ restTimer: false, deloadUntil: null, deloadSnoozedUntil: null, units: {} });
 
 export function createSettings(storage) {
   let current = { ...DEFAULT_SETTINGS, ...(isObject(storage.read(KEY)) ? storage.read(KEY) : {}) };

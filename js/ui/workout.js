@@ -4,20 +4,20 @@
  * if the app is closed mid-workout.
  */
 import { PREHAB, SESSION_LABELS, SESSION_COLORS } from '../config/program.js';
-import { sessionExercises, findExercise, unitOf, repRangeText, restOf } from '../core/exercises.js';
+import { sessionExercises, findExercise, unitOf, programUnitOf, setUnitChoices, incrementOf, repRangeText, restOf } from '../core/exercises.js';
 import { todayISO, isISODate, formatShort, agoText } from '../core/dates.js';
-import { hasValue, parseWeight, parseReps } from '../core/numbers.js';
+import { hasValue, parseWeight, parseReps, convertWeight, UNITS } from '../core/numbers.js';
 import { STATUS, buildSessionRecord, formatSets } from '../core/records.js';
 import { addSession } from '../core/log.js';
-import { lastPerformance, computeTarget, targetReason, stepWeight, stepReps, stepTarget, setBadge, exerciseVerdict } from '../core/progress.js';
-import { deloadAdvice, deloadWeekActive, startDeloadWeek, endDeloadWeek, snoozeDeload } from '../core/deload.js';
+import { lastPerformance, computeTarget, targetReason, missedStreak, MISSES_BEFORE_HINT, lighterWeight, stepWeight, stepReps, stepTarget, setBadge, exerciseVerdict } from '../core/progress.js';
+import { deloadAdvice, deloadFrequency, deloadWeekActive, startDeloadWeek, endDeloadWeek, snoozeDeload } from '../core/deload.js';
 import { saveDraft, loadDraft, clearDraft } from '../data/draft.js';
 import { esc, delegate, autoResize, flash, confirmTap } from './dom.js';
 import { createRestTimer } from './rest-timer.js';
 
 const COMPLETE_LABEL = 'Complete Session';
 
-export function createWorkoutView({ root, repo, storage, settings, onSaved }) {
+export function createWorkoutView({ root, repo, storage, settings, onSaved, onUnitsChanged }) {
   const $ = sel => root.querySelector(sel);
   const ui = {
     pickerPanel: $('#picker-panel'), sessionPanel: $('#session-panel'),
@@ -97,11 +97,17 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved }) {
     const weekText = week
       ? `<span class="deload-week-on">Deload week until ${esc(formatShort(s.deloadUntil))}</span> <button type="button" class="link-btn" data-action="deload-week-end">end</button>`
       : '<button type="button" class="link-btn" data-action="deload-week">Deload week…</button>';
+    const freq = on && !week ? deloadFrequency(repo.sessions, date, date) : null;
+    const tooOften = freq?.tooMany ? `<div class="deload-often" role="note">
+        <b>That's ${freq.stretches} deloads in ${freq.weeks} weeks</b> — more often than the usual every 4–8 weeks.
+        Needing them this often usually points to hard climbing, short sleep, or targets rising too fast.
+        Deload if you need to, but also consider holding your weights steady for a while (tap ✎ on a target) and leaving 2–3 reps in reserve.
+      </div>` : '';
     ui.deloadArea.innerHTML = `${suggestion}<div class="deload-row${on ? ' is-on' : ''}">
         <label class="switch"><input type="checkbox" id="pick-deload" data-action="pick-deload"${on ? ' checked' : ''}><span class="switch-track" aria-hidden="true"></span>
           <span class="switch-label">Deload session</span></label>
         <span class="deload-week">${weekText}</span>
-      </div>`;
+      </div>${tooOften}`;
   }
 
   function renderPreview() {
@@ -237,7 +243,11 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved }) {
     const st = stateOf(ex.id), last = lastFor(ex), target = targetFor(ex);
     if (!target) return '';
     const unit = unitOf(ex), edited = !!st.target;
-    const reason = edited ? 'your target for today' : targetReason(ex, target, last, unit);
+    let reason = edited ? 'your target for today' : targetReason(ex, target, last, unit);
+    const misses = !edited && target.reason === 'repeat' ? missedStreak(repo.sessions, ex, active.date) : 0;
+    if (misses >= MISSES_BEFORE_HINT) {
+      reason += ` · missed ${misses} times in a row — consider ${ex.bw || !hasValue(target.weight) ? 'an easier variation' : `~10% lighter (${lighterWeight(ex, target.weight, 0.9)} ${unit}, tap ✎)`}`;
+    }
     const needsWeight = !ex.bw && !hasValue(target.weight);
     return `<div class="ex-row target-row">
       <span class="row-label">Target</span>
@@ -256,10 +266,14 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved }) {
       <span class="tp-val" id="tp-${field}-${ex.id}">${value ?? '–'}</span>
       <button type="button" class="stepper" data-action="target-step" data-field="${field}" data-dir="1" aria-label="Raise target ${label}">+</button>
       <span class="tp-suffix">${suffix}</span></div>`;
+    const unitRow = ex.bw ? '' : `<div class="tp-row"><span class="row-label">Unit</span>
+      <div class="seg unit-seg" role="group" aria-label="Weight unit">${UNITS.map(u => `<button type="button" data-action="unit" data-unit="${u}" aria-pressed="${unitOf(ex) === u}">${u}</button>`).join('')}</div>
+      <span class="tp-suffix">match the machine's labels</span></div>`;
     return `<div class="target-pop" role="dialog" aria-label="Adjust today's target">
       ${ex.bw ? '' : row('weight', 'Weight', t.weight, unitOf(ex))}
       ${row('reps', 'Reps', t.reps, `/ ${repRangeText(ex.reps)}`)}
       ${row('sets', 'Sets', t.sets)}
+      ${unitRow}
       <div class="tp-actions">
         ${stateOf(ex.id).target ? '<button type="button" class="link-btn" data-action="target-reset">Back to suggested</button>' : '<span></span>'}
         <button type="button" class="btn-small" data-action="target-close">Done</button>
@@ -441,6 +455,30 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved }) {
     renderExercises();   // targets depend on the date; what you logged lives in `scratch`
   }
 
+  /**
+   * Switch a lift between lbs and kg (applies to every session with that lift). Past entries keep the
+   * unit they were logged in; targets and anything logged in this workout are converted.
+   */
+  function setUnit(exId, unit) {
+    const ex = findExercise(exId), from = unitOf(ex);
+    if (!UNITS.includes(unit) || unit === from) return;
+    const units = { ...settings.get().units };
+    if (unit === programUnitOf(ex)) delete units[ex.name]; else units[ex.name] = unit;
+    settings.update({ units });
+    setUnitChoices(units);
+    const conv = w => convertWeight(w, from, unit, 0.5);   // logged numbers: fine rounding, so switching back restores them
+    for (const other of sessionExercises(active.sessionNum).filter(o => o.name === ex.name)) {
+      const st = scratch[other.id];
+      if (!st) continue;
+      st.done = st.done.map(s => (hasValue(s.weight) ? { ...s, weight: conv(s.weight) } : s));
+      if (st.draft && hasValue(st.draft.weight)) st.draft = { ...st.draft, weight: conv(st.draft.weight) };
+      if (st.target && hasValue(st.target.weight)) st.target = { ...st.target, weight: convertWeight(st.target.weight, from, unit, incrementOf(ex)) };
+    }
+    persist();
+    renderExercises();
+    onUnitsChanged?.();
+  }
+
   function toggleRestTimer() {
     const on = !settings.get().restTimer;
     settings.update({ restTimer: on });
@@ -513,6 +551,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved }) {
     'complete': complete,
     'discard-bottom': discardFromBottom,
     'rest-toggle': toggleRestTimer,
+    'unit': el => setUnit(exIdOf(el), el.dataset.unit),
     'rest-adjust': el => rest.adjust(Number(el.dataset.dir)),
     'rest-stop': () => rest.stop(),
     'deload-week': () => changeDeloadWeek(startDeloadWeek(pickedDate())),

@@ -1,5 +1,6 @@
 /** Lookups over the program definition. */
 import { SESSIONS, RETIRED, INCREMENTS, DEFAULT_INCREMENT, DEFAULT_SETS, DEFAULT_REST_SECONDS } from '../config/program.js';
+import { UNITS, convertWeight } from './numbers.js';
 
 const sessionOf = id => Number(String(id).match(/^s(\d)/)?.[1]) || null;
 
@@ -13,8 +14,22 @@ export const findExercise = id => BY_ID.get(id) || null;
 /** Every exercise, current first, then retired. */
 export const allExercises = () => [...CURRENT, ...OLD];
 
-export const unitOf = ex => ex?.unit || 'lbs';
-export const incrementOf = ex => INCREMENTS[ex?.name] ?? DEFAULT_INCREMENT;
+/**
+ * Your unit choice per lift (by name), from settings — so the numbers match the labels on the
+ * machine. Set once at startup and whenever you switch; everything else reads it through unitOf().
+ */
+let unitChoices = {};
+export function setUnitChoices(map) {
+  unitChoices = Object.fromEntries(Object.entries(map && typeof map === 'object' ? map : {}).filter(([, u]) => UNITS.includes(u)));
+}
+/** The unit the program file uses for this lift. */
+export const programUnitOf = ex => ex?.unit || 'lbs';
+/** The unit to show and log this lift in: your choice, else the program's. */
+export const unitOf = ex => unitChoices[ex?.name] || programUnitOf(ex);
+/** − / + step and target bump. INCREMENTS are in the program's unit; in the other unit it's 2.5. */
+export const incrementOf = ex => (unitOf(ex) === programUnitOf(ex) ? INCREMENTS[ex?.name] ?? DEFAULT_INCREMENT : DEFAULT_INCREMENT);
+/** The program's starting weight, in the unit you're using. */
+export const defaultWeightOf = ex => (ex?.bw ? null : convertWeight(ex?.defaultWeight ?? null, programUnitOf(ex), unitOf(ex), incrementOf(ex)));
 export const setsOf = ex => ex?.sets ?? DEFAULT_SETS;
 export const restOf = ex => ex?.rest ?? DEFAULT_REST_SECONDS;
 export const repRangeText = ([lo, hi]) => (lo === hi ? `${lo}` : `${lo}–${hi}`);

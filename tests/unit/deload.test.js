@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { findExercise } from '../../js/core/exercises.js';
 import { computeTarget, lighterWeight, lastPerformance, performances, targetReason } from '../../js/core/progress.js';
-import { blockStart, stalledLifts, deloadAdvice, deloadWeekActive, startDeloadWeek, endDeloadWeek, snoozeDeload } from '../../js/core/deload.js';
+import { blockStart, stalledLifts, deloadAdvice, deloadFrequency, deloadWeekActive, startDeloadWeek, endDeloadWeek, snoozeDeload } from '../../js/core/deload.js';
 import { buildSessionRecord } from '../../js/core/records.js';
 import { setSessionDeload } from '../../js/core/log.js';
 import { migrateLog } from '../../js/core/migrate.js';
@@ -186,4 +186,64 @@ test('formatClock', () => {
   assert.equal(formatClock(149.2), '2:30');
   assert.equal(formatClock(5), '0:05');
   assert.equal(formatClock(-3), '0:00');
+});
+
+test('deloadFrequency: warns on the 2nd separate deload stretch within 6 weeks', () => {
+  const dl = (date, n = 1) => ({ ...session(date, n, {}), deload: true });
+  const week = [dl('2026-09-01', 1), dl('2026-09-03', 2), dl('2026-09-05', 3)];
+  assert.deepEqual(deloadFrequency(week, '2026-09-20', '2026-09-20'), { tooMany: true, stretches: 2, weeks: 6 });
+  assert.equal(deloadFrequency(week, '2026-09-06', '2026-09-06').tooMany, false, 'same deload week');
+  assert.equal(deloadFrequency(week, '2026-10-20', '2026-10-20').tooMany, false, 'first deload has left the window');
+  assert.equal(deloadFrequency(week, '2026-09-20').stretches, 1, 'nothing planned');
+});
+
+test('units: switching a lift to kg converts targets and history to kg', async () => {
+  const { setUnitChoices, unitOf, incrementOf, defaultWeightOf } = await import('../../js/core/exercises.js');
+  const { convertWeight } = await import('../../js/core/numbers.js');
+  const { liftSeries } = await import('../../js/core/trends.js');
+  assert.equal(convertWeight(100, 'lbs', 'kg'), 45.36);
+  assert.equal(convertWeight(100, 'lbs', 'kg', 2.5), 45);
+  assert.equal(convertWeight(20, 'kg', 'lbs', 2.5), 45);
+  assert.equal(convertWeight(1, 'kg', 'lbs', 5), 5, 'never below one step');
+  assert.equal(convertWeight(null, 'kg', 'lbs'), null);
+  assert.equal(convertWeight(10, 'kg', 'kg'), 10);
+
+  const sessions = [session('2026-10-01', 1, { 's1-deadlift': done(185, 6) })];
+  try {
+    setUnitChoices({ Deadlift: 'kg', 'Incline DB Press': 'stone' });
+    assert.equal(unitOf(deadlift), 'kg');
+    assert.equal(unitOf(incline), 'lbs', 'unknown units ignored');
+    assert.equal(incrementOf(deadlift), 2.5, 'program increment (5 lbs) not reused in kg');
+    assert.equal(defaultWeightOf(deadlift), 85);
+    const last = lastPerformance(sessions, deadlift, '2026-10-03');
+    assert.equal(last.unit, 'kg');
+    assert.equal(last.weight, 85);
+    assert.deepEqual(computeTarget(deadlift, last), { weight: 85, reps: 7, sets: 2, reason: 'more' });
+    const pt = liftSeries(sessions).find(s => s.name === 'Deadlift');
+    assert.equal(pt.unit, 'kg');
+    assert.equal(pt.points[0].weight, 85);
+  } finally {
+    setUnitChoices({});
+  }
+  assert.equal(unitOf(deadlift), 'lbs');
+  assert.equal(lastPerformance(sessions, deadlift, '2026-10-03').weight, 185);
+});
+
+test('old rows count as Bent Over Rows', () => {
+  const sessions = [session('2026-05-15', 2, { 's2-oldrows': done(35, 8) }, { program: 'old' })];
+  const last = lastPerformance(sessions, findExercise('s2-rows'), '2026-05-20');
+  assert.equal(last.weight, 35);
+  assert.deepEqual(computeTarget(findExercise('s2-rows'), last), { weight: 35, reps: 9, sets: 2, reason: 'more' });
+});
+
+test('missedStreak: same target missed in a row (going lighter or hitting it ends the streak)', async () => {
+  const { missedStreak } = await import('../../js/core/progress.js');
+  const t = { weight: 185, reps: 7, sets: 2 };
+  const miss = date => session(date, 1, { 's1-deadlift': { status: 'partial', weight: 185, unit: 'lbs', sets: [{ weight: 185, reps: 7 }, { weight: 185, reps: 5 }], target: t } });
+  const sessions = [miss('2026-09-01'), miss('2026-09-08'), miss('2026-09-15')];
+  assert.equal(missedStreak(sessions, deadlift, '2026-09-20'), 3);
+  const hit = session('2026-09-05', 1, { 's1-deadlift': { ...done(185, 7), sets: [{ weight: 185, reps: 7 }, { weight: 185, reps: 7 }], target: t } });
+  assert.equal(missedStreak([...sessions.slice(1), hit], deadlift, '2026-09-20'), 2);
+  const lighter = session('2026-09-18', 1, { 's1-deadlift': { status: 'partial', weight: 165, unit: 'lbs', sets: [{ weight: 165, reps: 8 }], target: t } });
+  assert.equal(missedStreak([...sessions, lighter], deadlift, '2026-09-20'), 0);
 });

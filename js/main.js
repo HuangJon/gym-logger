@@ -2,6 +2,7 @@
 import { createLocalStorage, requestPersistentStorage } from './data/storage.js';
 import { createRepository } from './data/repository.js';
 import { createSettings } from './data/settings.js';
+import { setUnitChoices } from './core/exercises.js';
 import { createTabs } from './ui/tabs.js';
 import { createWorkoutView } from './ui/workout.js';
 import { createHistoryView } from './ui/history.js';
@@ -13,6 +14,7 @@ const storage = createLocalStorage();
 requestPersistentStorage();
 const repo = createRepository(storage);
 const settings = createSettings(storage);
+setUnitChoices(settings.get().units);
 repo.load();
 document.getElementById('readonly-banner').hidden = !repo.readOnly;
 
@@ -24,6 +26,7 @@ const workout = createWorkoutView({
   repo,
   storage,
   settings,
+  onUnitsChanged: () => { if (tabs.current === 'trends') trends.render(); },
   onSaved: () => {
     history.showNewest();
     history.render();

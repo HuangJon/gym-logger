@@ -57,6 +57,22 @@ export function deloadAdvice(sessions, today, settings = {}) {
   return { suggest, weeks, stalled, why: parts.join('; ') };
 }
 
+/**
+ * Are deloads coming too often? Counts separate deload stretches (deload sessions more than 10 days
+ * apart start a new stretch) in the last DELOAD.frequentWindowWeeks. Pass `plannedDate` to count a
+ * deload you're about to start.
+ * @returns {{ tooMany: boolean, stretches: number, weeks: number }}
+ */
+export function deloadFrequency(sessions, today, plannedDate = null) {
+  const weeks = DELOAD.frequentWindowWeeks, from = addDays(today, -weeks * 7 + 1);
+  const dates = sessions.filter(s => s.deload && s.date >= from && s.date <= today).map(s => s.date);
+  if (plannedDate) dates.push(plannedDate);
+  dates.sort();
+  let stretches = 0, prev = null;
+  for (const d of dates) { if (prev === null || daysBetween(prev, d) > 10) stretches++; prev = d; }
+  return { tooMany: stretches >= DELOAD.frequentStretches, stretches, weeks };
+}
+
 const listNames = names => (names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`);
 
 /** Is a deload week running on `date`? */
