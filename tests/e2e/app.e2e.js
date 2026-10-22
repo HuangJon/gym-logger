@@ -56,6 +56,8 @@ try {
   check('install: manifest is standalone with icons', manifest.display === 'standalone' && manifest.icons.length >= 2);
   check('install: iPhone home-screen tags', await page.locator('link[rel="apple-touch-icon"]').count() === 1);
   check('install: offline worker active', await page.evaluate(async () => !!(await navigator.serviceWorker.ready).active));
+  await page.waitForTimeout(300);
+  check('install: no "new version" banner on a first install', await page.locator('#update-banner').isHidden());
   check('empty: history says nothing logged yet', (await text('#history-list')).includes('No sessions logged yet'));
 
   // ── import ──────────────────────────────────────────────
@@ -226,13 +228,14 @@ try {
   await page.fill('#pick-date', '2026-05-05'); await page.dispatchEvent('#pick-date', 'change'); await page.selectOption('#pick-session', '1'); await page.tap('#start-btn');
   check('next time: after a partial the target repeats (no increase)', (await text('#card-s1-deadlift .target-row')).includes('175 lbs × 7 × 2 sets'));
   check('next time: after hitting it, one more rep', (await text('#card-s1-incline .target-row')).includes('50 lbs × 7 × 2 sets'));
+  check('last note: shown on the card next time', (await text('#card-s1-incline .last-row')).includes('“felt solid”'));
 
   // ── unfinished workout: survives closing the app ───────
   const draft = () => page.evaluate(() => JSON.parse(localStorage.getItem('liftlog:draft') || 'null'));
   await log('s1-deadlift');
   check('draft: saved as you log', (await draft())?.scratch?.['s1-deadlift']?.done?.length === 1);
   await page.reload(); await wait(400);
-  check('draft: reopening picks up the workout', await page.locator('#session-panel').isVisible() && (await summary('s1-deadlift')) === '175 lbs × 7' && (await text('#status')).includes('unfinished workout'));
+  check('draft: reopening picks up the workout', await page.locator('#session-panel').isVisible() && (await summary('s1-deadlift')) === '175 lbs × 7' && (await text('#status')).includes('unfinished workout from Tue, May 5'));
   await page.tap('.sa-change');
   check('draft: "change" asks before throwing away logged sets', await page.locator('.discard-bar').count() === 1);
   await page.tap('.discard-bar [data-action="keep"]');
@@ -267,13 +270,33 @@ try {
   await page.tap('#start-btn');
   check('deload: header tag + reason', (await text('#session-header')).toLowerCase().includes('deload') && (await text('#card-s1-deadlift .target-row')).includes('half the sets'));
   await log('s1-deadlift');
+  await page.tap('#prehab [data-name="Face pulls"]');
+  check('prehab: tap to tick off', (await page.getAttribute('#prehab [data-name="Face pulls"]', 'aria-pressed')) === 'true' && (await text('#prehab .prehab-header')).includes('1/4'));
   await page.tap('#complete-btn'); await wait(1000);
   const dl = (await sessionsOn('2026-05-05')).find(x => x.session === 1);
+  check('prehab: saved with the session', JSON.stringify(dl?.prehab) === '["Face pulls"]');
   check('deload: saved as a deload session', dl?.deload === true && dl.entries['s1-deadlift'].status === 'complete' && JSON.stringify(dl.entries['s1-deadlift'].sets) === '[{"weight":155,"reps":5}]', JSON.stringify(dl));
   await tab('workout');
   await page.fill('#pick-date', '2026-05-06'); await page.dispatchEvent('#pick-date', 'change'); await page.selectOption('#pick-session', '1');
   check('deload: picker back to normal for the next session', !(await page.isChecked('#pick-deload')));
+  // climbing days
+  check('climbing: easy / hard buttons for the picked date', (await text('#climb-area')).includes('Climbed on Wed, May 6?'));
+  await page.tap('#climb-area [data-intensity="hard"]'); await wait(150);
+  check('climbing: hard climb saved', JSON.stringify((await savedLog()).climbs.map(c => [c.date, c.intensity])) === '[["2026-05-06","hard"]]' && (await text('#climb-area')).includes('Hard climb'));
+  await page.tap('#climb-area [data-action="climb-undo"]'); await wait(150);
+  check('climbing: undo', (await savedLog()).climbs.length === 0);
+  await page.tap('#climb-area [data-intensity="hard"]'); await wait(150);
   await page.tap('#start-btn');
+  check('climbing: nudge to deload pulling lifts after a hard climb', (await text('.climb-nudge')).includes('Hard climb today'));
+  // a weight you set survives deload on/off
+  await page.tap('#card-s1-deadlift [data-action="target-open"]');
+  await page.tap('#card-s1-deadlift [data-action="target-step"][data-field="weight"][data-dir="1"]');
+  await page.tap('#card-s1-deadlift [data-action="target-close"]');
+  await page.tap('#card-s1-deadlift [data-action="lift-deload"]');
+  check('your weight through deload: ~10% lighter', (await text('#card-s1-deadlift .target-btn')).includes('160 lbs × 5 × 1 set'));
+  await page.tap('#card-s1-deadlift [data-action="lift-deload"]');
+  check('your weight through deload: back to yours', (await text('#card-s1-deadlift .target-btn')).includes('180 lbs × 7 × 2 sets'));
+  await page.tap('#card-s1-deadlift [data-action="target-open"]'); await page.tap('#card-s1-deadlift [data-action="target-reset"]'); await page.tap('#card-s1-deadlift [data-action="target-close"]');
   check('deload: next normal session builds on the session before the deload', (await text('#card-s1-deadlift .target-row')).includes('175 lbs × 7 × 2 sets') && (await text('#card-s1-deadlift .last-row')).includes('deload since'));
   // deload mid-session, or just one lift
   await page.tap('#session-header .session-deload .switch-track');
@@ -445,11 +468,12 @@ try {
   const file = join(TMP, 'export.json'); await download.saveAs(file);
   const exported = JSON.parse(readFileSync(file, 'utf8'));
   check('export: file has every session', exported.sessions.length === n1 + 2 && exported.app === 'lifting-log');
+  check('export: climbing days and preferences included', exported.climbs.length === 1 && typeof exported.settings === 'object' && 'units' in exported.settings);
   check('export: backup reminder clears', await page.locator('#backup-card.stale').count() === 0 && (await text('#backup-status')).includes('today'));
   const fresh = await browser.newContext(phone);
   const p2 = await fresh.newPage(); await p2.goto(url); await p2.waitForTimeout(300);
   await p2.tap('.tab-btn[data-tab="history"]'); await p2.setInputFiles('#import-file', file); await p2.waitForTimeout(200);
-  check('restore on a new device', await p2.locator('.history-entry').count() === n1 + 2);
+  check('restore on a new device', await p2.locator('.history-entry').count() === n1 + 2 && await p2.locator('.history-climb').count() === 1);
   await fresh.close();
 
   // ── site down (e.g. repo made private): installed app still opens ──

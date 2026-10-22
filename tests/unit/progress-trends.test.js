@@ -238,6 +238,8 @@ test('weeklyCounts: last 8 weeks, or anchored on the last session when nothing i
   assert.equal(recent.anchored, false);
   assert.equal(recent.weeks.length, 8);
   assert.deepEqual(recent.weeks.slice(-2).map(w => [w.start, w.count]), [['2026-10-12', 1], ['2026-10-19', 2]]);
+  const withClimbs = weeklyCounts(log, '2026-10-21', 8, [{ date: '2026-10-20', intensity: 'hard' }, { date: '2026-10-21', intensity: 'easy' }, { date: '2026-10-13', intensity: 'easy' }]);
+  assert.deepEqual(withClimbs.weeks.slice(-2).map(w => [w.climbs, w.hardClimbs]), [[1, 0], [2, 1]]);
   const old = weeklyCounts([session('2026-05-28', 3, {})], '2026-10-21');
   assert.equal(old.anchored, true);
   assert.equal(old.weeks.at(-1).count, 1);

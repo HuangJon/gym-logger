@@ -114,17 +114,16 @@ export function changeOverWindows(points, weighted, today) {
  * Sessions per week (Monday start) for the last `weeks` weeks. If nothing was logged in that
  * time, shows the weeks leading up to the last session instead (`anchored: true`).
  */
-export function weeklyCounts(sessions, today, weeks = 8) {
+export function weeklyCounts(sessions, today, weeks = 8, climbs = []) {
   let end = dayNum(today);
   const last = sessions.reduce((m, s) => Math.max(m, dayNum(s.date)), -Infinity);
   const anchored = Number.isFinite(last) && end - last > weeks * 7;
   if (anchored) end = last;
   const thisWeek = weekStart(fromDayNum(end));
-  const result = Array.from({ length: weeks }, (_, i) => ({ start: fromDayNum(thisWeek - (weeks - 1 - i) * 7), count: 0 }));
-  for (const s of sessions) {
-    const w = result.find(r => s.date >= r.start && dayNum(s.date) < dayNum(r.start) + 7);
-    if (w) w.count++;
-  }
+  const result = Array.from({ length: weeks }, (_, i) => ({ start: fromDayNum(thisWeek - (weeks - 1 - i) * 7), count: 0, climbs: 0, hardClimbs: 0 }));
+  const weekOf = date => result.find(r => date >= r.start && dayNum(date) < dayNum(r.start) + 7);
+  for (const s of sessions) { const w = weekOf(s.date); if (w) w.count++; }
+  for (const c of climbs) { const w = weekOf(c.date); if (w) { w.climbs++; if (c.intensity === 'hard') w.hardClimbs++; } }
   return { weeks: result, anchored };
 }
 

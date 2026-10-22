@@ -12,6 +12,11 @@ body {
 }
 button { font-family: var(--font); }
 
+.update-banner {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 10px 12px; border-radius: var(--radius);
+  background: var(--deload-bg); color: var(--deload); font-size: 12px; font-weight: 600;
+}
+.update-banner span { flex: 1; }
 .readonly-banner { background: var(--bad-bg); color: var(--bad); font-size: 12px; font-weight: 600; padding: 10px 12px; border-radius: 0 0 var(--radius) var(--radius); }
 
 /* ── tabs ── */

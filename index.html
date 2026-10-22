@@ -22,6 +22,10 @@
   <script type="module" src="js/main.js"></script>
 </head>
 <body>
+  <div class="update-banner" id="update-banner" role="status" hidden>
+    <span>A new version of the app is ready.</span>
+    <button type="button" class="btn-small" id="update-btn">Refresh</button>
+  </div>
   <div class="readonly-banner" id="readonly-banner" role="alert" hidden>
     This log was saved by a newer version of the app. Close the app completely and reopen it to update — nothing will be saved until then.
   </div>
@@ -51,6 +55,7 @@
         <button type="button" class="btn-primary" id="start-btn" data-action="start" disabled>Start Session</button>
       </div>
       <div id="deload-area"></div>
+      <div id="climb-area"></div>
       <div id="session-preview-area"></div>
       <div class="picker-hint" id="picker-hint">Pick a date and session above to begin.</div>
     </section>

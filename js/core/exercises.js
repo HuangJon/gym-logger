@@ -1,5 +1,5 @@
 /** Lookups over the program definition. */
-import { SESSIONS, RETIRED, INCREMENTS, DEFAULT_INCREMENT, DEFAULT_SETS, DEFAULT_REST_SECONDS } from '../config/program.js';
+import { SESSIONS, RETIRED, INCREMENTS, DEFAULT_INCREMENT, DEFAULT_SETS, DEFAULT_REST_SECONDS, CIRCUIT_REST_SECONDS } from '../config/program.js';
 import { UNITS, convertWeight } from './numbers.js';
 
 const sessionOf = id => Number(String(id).match(/^s(\d)/)?.[1]) || null;
@@ -31,7 +31,7 @@ export const incrementOf = ex => (unitOf(ex) === programUnitOf(ex) ? INCREMENTS[
 /** The program's starting weight, in the unit you're using. */
 export const defaultWeightOf = ex => (ex?.bw ? null : convertWeight(ex?.defaultWeight ?? null, programUnitOf(ex), unitOf(ex), incrementOf(ex)));
 export const setsOf = ex => ex?.sets ?? DEFAULT_SETS;
-export const restOf = ex => ex?.rest ?? DEFAULT_REST_SECONDS;
+export const restOf = ex => ex?.rest ?? (ex?.tag === 'circuit' ? CIRCUIT_REST_SECONDS : DEFAULT_REST_SECONDS);
 export const repRangeText = ([lo, hi]) => (lo === hi ? `${lo}` : `${lo}–${hi}`);
 
 /**

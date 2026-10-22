@@ -4,8 +4,12 @@ A gym lifting log for a 3-session program with **double progression** (hit the t
 
 - **Workout** — pick a date and session; each exercise shows today's **target** (weight × reps × sets — tap it to adjust) and what you did last time. Log **one set at a time**: weight and reps start at the target, adjust with − / +, tap **Log set**. The set collapses into a ✓ tab and the next one opens pre-filled with what you just did. Tap a ✓ tab to fix a set, **+** to add one, or **Skip** the exercise.
 - **Unfinished workouts are kept** — what you've logged is saved as you go, so closing the app mid-workout loses nothing; reopen and carry on. **Discard workout** (two taps) throws it away.
-- **Rest timer** (optional, off by default) — turn it on in the session header; after each logged set a countdown runs at the bottom (90 s, deadlift 150 s; −15 / +15 / ✕). It beeps and vibrates where the phone allows — only while the app is open.
+- **Rest timer** (optional, off by default) — turn it on in the session header; after each logged set a countdown runs at the bottom (90 s, deadlift 150 s, circuit lifts 60 s; −15 / +15 / ✕). It beeps and vibrates where the phone allows — only while the app is open.
 - **Deloads** — flip **Deload session** before starting (or the **Deload** switch mid-session if you're feeling weak), or **Deload week…** to keep it on for 7 days. **↓ Deload this lift** on a card deloads just that lift (or keeps one lift normal in a deload session) — useful when one area is beat up, e.g. pulling muscles after hard climbing. The app also suggests a deload week when you've trained a while without a break (see below). Deload sessions are tagged in History (where you can also mark or unmark one) and shown as hollow teal dots in Trends.
+- **Climbing days** — tap **Easy** or **Hard** under the session picker to log a climbing day. They show in History and on the weekly chart in Trends, a hard climb today or yesterday brings up a reminder to deload pulling lifts if you're beat up, and 4+ hard days in two weeks brings the deload suggestion a week earlier.
+- **Prehab** — tap each prehab exercise off as you do it; saved with the session.
+- **Last time's note** shows on each card, so "grip slipped" is in front of you next session.
+- **Updates** — when a new version is installed while the app is open, a banner offers a one-tap refresh (a workout in progress is kept).
 - **History** — every session, editable after the fact (status, weight, reps, notes, date), plus **Export / Import** backups.
 - **Trends** — sessions per week, and for each lift: weight over time with reps on every dot, change over 1 month / 3 months / 1 year, and your last six sessions.
 
@@ -46,9 +50,9 @@ Only logged sets are saved. An exercise is **complete** when its logged sets mee
 
 ## Your data
 
-Everything is stored **on the device** (browser storage for this site). Nothing is sent anywhere — this repository only contains the app's code.
+Everything is stored **on the device** — sessions, climbing days and preferences (browser storage for this site). Nothing is sent anywhere — this repository only contains the app's code.
 
-That also means the device is the only copy. Use **History → Export** regularly (the History tab nudges you after 14 days) and save the file to Files / iCloud Drive. **Import** merges a backup into the current log without creating duplicates.
+That also means the device is the only copy. Use **History → Export** regularly (the file includes climbing days and your lbs/kg choices) (the History tab nudges you after 14 days) and save the file to Files / iCloud Drive. **Import** merges a backup into the current log without creating duplicates.
 
 Safeguards built in:
 

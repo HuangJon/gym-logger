@@ -72,6 +72,8 @@ export const WEEKLY_GOAL = 3;
 
 /** Rest timer: seconds between sets unless an exercise sets its own `rest`. The timer is off until you turn it on. */
 export const DEFAULT_REST_SECONDS = 90;
+/** Shorter rest for exercises paired in a circuit (tag: 'circuit'). */
+export const CIRCUIT_REST_SECONDS = 60;
 
 /** Coming back after this many days without doing a lift → its target is eased back. */
 export const EASE_BACK_FACTOR = 0.9;   // ~10% lighter, bottom of the rep range
@@ -89,4 +91,5 @@ export const DELOAD = {
   stalledLifts: 2,          // …this many lifts missed target in their last 2 sessions
   alwaysAfterWeeks: 6,      // …or after this many weeks regardless
   snoozeDays: 7,            // "Not now" hides the suggestion this long
+  hardClimbs: 4,            // this many hard climbing days in the last 2 weeks (~2 a week) brings suggestions a week earlier
 };

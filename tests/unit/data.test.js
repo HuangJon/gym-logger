@@ -38,7 +38,7 @@ test('repository: commit saves, updates and notifies', async () => {
   await repo.commit([s]);
   assert.equal(repo.sessions.length, 1);
   assert.equal(calls, 1);
-  assert.deepEqual(storage.dump().log, { schemaVersion: SCHEMA_VERSION, sessions: [s] });
+  assert.deepEqual(storage.dump().log, { schemaVersion: SCHEMA_VERSION, sessions: [s], climbs: [] });
   unsubscribe();
   await repo.commit([]);
   assert.equal(calls, 1);
@@ -116,9 +116,16 @@ test('repository: a log from a newer version is read-only (never overwritten)', 
 // ── backup ──
 test('backup round trip', () => {
   const sessions = [session('2026-10-21', 1, { 's1-incline': done(50, 8) }, { id: 'a' })];
-  const file = createBackup(sessions, '2026-10-21', 'T');
+  const climbs = [{ id: 'c1', date: '2026-10-20', intensity: 'hard', ts: 3 }];
+  const settings = { units: { Deadlift: 'kg' }, restTimer: true, deloadUntil: '2026-10-25' };
+  const file = createBackup(sessions, '2026-10-21', { climbs, settings, exportedAt: 'T' });
   assert.equal(file.filename, 'lifting-log-backup-2026-10-21.json');
-  assert.deepEqual(parseBackup(file.json), { sessions, skipped: 0 });
+  assert.deepEqual(parseBackup(file.json), { sessions, climbs, settings: { units: { Deadlift: 'kg' }, restTimer: true }, skipped: 0 }, 'deload week is per-phone, not backed up');
+  // junk settings are dropped
+  const junk = JSON.stringify({ sessions, settings: { units: { Deadlift: 'stone', Rows: 'kg' }, restTimer: 'yes' } });
+  assert.deepEqual(parseBackup(junk).settings, { units: { Rows: 'kg' } });
+  // a file with only climbing days still imports
+  assert.equal(parseBackup(JSON.stringify({ schemaVersion: 4, sessions: [], climbs })).climbs.length, 1);
 });
 
 test('parseBackup accepts the earlier export format', () => {

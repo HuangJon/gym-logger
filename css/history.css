@@ -70,3 +70,12 @@
   display: block; width: calc(100% - 28px); margin: 8px 14px 10px; padding: 6px;
   background: none; border: 1px solid var(--border); border-radius: 7px; color: var(--fg3); font-size: 11px; cursor: pointer;
 }
+
+/* climbing days in the list */
+.history-climb {
+  display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; margin-bottom: 10px; padding: 8px 14px;
+  border-radius: var(--radius); border: 1px dashed var(--border); font-size: 12px; color: var(--fg2);
+}
+.history-climb.hard { border-color: var(--climb-line); background: var(--climb-bg); color: var(--climb); }
+.hc-date { font-weight: 600; }
+.hc-what { flex: 1; }

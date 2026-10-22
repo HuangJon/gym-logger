@@ -272,3 +272,68 @@ test('per-lift deload: saved on the entry, skipped by progression; opting out of
   assert.equal(lastPerformance(all, deadlift, '2026-10-14').weight, 190);
   assert.equal(lastPerformance(all, incline, '2026-10-14').weight, 50);
 });
+
+test('climbs: add, remove, recent hard days, the day-before nudge', async () => {
+  const { addClimb, removeClimb, climbsOn, hardClimbsRecent, recentHardClimb } = await import('../../js/core/climbs.js');
+  let climbs = addClimb([], { date: '2026-10-20', intensity: 'hard', now: 1 });
+  climbs = addClimb(climbs, { date: '2026-10-21', intensity: 'whatever', now: 2 });
+  assert.deepEqual(climbs.map(c => [c.date, c.intensity]), [['2026-10-20', 'hard'], ['2026-10-21', 'easy']]);
+  assert.equal(climbsOn(climbs, '2026-10-21').length, 1);
+  assert.equal(recentHardClimb(climbs, '2026-10-21').date, '2026-10-20');
+  assert.equal(recentHardClimb(climbs, '2026-10-22'), null);
+  const many = ['2026-10-01', '2026-10-05', '2026-10-09', '2026-10-09', '2026-10-12'].map((date, i) => ({ id: `c${i}`, date, intensity: 'hard' }));
+  assert.equal(hardClimbsRecent(many, '2026-10-14'), 4, 'one per day; 14-day window');
+  assert.equal(removeClimb(climbs, climbs[0].id).length, 1);
+});
+
+test('deloadAdvice: lots of hard climbing brings the suggestion a week earlier', () => {
+  const today = '2026-08-01';
+  const fiveWeeks = block(addDays(today, -37), 6).filter(s => s.date <= today);
+  assert.equal(deloadAdvice(fiveWeeks, today).suggest, false);
+  const hard = ['2026-07-20', '2026-07-23', '2026-07-27', '2026-07-30'].map((date, i) => ({ id: `c${i}`, date, intensity: 'hard' }));
+  const a = deloadAdvice(fiveWeeks, today, {}, hard);
+  assert.equal(a.suggest, true);
+  assert.match(a.why, /4 hard climbing days in the last 2 weeks/);
+});
+
+test('repository: climbing days are saved, snapshotted and restored with the log', async () => {
+  const { createRepository } = await import('../../js/data/repository.js');
+  const storage = createMemoryStorage();
+  const repo = createRepository(storage);
+  repo.load();
+  const s = session('2026-10-21', 1, { 's1-incline': done(50, 8) }, { id: 'a' });
+  await repo.commit([s]);
+  await repo.commitClimbs([{ id: 'c1', date: '2026-10-20', intensity: 'hard', ts: 1 }]);
+  assert.equal(repo.sessions.length, 1, 'sessions untouched');
+  assert.equal(storage.dump().log.climbs.length, 1);
+  await repo.commitClimbs([]);
+  assert.equal(repo.snapshots()[0].climbs, 1);
+  await repo.restoreSnapshot(0);
+  assert.equal(repo.climbs.length, 1);
+  const reloaded = createRepository(storage); reloaded.load();
+  assert.equal(reloaded.climbs[0].id, 'c1');
+  // a v3 log upgrades to v4 with no climbs, original kept aside
+  const old = createMemoryStorage({ log: { schemaVersion: 3, sessions: [s] } });
+  const r3 = createRepository(old); r3.load();
+  assert.deepEqual(r3.climbs, []);
+  assert.equal(old.dump()['pre-upgrade-v3'].schemaVersion, 3);
+  assert.equal(old.dump().log.schemaVersion, 4);
+});
+
+test('last note, prehab on the record, shorter rest for circuits', async () => {
+  const { lastNote } = await import('../../js/core/progress.js');
+  const { restOf } = await import('../../js/core/exercises.js');
+  const sessions = [
+    session('2026-10-01', 1, { 's1-deadlift': { ...done(185, 6), note: 'old note' } }),
+    session('2026-10-08', 1, { 's1-deadlift': { status: 'skip', note: 'back tight' } }),
+  ];
+  assert.deepEqual(lastNote(sessions, deadlift, '2026-10-10'), { note: 'back tight', date: '2026-10-08' });
+  sessions.push(session('2026-10-09', 1, { 's1-deadlift': done(185, 7) }));
+  assert.equal(lastNote(sessions, deadlift, '2026-10-10'), null, 'older notes do not resurface');
+  assert.equal(lastNote(sessions, deadlift, '2026-10-09').note, 'back tight', "today's own session isn't 'last time'");
+  const rec = buildSessionRecord({ sessionNum: 1, date: '2026-10-21', scratch: {}, targetOf: () => null, prehab: ['Face pulls'], now: 9 });
+  assert.deepEqual(rec.prehab, ['Face pulls']);
+  assert.equal(restOf(lateral), 60);
+  assert.equal(restOf(deadlift), 150);
+  assert.equal(restOf(incline), 90);
+});

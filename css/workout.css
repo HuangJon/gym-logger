@@ -46,7 +46,11 @@
 .prehab-header h3 { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ph); flex: 1; }
 .prehab-header span { font-size: 11px; color: var(--fg2); }
 .prehab-pills { display: flex; flex-wrap: wrap; gap: 5px; padding: 9px 14px; }
-.prehab-pill { font-size: 11px; font-weight: 500; padding: 2px 9px; border-radius: 20px; background: var(--ph-pill); color: var(--ph); }
+.prehab-pill {
+  font-size: 12px; font-weight: 500; padding: 6px 11px; min-height: 32px; border-radius: 20px; cursor: pointer; touch-action: manipulation;
+  background: var(--ph-pill); color: var(--ph); border: 1px solid transparent; font-family: var(--font);
+}
+.prehab-pill[aria-pressed="true"] { background: var(--ph); color: var(--ph-bg); font-weight: 700; }
 
 /* ── exercise card ── */
 .ex-card { overflow: hidden; margin-bottom: 10px; }
@@ -237,3 +241,19 @@
 .session-deload.is-on .switch-label { color: var(--deload); }
 .ex-card.is-deload .ex-header { background: var(--deload-bg); }
 .ex-card .deload-btn[aria-pressed="true"] { border-color: var(--deload-line); color: var(--deload); background: var(--deload-bg); }
+
+/* ── climbing ── */
+.climb-row {
+  display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap;
+  margin: -6px 0 14px; padding: 8px 14px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--border);
+}
+.climb-label { font-size: 13px; font-weight: 600; flex: 1; min-width: 140px; }
+.climb-btns { display: flex; gap: 8px; }
+.climb-btns .btn-small { min-height: 32px; min-width: 56px; }
+.climb-hard { border-color: var(--climb-line); color: var(--climb); }
+.climb-chip { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; background: var(--climb-bg); color: var(--climb); }
+.climb-chip.easy { background: var(--input-bg); color: var(--fg2); }
+.climb-recent { width: 100%; font-size: 11px; color: var(--fg2); }
+.climb-nudge { margin-bottom: 10px; padding: 10px 14px; border-radius: var(--radius); font-size: 12px; line-height: 1.45; background: var(--climb-bg); color: var(--climb); }
+.last-memo { width: 100%; padding-left: 52px; font-size: 11px; color: var(--fg); font-style: italic; }
+.last-memo .last-when { font-style: normal; }

@@ -1,0 +1,18 @@
+{
+ "schemaVersion": 4,
+ "sessions": [
+  {
+   "id": "1792600000000", "session": 1, "date": "2026-10-20", "ts": 1792600000000, "deload": true,
+   "entries": {
+    "s1-deadlift": { "status": "complete", "note": "", "sets": [{ "weight": 165, "reps": 5 }], "weight": 165, "unit": "lbs", "reps": 5, "target": { "reps": 5, "sets": 1, "weight": 165 } },
+    "s1-incline": { "status": "complete", "note": "felt good, kept it normal", "sets": [{ "weight": 50, "reps": 9 }, { "weight": 50, "reps": 9 }], "weight": 50, "unit": "lbs", "reps": 9, "target": { "reps": 9, "sets": 2, "weight": 50 }, "deload": false },
+    "s1-pulldown": { "status": "complete", "note": "", "sets": [{ "weight": 27.5, "reps": 10 }], "weight": 27.5, "unit": "kg", "reps": 10, "target": { "reps": 10, "sets": 2, "weight": 27.5 } }
+   },
+   "prehab": ["Face pulls", "External rotation"]
+  }
+ ],
+ "climbs": [
+  { "id": "climb-1", "date": "2026-10-19", "intensity": "hard", "ts": 1792500000000, "note": "projecting" },
+  { "id": "climb-2", "date": "2026-10-21", "intensity": "easy", "ts": 1792700000000, "gym": "future field" }
+ ]
+}

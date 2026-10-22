@@ -71,10 +71,11 @@ export function createTrendsView({ root, repo }) {
   }
 
   function weeklyCard(sessions, today) {
-    const { weeks, anchored } = weeklyCounts(sessions, today);
+    const { weeks, anchored } = weeklyCounts(sessions, today, 8, state.demo ? [] : repo.climbs);
+    const climbs = weeks.some(w => w.climbs);
     return `<div class="card trend-card">
       <div class="trend-head"><span class="trend-name">Sessions per week</span>
-        <span class="trend-sub">${anchored ? '8 weeks up to your last session · ' : ''}dashed line = ${WEEKLY_GOAL}/week goal</span></div>
+        <span class="trend-sub">${anchored ? '8 weeks up to your last session · ' : ''}dashed line = ${WEEKLY_GOAL}/week goal${climbs ? ' · <span class="climb-key">▲ climbing days</span> (darker = hard)' : ''}</span></div>
       ${weeklyBarsChart(weeks, WEEKLY_GOAL)}</div>`;
   }
 
