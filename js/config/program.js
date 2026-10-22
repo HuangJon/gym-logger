@@ -62,7 +62,11 @@ export const DEFAULT_INCREMENT = 2.5;
 /** Working sets per exercise unless an exercise sets its own `sets`. Change to 3 when the program moves to 3 sets. */
 export const DEFAULT_SETS = 2;
 
-export const SESSION_LABELS = { 1: 'Session 1', 2: 'Session 2', 3: 'Session 3' };
+/** The three workouts, done in rotation A → B → C. (Saved logs refer to them as session 1 / 2 / 3.) */
+export const SESSION_LABELS = { 1: 'Workout A', 2: 'Workout B', 3: 'Workout C' };
+export const SESSION_LETTERS = { 1: 'A', 2: 'B', 3: 'C' };
+/** One line under each workout's button so you can tell them apart. */
+export const SESSION_FOCUS = { 1: 'Incline · Deadlift · Pulldown', 2: 'Shoulder press · Rows', 3: 'Incline · Split squats' };
 export const SESSION_COLORS = { 1: 'var(--s1)', 2: 'var(--s2)', 3: 'var(--s3)' };
 
 /** A "Last time" older than this many days gets an "ease back in" note. */

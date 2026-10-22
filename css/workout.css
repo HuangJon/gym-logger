@@ -17,6 +17,21 @@
 .pick-msg { width: 100%; font-size: 11px; color: var(--fg2); }
 .pick-msg:empty { display: none; }
 .pick-msg.error { color: var(--danger); }
+.picker-workouts { width: 100%; display: flex; flex-direction: column; gap: 4px; }
+.picker-label { font-size: 11px; font-weight: 600; color: var(--fg2); letter-spacing: .05em; text-transform: uppercase; }
+.workout-btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.workout-btn {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 9px; min-height: 76px; text-align: left;
+  border-radius: 10px; border: 1.5px solid var(--input-border); background: var(--input-bg); color: var(--fg); cursor: pointer;
+  font-family: var(--font); touch-action: manipulation;
+}
+.workout-btn[aria-pressed="true"] { border-color: var(--sess); background: var(--card); box-shadow: 0 0 0 1.5px var(--sess); }
+.wb-top { display: flex; align-items: center; gap: 6px; width: 100%; }
+.wb-letter { font-size: 20px; font-weight: 800; color: var(--sess); line-height: 1; }
+.wb-next { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 20px; background: var(--fg); color: var(--bg); }
+.wb-focus { font-size: 10px; font-weight: 600; color: var(--fg2); line-height: 1.3; }
+.wb-last { font-size: 10px; color: var(--fg3); margin-top: auto; }
+.picker .btn-primary { width: 100%; min-height: 44px; font-size: 15px; }
 .picker-hint { text-align: center; padding: 24px 0; color: var(--fg2); font-size: 13px; }
 
 .preview { overflow: hidden; margin-bottom: 14px; }
@@ -270,3 +285,22 @@
 .ex-card .maintain-btn[aria-pressed="true"] { border-color: var(--maintain-line); color: var(--maintain); background: var(--maintain-bg); }
 .ex-card .status-row { flex-wrap: wrap; }
 .target-note { width: 100%; padding-left: 52px; font-size: 10px; font-weight: 600; line-height: 1.4; color: var(--warn); }
+
+/* finished lifts collapse to one line */
+.ex-card.is-collapsed { margin-bottom: 8px; }
+.ex-collapsed {
+  width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 14px; background: none; border: none; text-align: left;
+  font-family: var(--font); color: var(--fg); cursor: pointer; touch-action: manipulation;
+}
+.ex-card.is-collapsed.s1 .ex-collapsed { border-left: 3px solid var(--s1); }
+.ex-card.is-collapsed.s2 .ex-collapsed { border-left: 3px solid var(--s2); }
+.ex-card.is-collapsed.s3 .ex-collapsed { border-left: 3px solid var(--s3); }
+.exc-icon { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; flex-shrink: 0; background: var(--mid-bg); color: var(--mid); }
+.ex-card.is-hit .exc-icon { background: var(--good-bg); color: var(--good); }
+.ex-card.is-skipped .exc-icon { background: var(--input-bg); color: var(--fg3); }
+.exc-name { font-size: 13px; font-weight: 700; flex: 1; min-width: 0; }
+.exc-sum { font-size: 12px; font-weight: 600; color: var(--fg2); font-variant-numeric: tabular-nums; text-align: right; }
+.exc-chev { font-size: 11px; color: var(--fg3); }
+.session-progress { width: 100%; font-size: 11px; font-weight: 600; color: var(--fg2); margin-top: -4px; }
+.session-progress.all-done { color: var(--good); }
+.exc-note { width: 100%; padding-left: 30px; font-size: 11px; color: var(--fg2); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

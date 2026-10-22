@@ -1,5 +1,5 @@
 /** Trends tab: pinned controls, summary, weekly bars, training calendar, target hit rate, progress per lift, and a chart per lift. */
-import { SESSION_COLORS, WEEKLY_GOAL } from '../config/program.js';
+import { SESSION_COLORS, SESSION_LABELS, SESSION_LETTERS, WEEKLY_GOAL } from '../config/program.js';
 import { repRangeText } from '../core/exercises.js';
 import { todayISO, addDays, isISODate, formatShort, formatMonthDay, agoText, daysBetween } from '../core/dates.js';
 import { hasValue, round2, signed } from '../core/numbers.js';
@@ -67,11 +67,11 @@ export function createTrendsView({ root, repo }) {
     const cell = day => {
       const lift = day.lifts[0], mode = lift?.mode;
       const bits = [
-        ...day.lifts.map(l => `Session ${l.session}${l.mode !== 'normal' ? ` (${l.mode})` : ''}`),
+        ...day.lifts.map(l => `${SESSION_LABELS[l.session]}${l.mode !== 'normal' ? ` (${l.mode})` : ''}`),
         day.climb && `${day.climb} climb`,
       ].filter(Boolean);
       const cls = ['cal-day', day.future && 'future', lift && 'lift', mode && mode !== 'normal' && `m-${mode}`, day.climb && `c-${day.climb}`, day.date === today && 'today'].filter(Boolean).join(' ');
-      const label = day.lifts.length === 1 ? `S${day.lifts[0].session}` : day.lifts.length > 1 ? `×${day.lifts.length}` : '';
+      const label = day.lifts.length === 1 ? SESSION_LETTERS[day.lifts[0].session] : day.lifts.length > 1 ? `×${day.lifts.length}` : '';
       const tip = `${formatShort(day.date)}${bits.length ? ` — ${bits.join(', ')}` : ' — rest day'}`;
       return `<span class="${cls}" title="${esc(tip)}"${day.future ? '' : tipAttrs(tip)}>${label ? `<b>${label}</b>` : ''}</span>`;
     };
@@ -84,8 +84,8 @@ export function createTrendsView({ root, repo }) {
     return `<div class="card trend-card cal-card">
       <div class="trend-head"><span class="trend-name">Training calendar</span><span class="trend-sub">${anchored ? '12 weeks up to your last activity' : 'last 12 weeks'}</span></div>
       <div class="cal-grid"><div class="cal-row cal-head"><span class="cal-month"></span>${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(d => `<span class="cal-dow">${d}</span>`).join('')}</div>${rows}</div>
-      <div class="cal-legend"><span><i class="cal-day lift"><b>S1</b></i>lifted (session)</span><span><i class="cal-day lift"><b>×2</b></i>2 sessions that day</span>
-        <span><i class="cal-day lift m-maintain"><b>S2</b></i>maintain</span><span><i class="cal-day lift m-deload"><b>S3</b></i>deload</span>
+      <div class="cal-legend"><span><i class="cal-day lift"><b>A</b></i>lifted (workout A/B/C)</span><span><i class="cal-day lift"><b>×2</b></i>2 workouts that day</span>
+        <span><i class="cal-day lift m-maintain"><b>B</b></i>maintain</span><span><i class="cal-day lift m-deload"><b>C</b></i>deload</span>
         <span><i class="cal-day c-easy"></i>easy climb</span><span><i class="cal-day c-hard"></i>hard climb</span></div>
       <div class="tip-hint">Tap a day for details.</div>
     </div>`;
@@ -162,7 +162,7 @@ export function createTrendsView({ root, repo }) {
   // ── one card per lift ───────────────────────────────────
   function liftCard(series, { today, filter, grouping, rangeName }) {
     const tags = series.retired ? '<span class="pill-muted">old program</span>'
-      : [...series.sessions].sort().map(n => `<span class="trend-sess" style="color:${SESSION_COLORS[n]}">S${n}</span>`).join('');
+      : [...series.sessions].sort().map(n => `<span class="trend-sess" style="color:${SESSION_COLORS[n]}">${SESSION_LETTERS[n]}</span>`).join('');
     const head = `<div class="trend-head"><span class="trend-name">${esc(series.name)}</span>${tags}</div>`;
     const last = series.points[series.points.length - 1];
     if (!last) return `<div class="card trend-card empty">${head}<div class="trend-empty">Not logged yet</div></div>`;

@@ -5,7 +5,7 @@
  *
  * When you add a file under css/ or js/, add it to APP_FILES (a unit test checks this).
  */
-const CACHE = 'liftlog-v8';
+const CACHE = 'liftlog-v9';
 const APP_FILES = [
   './', './index.html', './manifest.webmanifest',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png',

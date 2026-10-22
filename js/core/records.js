@@ -173,6 +173,15 @@ export function statusCounts(record) {
   return counts;
 }
 
+/** The next workout in the A → B → C rotation, after the most recent session (A if there's none). */
+export function nextSession(sessions, count = 3) {
+  const last = [...sessions].sort(byNewest)[0];
+  return last ? (Number(last.session) % count) + 1 : 1;
+}
+
+/** Date of the most recent session of workout `n`, or null. */
+export const lastDoneOf = (sessions, n) => sessions.filter(s => Number(s.session) === Number(n)).map(s => s.date).sort().pop() ?? null;
+
 /** Newest first: by date, then by save time. */
 export const byNewest = (a, b) => String(b.date).localeCompare(String(a.date)) || (b.ts || 0) - (a.ts || 0);
 export const byOldest = (a, b) => -byNewest(a, b);

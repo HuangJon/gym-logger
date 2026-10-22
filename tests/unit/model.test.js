@@ -204,3 +204,14 @@ test('retired exercises are not in the current program', () => {
   const current = new Set(Object.values(SESSIONS).flat().map(e => e.id));
   for (const ex of RETIRED) assert.ok(!current.has(ex.id), ex.id);
 });
+
+test('rotation: the next workout after the most recent session; when each was last done', async () => {
+  const { nextSession, lastDoneOf } = await import('../../js/core/records.js');
+  assert.equal(nextSession([]), 1);
+  const log = [session('2026-10-01', 1, {}), session('2026-10-03', 2, {}), session('2026-10-05', 3, {}), session('2026-10-08', 1, {})];
+  assert.equal(nextSession(log), 2);
+  assert.equal(nextSession(log.slice(0, 3)), 1, 'after C comes A');
+  assert.equal(lastDoneOf(log, 1), '2026-10-08');
+  assert.equal(lastDoneOf(log, 3), '2026-10-05');
+  assert.equal(lastDoneOf([], 2), null);
+});

@@ -43,22 +43,17 @@
           <label for="pick-date">Date</label>
           <input type="date" id="pick-date" data-action="pick-date">
         </div>
-        <div class="picker-field">
-          <label for="pick-session">Session</label>
-          <select id="pick-session" data-action="pick-session">
-            <option value="">choose…</option>
-            <option value="1">Session 1</option>
-            <option value="2">Session 2</option>
-            <option value="3">Session 3</option>
-          </select>
+        <div class="picker-workouts">
+          <span class="picker-label" id="pick-workout-label">Workout</span>
+          <div class="workout-btns" id="pick-workouts" role="group" aria-labelledby="pick-workout-label"></div>
         </div>
-        <button type="button" class="btn-primary" id="start-btn" data-action="start" disabled>Start Session</button>
+        <button type="button" class="btn-primary" id="start-btn" data-action="start" disabled>Start workout</button>
         <div class="pick-msg" id="pick-msg" role="status"></div>
       </div>
       <div id="deload-area"></div>
       <div id="climb-area"></div>
       <div id="session-preview-area"></div>
-      <div class="picker-hint" id="picker-hint">Pick a date and session above to begin.</div>
+      <div class="picker-hint" id="picker-hint">Pick a workout above to begin.</div>
     </section>
 
     <section id="session-panel" hidden>
@@ -66,7 +61,7 @@
       <div class="card prehab" id="prehab"></div>
       <div id="exercise-area"></div>
       <div id="session-climb"></div>
-      <button type="button" class="complete-btn" id="complete-btn" data-action="complete">Complete Session</button>
+      <button type="button" class="complete-btn" id="complete-btn" data-action="complete">Complete workout</button>
       <div class="complete-hint">Unmarked exercises are logged as “not recorded”.</div>
       <div class="status-msg" id="status" role="status"></div>
       <button type="button" class="discard-btn" id="discard-btn" data-action="discard-bottom">Discard workout</button>
