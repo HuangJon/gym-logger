@@ -312,7 +312,8 @@ test('climbs: add, remove, recent hard days, the day-before nudge', async () => 
   assert.equal(climbsOn(climbs, '2026-10-21').length, 1);
   assert.equal(recentHardClimb(climbs, '2026-10-21').date, '2026-10-20');
   assert.equal(recentHardClimb(climbs, '2026-10-20'), null, 'same-day climbing comes after lifting');
-  assert.equal(recentHardClimb(climbs, '2026-10-22'), null);
+  assert.equal(recentHardClimb(climbs, '2026-10-22').date, '2026-10-20', '2 days ago still counts (~48 h recovery)');
+  assert.equal(recentHardClimb(climbs, '2026-10-23'), null);
   // one climbing day per date: switch easy ↔ hard, clear
   let day = setClimbDay([], '2026-10-22', 'easy', 5);
   const id = day[0].id;
