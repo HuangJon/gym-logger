@@ -97,3 +97,49 @@
 .chart-climb { font-size: 9px; font-weight: 700; fill: var(--good-line); }
 .chart-climb.hard { fill: var(--climb-line); }
 .climb-key { color: var(--climb-line); font-weight: 600; }
+
+/* training calendar */
+.cal-grid { display: flex; flex-direction: column; gap: 3px; margin: 6px 0 8px; }
+.cal-row { display: grid; grid-template-columns: 30px repeat(7, 1fr); gap: 3px; align-items: center; }
+.cal-month { font-size: 9px; font-weight: 700; color: var(--fg3); text-transform: uppercase; }
+.cal-dow { font-size: 9px; font-weight: 700; color: var(--fg3); text-align: center; }
+.cal-day {
+  position: relative; display: block; height: 18px; border-radius: 4px; background: var(--input-bg); overflow: hidden;
+}
+.cal-day.future { opacity: .35; }
+.cal-day.today { box-shadow: inset 0 0 0 1.5px var(--fg2); }
+.cal-day.lift { background: var(--sess, var(--fg2)); }
+.cal-day.m-maintain { background: var(--maintain-line); }
+.cal-day.m-deload { background: var(--deload-line); }
+.cal-day.c-easy::after, .cal-day.c-hard::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 5px; }
+.cal-day.c-easy::after { background: var(--good-line); }
+.cal-day.c-hard::after { background: var(--climb-line); }
+.cal-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 10px; color: var(--fg2); }
+.cal-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.cal-legend .cal-day { width: 14px; height: 12px; display: inline-block; }
+
+/* target hit rate */
+.hr-big { display: flex; align-items: baseline; gap: 8px; font-size: 11px; color: var(--fg2); margin: 2px 0 4px; }
+.hr-big b { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.bar-pct.zone-top { fill: var(--good-line); } .bar-pct.zone-mid { fill: var(--mid-line); } .bar-pct.zone-low { fill: var(--bad-line); }
+.hr-compare { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--fg2); margin-top: 6px; }
+.hr-compare b { color: var(--fg); } .hr-compare i { color: var(--fg3); font-style: normal; }
+.hr-compare.muted { color: var(--fg3); font-style: italic; }
+.hr-note { width: 100%; color: var(--climb); font-weight: 600; }
+.hr-hint { font-size: 10px; color: var(--fg3); margin-top: 6px; }
+
+/* progress per lift */
+.pg-prs { margin: 4px 0 8px; padding: 8px 10px; border-radius: 8px; background: var(--good-bg); }
+.pg-sub { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--good); margin-bottom: 3px; }
+.pg-prs ul { margin: 0; padding-left: 16px; font-size: 11px; color: var(--fg); display: flex; flex-direction: column; gap: 2px; }
+.pg-list { display: flex; flex-direction: column; }
+.pg-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 6px 0; border-top: 1px solid var(--border); }
+.pg-row:first-child { border-top: none; }
+.pg-name { font-size: 12px; font-weight: 700; flex: 1; min-width: 0; }
+.pg-status { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 20px; background: var(--input-bg); color: var(--fg2); }
+.pg-status.s-progressing { background: var(--good-bg); color: var(--good); }
+.pg-status.s-stalled { background: var(--bad-bg); color: var(--bad); }
+.pg-status.s-holding { background: var(--mid-bg); color: var(--mid); }
+.pg-detail { width: 100%; font-size: 11px; color: var(--fg2); }
+.pg-detail b { color: var(--fg); font-variant-numeric: tabular-nums; }
+.pg-status.s-top { background: var(--deload-bg); color: var(--deload); }
