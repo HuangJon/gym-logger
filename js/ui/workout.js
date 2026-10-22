@@ -3,11 +3,11 @@
  * complete the session. The workout in progress is saved on every change and picked up again
  * if the app is closed mid-workout.
  */
-import { PREHAB, SESSION_LABELS, SESSION_COLORS, DELOAD } from '../config/program.js';
+import { PREHAB, SESSION_LABELS, SESSION_LETTERS, SESSION_FOCUS, SESSION_COLORS, DELOAD } from '../config/program.js';
 import { sessionExercises, findExercise, unitOf, programUnitOf, setUnitChoices, incrementOf, repRangeText, restOf } from '../core/exercises.js';
 import { todayISO, isISODate, formatShort, agoText } from '../core/dates.js';
 import { hasValue, parseWeight, parseReps, convertWeight, UNITS } from '../core/numbers.js';
-import { STATUS, MODE, buildSessionRecord, formatSets } from '../core/records.js';
+import { STATUS, MODE, buildSessionRecord, formatSets, nextSession, lastDoneOf } from '../core/records.js';
 import { addSession } from '../core/log.js';
 import { liftEasedStreak, lastNote, canStepRepsDown, canStepRepsUp, lastPerformance, computeTarget, targetReason, missedStreak, MISSES_BEFORE_HINT, lighterWeight, deloadTarget, DELOAD_STYLES, stepWeight, stepReps, stepTarget, setBadge, exerciseVerdict } from '../core/progress.js';
 import { deloadAdvice, deloadFrequency, maintainCount, maintainOften, deloadWeekActive, startDeloadWeek, endDeloadWeek, snoozeDeload } from '../core/deload.js';
@@ -17,13 +17,13 @@ import { esc, delegate, autoResize, flash, confirmTap } from './dom.js';
 import { createRestTimer } from './rest-timer.js';
 import { climbSwitch, climbChoice } from './climb-switch.js';
 
-const COMPLETE_LABEL = 'Complete Session';
+const COMPLETE_LABEL = 'Complete workout';
 
 export function createWorkoutView({ root, repo, storage, settings, onSaved, onUnitsChanged }) {
   const $ = sel => root.querySelector(sel);
   const ui = {
     pickerPanel: $('#picker-panel'), sessionPanel: $('#session-panel'),
-    pickDate: $('#pick-date'), pickSession: $('#pick-session'), startBtn: $('#start-btn'),
+    pickDate: $('#pick-date'), workouts: $('#pick-workouts'), startBtn: $('#start-btn'),
     preview: $('#session-preview-area'), hint: $('#picker-hint'), pickMsg: $('#pick-msg'),
     header: $('#session-header'), prehab: $('#prehab'), exercises: $('#exercise-area'),
     completeBtn: $('#complete-btn'), status: $('#status'), deloadArea: $('#deload-area'), climbArea: $('#climb-area'), sessionClimb: $('#session-climb'),
@@ -99,11 +99,12 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
 
   // ── picker ──────────────────────────────────────────────
   let pickMode = null;   // your choice for the next session; null = follow the deload week
+  let pickN = null;      // the workout picked (1 / 2 / 3); starts on the next one in the rotation
 
   function resetPicker() {
     ui.pickDate.value = todayISO();
     ui.pickDate.max = todayISO();
-    ui.pickSession.value = '';
+    pickN = nextSession(repo.sessions);
     pickMode = null;
     renderPicker();
   }
@@ -120,6 +121,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   const modePicked = () => pickMode ?? (deloadWeekActive(settings.get(), pickedDate()) ? MODE.DELOAD : MODE.NORMAL);
 
   function renderPicker() {
+    renderWorkoutButtons();
     renderDeloadArea();
     renderClimbArea();
     renderPreview();
@@ -175,8 +177,22 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
       </div>${tooOften}${mode === MODE.MAINTAIN ? maintainWarning(date) : ''}`;
   }
 
+  /** Workout A / B / C buttons: the next one in the rotation is marked "up next"; each says when you last did it. */
+  function renderWorkoutButtons() {
+    const next = nextSession(repo.sessions), today = todayISO();
+    ui.workouts.innerHTML = Object.keys(SESSION_LABELS).map(Number).map(n => {
+      const last = lastDoneOf(repo.sessions, n);
+      return `<button type="button" class="workout-btn" data-action="pick-session" data-n="${n}" aria-pressed="${pickN === n}" style="--sess:${SESSION_COLORS[n]}">
+        <span class="wb-top"><b class="wb-letter">${SESSION_LETTERS[n]}</b>${n === next && repo.sessions.length ? '<span class="wb-next">up next</span>' : ''}</span>
+        <span class="wb-focus">${esc(SESSION_FOCUS[n] || '')}</span>
+        <span class="wb-last">${last ? `last ${esc(agoText(last, today))}` : 'not done yet'}</span>
+      </button>`;
+    }).join('');
+    ui.startBtn.textContent = pickN ? `Start ${SESSION_LABELS[pickN]}` : 'Start workout';
+  }
+
   function renderPreview() {
-    const n = Number(ui.pickSession.value), mode = modePicked();
+    const n = pickN, mode = modePicked();
     ui.startBtn.disabled = !n;
     ui.hint.hidden = !!n;
     if (!n) { ui.preview.innerHTML = ''; return; }
@@ -201,7 +217,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   }
 
   function start() {
-    const n = Number(ui.pickSession.value);
+    const n = pickN;
     if (!n) return;
     active = { sessionNum: n, date: pickedDate(), mode: modePicked() };
     scratch = {};
@@ -254,11 +270,13 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
       <h2 style="color:${SESSION_COLORS[n]}">${SESSION_LABELS[n]}</h2>
       <input type="date" class="date-input" id="active-date" value="${date}" max="${todayISO()}" data-action="active-date" aria-label="Session date">
       <button type="button" class="link-btn sa-change" data-action="ask-discard">change</button>
+      <div class="session-progress" id="session-progress" role="status"></div>
       <div class="session-tools">
         ${modeSwitch(mode, 'session-mode')}
         <button type="button" class="rest-toggle" data-action="rest-toggle" aria-pressed="${restOn}">⏱ Rest timer ${restOn ? 'on' : 'off'}</button>
         ${anyDeload() ? `<div class="deload-style-row">${deloadStyleSwitch()}<span class="deload-how">${deloadHow()}</span></div>` : ''}
       </div>`;
+    updateProgress();
   }
 
   const anyDeload = () => sessionExercises(active.sessionNum).some(liftDeload);
@@ -287,6 +305,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     const nudge = climb ? `<div class="climb-nudge" role="note">🧗 Hard climb yesterday — if your back, biceps or grip feel beat up, tap <b>↓ Deload</b> on the pulling lifts.</div>` : '';
     ui.exercises.innerHTML = nudge + sessionExercises(active.sessionNum).map(exerciseCard).join('');
     ui.exercises.querySelectorAll('.note-input').forEach(autoResize);
+    updateProgress();
   }
 
   /** Re-render one card (state lives in `scratch`, so nothing typed is lost). */
@@ -295,11 +314,42 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     const card = ui.exercises.querySelector(`#card-${exId}`);
     if (!card) return;
     card.outerHTML = exerciseCard(findExercise(exId));
-    autoResize(ui.exercises.querySelector(`#note-${exId}`));
+    const note = ui.exercises.querySelector(`#note-${exId}`);
+    if (note) autoResize(note);
+    updateProgress();
+  }
+
+  /** Finished: skipped, or every set logged. Finished lifts shrink to one line until you tap them. */
+  const isFinished = ex => { const st = stateOf(ex.id); return !!st.skipped || (st.done.length > 0 && openIndex(ex) === null); };
+
+  function collapsedCard(ex) {
+    const st = stateOf(ex.id), mode = liftMode(ex), unit = unitOf(ex);
+    const verdict = st.skipped ? null : exerciseVerdict(st.done, targetFor(ex));
+    const summary = st.skipped ? 'skipped' : formatSets(st.done, ex.bw ? '' : unit);
+    const icon = st.skipped ? '✕' : verdict?.status === STATUS.COMPLETE ? '✓' : '~';
+    return `<div class="card ex-card is-collapsed s${active.sessionNum}${st.skipped ? ' is-skipped' : ''}${verdict?.status === STATUS.COMPLETE ? ' is-hit' : ''}" id="card-${ex.id}" data-ex="${ex.id}">
+      <button type="button" class="ex-collapsed" data-action="expand" aria-expanded="false" aria-label="${esc(ex.name)}: ${esc(summary)} — tap to open">
+        <span class="exc-icon">${icon}</span>
+        <span class="exc-name">${esc(ex.name)}${mode !== MODE.NORMAL ? ` <span class="${mode}-tag">${mode}</span>` : ''}</span>
+        <span class="exc-sum">${esc(summary)}</span>
+        <span class="exc-chev">▾</span>
+        ${st.note ? `<span class="exc-note">✎ ${esc(st.note)}</span>` : ''}
+      </button>
+    </div>`;
+  }
+
+  /** "2 of 5 lifts done" in the header. */
+  function updateProgress() {
+    const el = ui.header.querySelector('#session-progress');
+    if (!el || !active) return;
+    const lifts = sessionExercises(active.sessionNum), n = lifts.filter(isFinished).length;
+    el.textContent = `${n} of ${lifts.length} lifts done`;
+    el.classList.toggle('all-done', n === lifts.length);
   }
 
   function exerciseCard(ex) {
     const st = stateOf(ex.id), mode = liftMode(ex), deload = mode === MODE.DELOAD, maintain = mode === MODE.MAINTAIN;
+    if (isFinished(ex) && !st.expanded) return collapsedCard(ex);
     const tags = [deload && '<span class="deload-tag">deload</span>', maintain && '<span class="maintain-tag">maintain</span>', ex.tag && `<span class="ex-tag tag-circuit">${esc(ex.tag)}</span>`, ex.warn && `<span class="ex-tag tag-warn">${esc(ex.warn)}</span>`].filter(Boolean).join('');
     return `
       <div class="card ex-card s${active.sessionNum}${st.skipped ? ' is-skipped' : ''}${deload ? ' is-deload' : ''}${maintain ? ' is-maintain' : ''}" id="card-${ex.id}" data-ex="${ex.id}">
@@ -315,6 +365,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
         ${lastRow(ex)}
         ${st.skipped ? '' : setLog(ex)}
         <div class="ex-row status-row">
+          ${isFinished(ex) ? '<button type="button" class="status-btn collapse-btn" data-action="collapse">▴ Done</button>' : ''}
           <button type="button" class="status-btn" data-action="skip" data-status="skip" aria-pressed="${!!st.skipped}">✕ Skip</button>
           <button type="button" class="status-btn deload-btn" data-action="lift-mode" data-mode="deload" aria-pressed="${deload}">↓ Deload</button>
           <button type="button" class="status-btn maintain-btn" data-action="lift-mode" data-mode="maintain" aria-pressed="${maintain}">= Maintain</button>
@@ -512,6 +563,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     st.current = undefined;
     st.draft = undefined;
     if (isNew && settings.get().restTimer) rest.start({ exId, label: ex.name, seconds: restOf(ex) });
+    if (isNew) st.expanded = false;   // finishing the last set collapses the lift
     refreshCard(exId);
   }
 
@@ -541,6 +593,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   function toggleSkip(exId) {
     const st = stateOf(exId);
     st.skipped = !st.skipped;
+    st.expanded = st.skipped ? true : undefined;   // stay open after Skip, so you can add a note why
     refreshCard(exId);
   }
 
@@ -698,6 +751,8 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     'remove-set': el => removeSet(exIdOf(el)),
     'cancel-set': el => openSet(exIdOf(el), stateOf(exIdOf(el)).done.length),
     'skip': el => toggleSkip(exIdOf(el)),
+    'expand': el => { stateOf(exIdOf(el)).expanded = true; refreshCard(exIdOf(el)); },
+    'collapse': el => { const st = stateOf(exIdOf(el)); st.expanded = false; st.current = undefined; st.draft = undefined; refreshCard(exIdOf(el)); },
     'complete': complete,
     'discard-bottom': discardFromBottom,
     'rest-toggle': toggleRestTimer,
@@ -705,6 +760,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     'lift-mode': el => toggleLiftMode(exIdOf(el), el.dataset.mode),
     'session-mode': el => setSessionMode(el.dataset.mode),
     'pick-mode': el => { pickMode = el.dataset.mode; renderPicker(); },
+    'pick-session': el => { const n = Number(el.dataset.n); pickN = pickN === n ? null : n; renderPicker(); },
     'climb-set': el => setClimb(el.dataset.date, el.dataset.intensity),
     'deload-style': el => setDeloadStyle(el.dataset.style),
     'rest-adjust': el => rest.adjust(Number(el.dataset.dir)),
@@ -721,7 +777,6 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     'note': el => { stateOf(exIdOf(el)).note = el.value; autoResize(el); persist(); },
   });
   delegate(root, 'change', {
-    'pick-session': renderPreview,
     'pick-date': () => { checkPickDate(); pickMode = null; renderPicker(); },
     'active-date': changeDate,
   });
