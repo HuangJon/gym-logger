@@ -3,13 +3,13 @@
  * complete the session. The workout in progress is saved on every change and picked up again
  * if the app is closed mid-workout.
  */
-import { PREHAB, SESSION_LABELS, SESSION_COLORS } from '../config/program.js';
+import { PREHAB, SESSION_LABELS, SESSION_COLORS, DELOAD } from '../config/program.js';
 import { sessionExercises, findExercise, unitOf, programUnitOf, setUnitChoices, incrementOf, repRangeText, restOf } from '../core/exercises.js';
 import { todayISO, isISODate, formatShort, agoText } from '../core/dates.js';
 import { hasValue, parseWeight, parseReps, convertWeight, UNITS } from '../core/numbers.js';
 import { STATUS, buildSessionRecord, formatSets } from '../core/records.js';
 import { addSession } from '../core/log.js';
-import { lastPerformance, computeTarget, targetReason, missedStreak, MISSES_BEFORE_HINT, lighterWeight, stepWeight, stepReps, stepTarget, setBadge, exerciseVerdict } from '../core/progress.js';
+import { canStepRepsDown, lastPerformance, computeTarget, targetReason, missedStreak, MISSES_BEFORE_HINT, lighterWeight, stepWeight, stepReps, stepTarget, setBadge, exerciseVerdict } from '../core/progress.js';
 import { deloadAdvice, deloadFrequency, deloadWeekActive, startDeloadWeek, endDeloadWeek, snoozeDeload } from '../core/deload.js';
 import { saveDraft, loadDraft, clearDraft } from '../data/draft.js';
 import { esc, delegate, autoResize, flash, confirmTap } from './dom.js';
@@ -332,7 +332,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
       ${ex.bw ? '' : `<div class="log-line"><span class="row-label">Weight</span><div class="weight-box" id="wb-${ex.id}">${weightInner(ex, d)}</div></div>`}
       <div class="log-line">
         <span class="row-label">Reps</span>
-        <button type="button" class="stepper" data-action="reps-step" data-dir="-1" aria-label="One less rep">−</button>
+        <button type="button" class="stepper" data-action="reps-step" data-dir="-1" aria-label="One less rep" id="rm-${ex.id}"${canStepRepsDown(d.reps, ex.reps) ? '' : ' disabled'}>−</button>
         <input class="reps-input" type="number" inputmode="numeric" min="0" id="reps-${ex.id}" value="${d.reps ?? ''}" data-action="reps" aria-label="${esc(ex.name)} reps, set ${i + 1}">
         <button type="button" class="stepper" data-action="reps-step" data-dir="1" aria-label="One more rep">+</button>
         <span class="reps-target">/ ${repRangeText(ex.reps)}</span>
@@ -361,6 +361,8 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     const ex = findExercise(exId), d = draftOf(ex);
     const box = ui.exercises.querySelector(`#wb-${exId}`);
     if (box) box.innerHTML = weightInner(ex, d);
+    const minus = ui.exercises.querySelector(`#rm-${exId}`);
+    if (minus) minus.disabled = !canStepRepsDown(d.reps, ex.reps);
     const badge = setBadge(d, targetFor(ex)), el = ui.exercises.querySelector(`#pb-${exId}`);
     if (el) { el.className = `prog-badge ${badge.cls}`; el.textContent = badge.label; }
   }
@@ -486,8 +488,14 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
 
   /** Deload the whole session (or back to normal) mid-workout. Logged sets stay; targets follow. */
   function setSessionDeload(on) {
+    const before = Object.fromEntries(sessionExercises(active.sessionNum).map(ex => [ex.id, liftDeload(ex)]));
     active.deload = on;
-    for (const st of Object.values(scratch)) { delete st.deload; delete st.target; delete st.draft; }
+    for (const ex of sessionExercises(active.sessionNum)) {
+      const st = scratch[ex.id];
+      if (!st) continue;
+      delete st.deload;
+      retarget(ex, before[ex.id]);
+    }
     persist();
     renderHeader();
     renderExercises();
@@ -496,10 +504,26 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   /** Deload just this lift (or keep this one normal in a deload session). */
   function toggleLiftDeload(exId) {
     const ex = findExercise(exId), st = stateOf(exId), next = !liftDeload(ex);
+    const was = liftDeload(ex);
     if (next === active.deload) delete st.deload; else st.deload = next;
-    delete st.target;   // the suggested target follows the change
-    st.draft = undefined;
+    retarget(ex, was);
     refreshCard(exId);
+  }
+
+  /**
+   * After a deload switch: targets go back to suggested (so they follow the change) — except a weight
+   * you set yourself on a lift with no suggested weight is kept (~10% lighter while deloaded, back
+   * to your number after).
+   */
+  function retarget(ex, wasDeload) {
+    const st = stateOf(ex.id);
+    const yours = st.target?.weight ?? st.draft?.weight ?? null;
+    if (!wasDeload && hasValue(yours)) st.baseWeight = yours;   // remember your normal weight
+    delete st.target;
+    st.draft = undefined;
+    const next = suggestedTarget(ex);
+    if (ex.bw || hasValue(next.weight) || !hasValue(st.baseWeight)) return;
+    st.target = { ...next, weight: liftDeload(ex) ? lighterWeight(ex, st.baseWeight, DELOAD.weightFactor) : st.baseWeight };
   }
 
   function toggleRestTimer() {
