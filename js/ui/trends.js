@@ -71,8 +71,8 @@ export function createTrendsView({ root, repo }) {
         day.climb && `${day.climb} climb`,
       ].filter(Boolean);
       const cls = ['cal-day', day.future && 'future', lift && 'lift', mode && mode !== 'normal' && `m-${mode}`, day.climb && `c-${day.climb}`, day.date === today && 'today'].filter(Boolean).join(' ');
-      const style = lift && mode === 'normal' ? ` style="--sess:${SESSION_COLORS[lift.session]}"` : '';
-      return `<span class="${cls}"${style} title="${esc(formatShort(day.date))}${bits.length ? ` — ${esc(bits.join(', '))}` : ''}"></span>`;
+      const label = day.lifts.map(l => l.session).join('');
+      return `<span class="${cls}" title="${esc(formatShort(day.date))}${bits.length ? ` — ${esc(bits.join(', '))}` : ''}">${label ? `<b>${label}</b>` : ''}</span>`;
     };
     let lastMonth = '';
     const rows = weeks.map(w => {
@@ -83,8 +83,8 @@ export function createTrendsView({ root, repo }) {
     return `<div class="card trend-card cal-card">
       <div class="trend-head"><span class="trend-name">Training calendar</span><span class="trend-sub">${anchored ? '12 weeks up to your last activity' : 'last 12 weeks'}</span></div>
       <div class="cal-grid"><div class="cal-row cal-head"><span class="cal-month"></span>${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(d => `<span class="cal-dow">${d}</span>`).join('')}</div>${rows}</div>
-      <div class="cal-legend"><span><i class="cal-day lift" style="--sess:${SESSION_COLORS[1]}"></i>lift (session color)</span><span><i class="cal-day lift m-maintain"></i>maintain</span>
-        <span><i class="cal-day lift m-deload"></i>deload</span><span><i class="cal-day c-easy"></i>easy climb</span><span><i class="cal-day c-hard"></i>hard climb</span></div>
+      <div class="cal-legend"><span><i class="cal-day lift"><b>1</b></i>lifted (session #)</span><span><i class="cal-day lift m-maintain"><b>2</b></i>maintain</span>
+        <span><i class="cal-day lift m-deload"><b>3</b></i>deload</span><span><i class="cal-day c-easy"></i>easy climb</span><span><i class="cal-day c-hard"></i>hard climb</span></div>
     </div>`;
   }
 
