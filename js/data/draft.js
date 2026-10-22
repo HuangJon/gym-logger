@@ -49,6 +49,7 @@ function cleanScratch(scratch) {
     const s = { done: (Array.isArray(st.done) ? st.done : []).map(cleanSet).filter(Boolean) };
     if (st.skipped) s.skipped = true;
     if (typeof st.deload === 'boolean') s.deload = st.deload;
+    if (num(st.baseWeight) !== null) s.baseWeight = st.baseWeight;
     if (typeof st.note === 'string' && st.note) s.note = st.note;
     const t = st.target;
     if (t && num(t.reps) !== null && num(t.sets) !== null) s.target = { weight: num(t.weight), reps: t.reps, sets: t.sets };

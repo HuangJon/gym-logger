@@ -164,8 +164,16 @@ export function stepWeight(ex, weight, direction) {
   return Math.max(inc, round2(Number(weight) + direction * inc));
 }
 
-/** Reps after a − / + tap: from 1 up to the top of the rep range (type a number for anything else). */
-export const stepReps = (reps, direction, range) => clamp(Number(reps) + direction, 1, range[1]);
+/**
+ * Reps after a − / + tap: stays inside the rep range (type a number for a set that fell short).
+ * − never raises a number you typed below the range; + from below the range climbs back in.
+ */
+export function stepReps(reps, direction, [lo, hi]) {
+  const r = Number(reps) || lo;
+  return direction < 0 ? Math.max(Math.min(lo, r), r - 1) : Math.min(hi, Math.max(1, r + 1));
+}
+/** Can − lower the reps any further? */
+export const canStepRepsDown = (reps, [lo]) => Number(reps) > lo;
 
 /** Limits for editing a target in the pop-out. */
 export const TARGET_SETS_RANGE = [1, 6];
