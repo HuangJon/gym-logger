@@ -785,7 +785,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     'lift-mode': el => toggleLiftMode(exIdOf(el), el.dataset.mode),
     'session-mode': el => setSessionMode(el.dataset.mode),
     'pick-mode': el => { pickMode = el.dataset.mode; renderPicker(); },
-    'pick-session': el => { const n = Number(el.dataset.n); pickN = pickN === n ? null : n; renderPicker(); },
+    'pick-session': el => { pickN = Number(el.dataset.n); renderPicker(); },   // tapping the picked one keeps it (Start never goes away)
     'climb-set': el => setClimb(el.dataset.date, el.dataset.intensity),
     'deload-style': el => setDeloadStyle(el.dataset.style),
     'rest-adjust': el => rest.adjust(Number(el.dataset.dir)),
