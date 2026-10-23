@@ -74,9 +74,17 @@
 .ex-card.is-skipped { opacity: .55; }
 .ex-header { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start; padding: 10px 14px; min-height: 50px; }
 .ex-name { font-size: 15px; font-weight: 800; padding-top: 1px; letter-spacing: -0.01em; }
-.ex-card.s1 .ex-name, .ex-card.s1 .exc-name { color: var(--s1-ink); }
-.ex-card.s2 .ex-name, .ex-card.s2 .exc-name { color: var(--s2-ink); }
-.ex-card.s3 .ex-name, .ex-card.s3 .exc-name { color: var(--s3-ink); }
+/* open lifts: header tinted in the workout's color so each lift is easy to spot; finished (collapsed) lifts stay plain */
+.ex-card.s1 .ex-name { color: var(--s1-ink); }
+.ex-card.s2 .ex-name { color: var(--s2-ink); }
+.ex-card.s3 .ex-name { color: var(--s3-ink); }
+.ex-card.s1:not(.is-collapsed) { border-color: var(--s1-edge); }
+.ex-card.s2:not(.is-collapsed) { border-color: var(--s2-edge); }
+.ex-card.s3:not(.is-collapsed) { border-color: var(--s3-edge); }
+.ex-card.s1 .ex-header { background: var(--s1-tint); border-bottom: 1px solid var(--s1-edge); }
+.ex-card.s2 .ex-header { background: var(--s2-tint); border-bottom: 1px solid var(--s2-edge); }
+.ex-card.s3 .ex-header { background: var(--s3-tint); border-bottom: 1px solid var(--s3-edge); }
+.ex-card.is-skipped .ex-header { background: var(--input-bg); border-bottom-color: var(--border); }
 .ex-card.is-skipped .ex-name, .ex-card.is-skipped .exc-name { color: var(--fg3); }
 .ex-detail { font-size: 11px; color: var(--fg2); margin-top: 2px; }
 .ex-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
