@@ -327,3 +327,7 @@
 .session-progress.all-done { color: var(--good); }
 .exc-note { width: 100%; padding-left: 30px; font-size: 11px; color: var(--fg2); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tag-pick { background: var(--input-bg); color: var(--fg2); }
+.ex-head-right { display: flex; align-items: center; gap: 6px; }
+.ex-min-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--fg2); font-size: 13px; line-height: 1; cursor: pointer; touch-action: manipulation; flex-shrink: 0; }
+.ex-card.is-todo .exc-icon { box-shadow: inset 0 0 0 1.5px var(--fg3); }
+.ex-card.is-todo .exc-sum { color: var(--fg3); font-weight: 500; }

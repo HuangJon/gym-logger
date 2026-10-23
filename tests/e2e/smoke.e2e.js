@@ -81,6 +81,9 @@ for (const setup of SETUPS) {
     check(tag(`workout ${n}: Log set button on screen`), await logBtn.isVisible() && await inView('[data-action="log-set"]'));
     await logBtn.tap(); await wait(100);
     check(tag(`workout ${n}: logging a set counts it`), /\d+ lbs|\d+ kg|\d+ reps/.test(await page.locator('.setlog-summary').first().innerText()));
+    await page.locator('.ex-card:not(.is-collapsed) .ex-min-btn').nth(1).tap(); await wait(60);
+    const minimized = page.locator('.ex-card.is-collapsed.is-todo');
+    check(tag(`workout ${n}: any lift can be minimized and opened again`), await minimized.count() === 1 && (await minimized.locator('[data-action="expand"]').tap(), await wait(60), await page.locator('.ex-card.is-todo').count() === 0));
     const lastCard = page.locator('.ex-card').last();
     await lastCard.locator('[data-action="skip"]').tap(); await wait(80);
     check(tag(`workout ${n}: Skip minimizes the lift, greyed out`), await page.locator('.ex-card').last().evaluate(el => el.classList.contains('is-collapsed') && el.classList.contains('is-skipped')));

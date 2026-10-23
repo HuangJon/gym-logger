@@ -341,15 +341,18 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   /** Finished: skipped, or every set logged. Finished lifts shrink to one line until you tap them. */
   const isFinished = ex => { const st = stateOf(ex.id); return !!st.skipped || (st.done.length > 0 && openIndex(ex) === null); };
   const isFinishedNotSkipped = ex => isFinished(ex) && !stateOf(ex.id).skipped;
+  /** Shown as one line: you minimized it, or it's finished and you haven't opened it. */
+  const isCollapsed = ex => { const st = stateOf(ex.id); return st.expanded === false || (isFinished(ex) && st.expanded !== true); };
   /** For a pick-one lift (crunches or ab wheel): "optional — you did X" once another in its group is done. */
   const coveredBy = ex => pickOneOthers(ex).find(o => (stateOf(o.id).done?.length || 0) > 0) || null;
 
   function collapsedCard(ex) {
     const st = stateOf(ex.id), mode = liftMode(ex), unit = unitOf(ex);
     const verdict = st.skipped ? null : exerciseVerdict(st.done, targetFor(ex));
-    const summary = st.skipped ? 'skipped' : formatSets(st.done, ex.bw ? '' : unit);
-    const icon = st.skipped ? '✕' : verdict?.status === STATUS.COMPLETE ? '✓' : '~';
-    return `<div class="card ex-card is-collapsed s${active.sessionNum}${st.skipped ? ' is-skipped' : ''}${verdict?.status === STATUS.COMPLETE ? ' is-hit' : ''}" id="card-${ex.id}" data-ex="${ex.id}">
+    const summary = st.skipped ? 'skipped' : !st.done.length ? targetText(ex, targetFor(ex)) : formatSets(st.done, ex.bw ? '' : unit);
+    const todo = !st.skipped && !st.done.length;   // minimized before you started it
+    const icon = st.skipped ? '✕' : todo ? '' : verdict?.status === STATUS.COMPLETE ? '✓' : '~';
+    return `<div class="card ex-card is-collapsed s${active.sessionNum}${st.skipped ? ' is-skipped' : ''}${todo ? ' is-todo' : ''}${verdict?.status === STATUS.COMPLETE ? ' is-hit' : ''}" id="card-${ex.id}" data-ex="${ex.id}">
       <button type="button" class="ex-collapsed" data-action="expand" aria-expanded="false" aria-label="${esc(ex.name)}: ${esc(summary)} — tap to open">
         <span class="exc-icon">${icon}</span>
         <span class="exc-name">${esc(ex.name)}${mode !== MODE.NORMAL ? ` <span class="${mode}-tag">${mode}</span>` : ''}</span>
@@ -372,7 +375,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
 
   function exerciseCard(ex) {
     const st = stateOf(ex.id), mode = liftMode(ex), deload = mode === MODE.DELOAD, maintain = mode === MODE.MAINTAIN;
-    if (isFinished(ex) && !st.expanded) return collapsedCard(ex);
+    if (isCollapsed(ex)) return collapsedCard(ex);
     const others = pickOneOthers(ex), covered = coveredBy(ex);
     const pickTag = others.length ? `<span class="ex-tag tag-pick">${covered ? `optional — you did ${esc(covered.name)}` : `or ${esc(others.map(o => o.name).join(' / '))}`}</span>` : '';
     const tags = [pickTag, deload && '<span class="deload-tag">deload</span>', maintain && '<span class="maintain-tag">maintain</span>', ex.tag && `<span class="ex-tag tag-circuit">${esc(ex.tag)}</span>`, ex.warn && `<span class="ex-tag tag-warn">${esc(ex.warn)}</span>`].filter(Boolean).join('');
@@ -384,7 +387,8 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
             <div class="ex-detail">${esc(ex.detail)}</div>
             ${tags ? `<div class="ex-tags">${tags}</div>` : ''}
           </div>
-          <div>${ex.bw ? '<span class="weight-bw">bodyweight</span>' : unitSwitch(ex)}</div>
+          <div class="ex-head-right">${ex.bw ? '<span class="weight-bw">bodyweight</span>' : unitSwitch(ex)}
+            <button type="button" class="ex-min-btn" data-action="collapse" aria-label="Minimize ${esc(ex.name)}" title="Minimize">▴</button></div>
         </div>
         ${targetRow(ex)}
         ${lastRow(ex)}
@@ -588,7 +592,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     st.current = undefined;
     st.draft = undefined;
     if (isNew && settings.get().restTimer) rest.start({ exId, label: ex.name, seconds: restOf(ex) });
-    if (isNew) st.expanded = false;   // finishing the last set collapses the lift
+    if (isNew) st.expanded = undefined;   // finishing the last set collapses the lift; otherwise it stays open
     refreshCard(exId);
   }
 
