@@ -35,7 +35,7 @@ const last = (weight, reps, status = 'complete', target) => ({ status, weight, u
 
 test('computeTarget: first time uses the default weight and the bottom of the range', () => {
   assert.deepEqual(computeTarget(incline1, null), { weight: 50, reps: 6, sets: 3, reason: 'first' });
-  assert.deepEqual(computeTarget(pulldown, null), { weight: 25, reps: 8, sets: 2, reason: 'first' });   // estimated starting weight (kg)
+  assert.deepEqual(computeTarget(pulldown, null), { weight: 50, reps: 8, sets: 2, reason: 'first' });   // estimated starting weight (a cable plate, lbs)
   assert.deepEqual(computeTarget(abwheel, null), { weight: null, reps: 8, sets: 2, reason: 'first' });
 });
 
@@ -92,10 +92,11 @@ test('targetReason', () => {
 
 test('stepWeight / stepReps', () => {
   assert.equal(stepWeight(incline1, 50, 1), 55);
-  assert.equal(stepWeight(findExercise('s1-lateral'), 5, -1), 2.5);
-  assert.equal(stepWeight(findExercise('s1-lateral'), 2.5, -1), 2.5);    // never below one increment
-  assert.equal(stepWeight(findExercise('s1-lateral'), 0, 1), 2.5);       // nothing logged → + starts from 0
-  assert.equal(stepWeight(findExercise('s1-lateral'), 3, 1), 5.5);
+  assert.equal(stepWeight(findExercise('s2-ohpress'), 5, -1), 5);         // never below one increment
+  assert.equal(stepWeight(findExercise('s2-ohpress'), 0, 1), 5);          // nothing logged → + starts from 0
+  assert.equal(stepWeight(findExercise('s2-ohpress'), 32, 1), 37);
+  assert.equal(stepWeight(findExercise('s1-lateral'), 0, 1), 3);          // cable stack: first plate
+  assert.equal(stepWeight(findExercise('s1-lateral'), 3, 1), 7);
   assert.equal(stepReps(8, 1, [6, 12]), 9);
   assert.equal(stepReps(12, 1, [6, 12]), 13);   // up to 2 past the top
   assert.equal(stepReps(14, 1, [6, 12]), 14);
@@ -116,7 +117,7 @@ test('stepTarget keeps the target sensible', () => {
   assert.deepEqual(stepTarget(incline1, { ...t, reps: 12 }, 'reps', 1), { ...t, reps: 12 });
   assert.deepEqual(stepTarget(incline1, t, 'sets', 1), { ...t, sets: 3 });
   assert.deepEqual(stepTarget(incline1, { ...t, sets: 1 }, 'sets', -1), { ...t, sets: 1 });
-  assert.deepEqual(stepTarget(pulldown, { weight: null, reps: 8, sets: 2 }, 'weight', 1), { weight: 2.5, reps: 8, sets: 2 });
+  assert.deepEqual(stepTarget(pulldown, { weight: null, reps: 8, sets: 2 }, 'weight', 1), { weight: 3, reps: 8, sets: 2 });   // first cable plate
 });
 
 test('setBadge: live check on the set you are about to log', () => {

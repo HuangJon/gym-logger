@@ -31,7 +31,8 @@ test('findExercise covers current and retired exercises', () => {
 
 test('sessionExercises / unitOf / incrementOf / repRangeText', () => {
   assert.equal(sessionExercises(1).length, SESSIONS[1].length);
-  assert.equal(unitOf(findExercise('s1-crunches')), 'kg');
+  assert.equal(unitOf(findExercise('s1-crunches')), 'lbs');            // cable stack is labeled in lbs
+  assert.equal(unitOf(findExercise('s2-pallof')), 'lbs');
   assert.equal(unitOf(findExercise('s1-incline')), 'lbs');
   assert.equal(incrementOf(findExercise('s1-deadlift')), 5);
   assert.equal(incrementOf(findExercise('s3-pulldown')), 2.5);   // default
@@ -109,10 +110,10 @@ test('buildSessionRecord: only logged sets count; complete/partial from the targ
   assert.deepEqual(rec.entries['s1-deadlift'], { status: 'partial', note: '', sets: [{ weight: 185, reps: 6 }], weight: 185, unit: 'lbs', reps: 6, target: { reps: 6, sets: 2, weight: 185 } });
   assert.deepEqual(rec.entries['s1-lateral'], { status: 'skip', note: '', target: { reps: 12, sets: 2, weight: 7.5 } });
   assert.deepEqual(rec.entries['s1-crunches'], { status: 'unrecorded', note: 'cable busy' });
-  // a first-time lift with no weight target; unit from the program (pulldown is in kg, in Workout C now)
+  // a first-time lift with no weight target; unit from the program (pulldown is on the cable stack, in lbs; Workout C now)
   const c = buildSessionRecord({ sessionNum: 3, date: '2026-10-21', now: 124, targetOf: ex => (ex.id === 's3-pulldown' ? pulldownTarget : null),
     scratch: { 's3-pulldown': { done: [{ weight: 45, reps: 8 }, { weight: 45, reps: 8 }] } } });
-  assert.deepEqual(c.entries['s3-pulldown'], { status: 'complete', note: '', sets: [{ weight: 45, reps: 8 }, { weight: 45, reps: 8 }], weight: 45, unit: 'kg', reps: 8, target: { reps: 8, sets: 2 } });
+  assert.deepEqual(c.entries['s3-pulldown'], { status: 'complete', note: '', sets: [{ weight: 45, reps: 8 }, { weight: 45, reps: 8 }], weight: 45, unit: 'lbs', reps: 8, target: { reps: 8, sets: 2 } });
   assert.equal('s1-pulldown' in rec.entries, false, 'pulldown is no longer in Workout A');
 });
 
@@ -188,7 +189,8 @@ test('every past save format still loads (fixtures are permanent — never edit 
   assert.equal(v1.sessions[2].program, 'old');
   const v2 = migrateLog(load('schema-v2.json'));
   assert.equal(v2.sessions[0].note, 'tweaked shoulder');
-  assert.equal(v2.sessions[0].entries['s1-crunches'].unit, 'kg');
+  assert.equal(v2.sessions[0].entries['s1-crunches'].unit, 'lbs');   // v5: cable "kg" was the stack's lbs labels
+  assert.equal(v2.sessions[0].entries['s1-crunches'].weight, load('schema-v2.json').sessions[0].entries['s1-crunches'].weight);   // number unchanged
   const v3 = migrateLog(load('schema-v3.json'));
   assert.deepEqual(v3.sessions[0].entries['s1-incline'].sets, [{ weight: 50, reps: 9 }, { weight: 50, reps: 8 }]);
   assert.deepEqual(v3.sessions[0].entries['s1-incline'].target, { reps: 9, sets: 2, weight: 50 });
@@ -197,7 +199,8 @@ test('every past save format still loads (fixtures are permanent — never edit 
   const v4 = migrateLog(load('schema-v4.json'));
   assert.equal(v4.sessions[0].deload, true);
   assert.equal(v4.sessions[0].entries['s1-incline'].deload, false);   // one lift kept normal in a deload session
-  assert.equal(v4.sessions[0].entries['s1-pulldown'].unit, 'kg');
+  assert.equal(v4.sessions[0].entries['s1-pulldown'].unit, 'lbs');   // v5 relabel
+  assert.equal(v4.sessions[0].entries['s1-incline'].unit, 'lbs');
   assert.deepEqual(v4.sessions[0].prehab, ['Face pulls', 'External rotation']);
   assert.equal(v4.climbs.length, 2);
   assert.deepEqual(v4.climbs[0], { id: 'climb-1', date: '2026-10-19', intensity: 'hard', ts: 1792500000000, note: 'projecting' });
@@ -247,4 +250,32 @@ test('beyond target: extra sets and reps above target (only when the target is h
   assert.equal(beyondTarget([set(10), set(9), set(7)], t), null);           // missed a set → no bonus
   assert.equal(exerciseVerdict([set(9), set(8), set(8)], t).label, '✓ target hit · +1 rep');
   assert.equal(exerciseVerdict([set(8), set(8), set(8)], t).label, '✓ target hit');
+});
+
+test('v5: cable "kg" relabeled lbs only in logs from before v5 (a v5 log keeps a deliberate kg)', () => {
+  const entry = { status: 'complete', weight: 43, unit: 'kg', reps: 10 };
+  const old = migrateLog({ schemaVersion: 4, sessions: [session('2026-04-19', 1, { 's1-crunches': entry, 's1-deadlift': { ...entry, weight: 80 } })] });
+  assert.equal(old.sessions[0].entries['s1-crunches'].unit, 'lbs');
+  assert.equal(old.sessions[0].entries['s1-crunches'].weight, 43);
+  assert.equal(old.sessions[0].entries['s1-deadlift'].unit, 'kg', 'not a cable lift — untouched');
+  const now = migrateLog({ schemaVersion: 5, sessions: [session('2026-10-23', 1, { 's1-crunches': entry })] });
+  assert.equal(now.sessions[0].entries['s1-crunches'].unit, 'kg');
+});
+
+test('cable stack: plate by plate (3, 7, 10, 13 … 70 lb), defaults on a plate, bump = next plate', async () => {
+  const { stepWeight, computeTarget } = await import('../../js/core/progress.js');
+  const { nextPlate, snapToStack, defaultWeightOf } = await import('../../js/core/exercises.js');
+  const lat = findExercise('s1-lateral'), crunch = findExercise('s1-crunches');
+  assert.equal(stepWeight(lat, 3, 1), 7);
+  assert.equal(stepWeight(lat, 7, -1), 3);
+  assert.equal(stepWeight(lat, 3, -1), 3, 'lightest plate stays');
+  assert.equal(stepWeight(lat, 70, 1), 70, 'heaviest plate stays');
+  assert.equal(stepWeight(lat, 55, 1), 57, 'off-plate → next plate up');
+  assert.equal(nextPlate(findExercise('s1-deadlift'), 185, 1), null, 'not a stack lift');
+  assert.equal(snapToStack(lat, 5), 3);
+  assert.equal(defaultWeightOf(crunch), 43);
+  const top = { ...done(43, 15), sets: [{ weight: 43, reps: 15 }, { weight: 43, reps: 15 }], target: { weight: 43, reps: 15, sets: 2 }, date: '2026-10-20' };
+  assert.deepEqual(computeTarget(crunch, top, { date: '2026-10-22' }), { weight: 47, reps: 10, sets: 2, reason: 'bump' });
+  const maxed = { ...top, weight: 70, sets: [{ weight: 70, reps: 15 }, { weight: 70, reps: 15 }], target: { weight: 70, reps: 15, sets: 2 } };
+  assert.equal(computeTarget(crunch, maxed, { date: '2026-10-22' }).weight, 70, 'heaviest plate: stays');
 });

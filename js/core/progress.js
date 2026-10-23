@@ -3,7 +3,7 @@ import { STALE_AFTER_DAYS, EASE_BACK_FACTOR, DELOAD } from '../config/program.js
 import { hasValue, round2, convertWeight } from './numbers.js';
 import { daysBetween } from './dates.js';
 import { normalizeEntry, DID_IT, STATUS, MODE, byNewest, setsOfEntry, meetsTarget, beyondTarget, beyondText, entryMode, effectiveSessionMode } from './records.js';
-import { exercisesForSession, incrementOf, setsOf, unitOf, defaultWeightOf } from './exercises.js';
+import { exercisesForSession, incrementOf, setsOf, unitOf, defaultWeightOf, stackOf, nextPlate } from './exercises.js';
 
 /**
  * Times this lift was actually done (complete or partial, with a weight or reps), newest first,
@@ -77,6 +77,13 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
  */
 export function lighterWeight(ex, weight, factor) {
   if (!hasValue(weight)) return weight ?? null;
+  const plates = stackOf(ex);
+  if (plates) {   // cable stack: the heaviest plate at or under the lighter weight (within 20%), else the nearest plate under where you started
+    const goal = weight * factor, below = plates.filter(p => p <= weight + 1e-9);
+    const down = [...below].reverse().find(p => p <= goal + 1e-9);
+    if (down && (weight - down) / weight <= 0.2 + 1e-9) return down;
+    return below.length ? below.reduce((best, p) => (Math.abs(p - goal) < Math.abs(best - goal) ? p : best), below[0]) : weight;
+  }
   const inc = incrementOf(ex), scaled = weight * factor / inc;
   const down = round2(Math.floor(scaled + 1e-9) * inc);
   if (down > 0 && (weight - down) / weight <= 0.2 + 1e-9) return down;
@@ -172,7 +179,9 @@ export function progressionTarget(ex, last) {
   if (lowest === null) return { weight: lastWeight, reps: lo, sets, reason: 'first' };
   if (lowest >= hi) {
     if (ex.bw || !hasValue(lastWeight)) return { weight: lastWeight, reps: hi, sets, reason: 'top' };
-    return { weight: round2(lastWeight + incrementOf(ex)), reps: lo, sets, reason: 'bump' };
+    const up = stackOf(ex) ? nextPlate(ex, lastWeight, 1) : round2(lastWeight + incrementOf(ex));
+    if (up <= lastWeight) return { weight: lastWeight, reps: hi, sets, reason: 'top' };   // heaviest plate on the stack
+    return { weight: up, reps: lo, sets, reason: 'bump' };
   }
   if (lowest < lo) return { weight: lastWeight, reps: lo, sets, reason: 'low' };
   return { weight: lastWeight, reps: Math.min(hi, lowest + 1), sets, reason: 'more' };
@@ -213,7 +222,7 @@ export function liftEasedStreak(sessions, ex, beforeDate) {
 export function targetReason(ex, target, last, unit) {
   if (!target) return '';
   switch (target.reason) {
-    case 'bump':   return `↑ +${incrementOf(ex)} ${unit} — you hit ${ex.reps[1]} last time`;
+    case 'bump':   return stackOf(ex) ? `↑ next plate — you hit ${ex.reps[1]} last time` : `↑ +${incrementOf(ex)} ${unit} — you hit ${ex.reps[1]} last time`;
     case 'more':   return 'same weight, one more rep';
     case 'bodyweight': return 'last time was bodyweight — starting at the program weight';
     case 'low':    return 'below range last time — aim for the bottom of the range (or go lighter)';
@@ -228,8 +237,9 @@ export function targetReason(ex, target, last, unit) {
   }
 }
 
-/** Weight after a − / + tap: moves by the exercise's increment, never below one increment. */
+/** Weight after a − / + tap: moves by the exercise's increment (or one plate on a stack), never below one step. */
 export function stepWeight(ex, weight, direction) {
+  if (stackOf(ex)) return nextPlate(ex, weight, direction);   // cable stack: plate by plate
   const inc = incrementOf(ex);
   return Math.max(inc, round2(Number(weight) + direction * inc));
 }

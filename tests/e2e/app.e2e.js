@@ -105,7 +105,7 @@ try {
   check('target: partial last time → same target again', (await text('#card-s1-incline .target-row')).includes('47.5 lbs × 6 × 3 sets') && (await text('#card-s1-incline .target-row')).includes('not hit last time'));
   check('target: hit last time → one more rep', (await text('#card-s1-deadlift .target-row')).includes('175 lbs × 7 × 2 sets') && (await text('#card-s1-deadlift .target-row')).includes('one more rep'));
   check('target: in the (wide) range last time → one more rep', (await text('#card-s1-lateral .target-row')).includes('7.5 lbs × 12 × 2 sets') && (await text('#card-s1-lateral .target-row')).includes('one more rep'));
-  check('target: kg lift', (await text('#card-s1-crunches .target-row')).includes('45 kg × 13 × 2 sets'));
+  check('target: cable lift in lbs (old kg logs relabeled)', (await text('#card-s1-crunches .target-row')).includes('45 lbs × 13 × 2 sets'));
   check('last: shows last time', (await text('#card-s1-deadlift .last-row')).includes('175 lbs × 6 reps') && (await text('#card-s1-deadlift .last-row')).includes('Apr 20'));
   check('set 1 open, pre-filled with the target', (await text('#wv-s1-deadlift')) === '175' && (await page.inputValue('#reps-s1-deadlift')) === '7' && (await text('#card-s1-deadlift .set-title')) === 'Set 1');
   check('tabs: set 1 current, set 2 locked', JSON.stringify(await tabState('s1-deadlift')) === '["current","locked"]');
@@ -183,10 +183,10 @@ try {
   await page.tap('#card-s1-crunches [data-action="target-step"][data-field="weight"][data-dir="1"]');
   await page.tap('#card-s1-crunches [data-action="target-step"][data-field="reps"][data-dir="1"]');
   for (let i = 0; i < 5; i++) await page.tap('#card-s1-crunches [data-action="target-step"][data-field="reps"][data-dir="1"]');
-  check('target: edited, reps capped at the top of the range', (await text('#card-s1-crunches .target-btn')).includes('47.5 kg × 15 × 3 sets') && (await text('#card-s1-crunches .target-row')).includes('your target'));
-  check('target: a new set count adds tabs, and the open set follows the new target', (await tabState('s1-crunches')).length === 3 && (await page.inputValue('#reps-s1-crunches')) === '15' && (await text('#wv-s1-crunches')) === '47.5');
+  check('target: edited, reps capped at the top of the range', (await text('#card-s1-crunches .target-btn')).includes('47 lbs × 15 × 3 sets') && (await text('#card-s1-crunches .target-row')).includes('your target'));
+  check('target: a new set count adds tabs, and the open set follows the new target', (await tabState('s1-crunches')).length === 3 && (await page.inputValue('#reps-s1-crunches')) === '15' && (await text('#wv-s1-crunches')) === '47');   // + on a cable stack = next plate
   await page.tap('#card-s1-crunches [data-action="target-reset"]');
-  check('target: back to suggested', (await text('#card-s1-crunches .target-btn')).includes('45 kg × 13 × 2 sets') && (await tabState('s1-crunches')).length === 2);
+  check('target: back to suggested', (await text('#card-s1-crunches .target-btn')).includes('45 lbs × 13 × 2 sets') && (await tabState('s1-crunches')).length === 2);
   await page.tap('#card-s1-crunches [data-action="target-close"]');
   check('target pop-out closes', await page.locator('#card-s1-crunches .target-pop').count() === 0);
 
@@ -200,7 +200,7 @@ try {
 
   // minimize / expand any lift, even before starting it
   await page.tap('#card-s1-crunches .ex-min-btn');
-  check('minimize: an untouched lift folds to one line showing its target', await page.locator('#card-s1-crunches.is-collapsed.is-todo').count() === 1 && /kg × \d+ × \d+ sets/.test(await text('#card-s1-crunches .exc-sum')));
+  check('minimize: an untouched lift folds to one line showing its target', await page.locator('#card-s1-crunches.is-collapsed.is-todo').count() === 1 && /lbs × \d+ × \d+ sets/.test(await text('#card-s1-crunches .exc-sum')));
   await expand('s1-crunches');
   check('expand: it opens again, nothing logged', await page.locator('#card-s1-crunches.is-collapsed').count() === 0 && await page.locator('#setlog-s1-crunches').count() === 1);
 
@@ -386,7 +386,7 @@ try {
   await page.fill('#hedit-w-0', '42.5'); await page.fill('#hedit-r-0', '11'); await page.fill('#hedit-w-1', '42.5'); await page.fill('#hedit-r-1', '11');
   await page.tap('#hedit-panel [data-action="edit-save"]'); await wait(150);
   let e = (await mySession())[0].entries['s1-crunches'];
-  check('history edit: each set saved with the exercise unit', e.status === 'complete' && JSON.stringify(e.sets) === '[{"weight":42.5,"reps":11},{"weight":42.5,"reps":11}]' && e.unit === 'kg', JSON.stringify(e));
+  check('history edit: each set saved with the exercise unit', e.status === 'complete' && JSON.stringify(e.sets) === '[{"weight":42.5,"reps":11},{"weight":42.5,"reps":11}]' && e.unit === 'lbs', JSON.stringify(e));
   check('history edit: header count updates', (await oct20.locator('.history-hdr').innerText()).includes('3/4 done'));
 
   const apr22 = page.locator('.history-entry', { has: page.locator('.history-title', { hasText: 'Apr 22, 2026' }) });
@@ -548,13 +548,13 @@ try {
   await tab('workout');
   await pickWorkout(3); await page.tap('#start-btn');
   check('Workout C: 6 lifts, crunches or ab wheel counts once', await page.locator('.ex-card').count() === 6 && (await text('#session-progress')) === '0 of 5 lifts done');
-  check('target: first time starts at the estimated weight (cable, kg)', (await text('#card-s3-pulldown .target-row')).includes('25 kg × 8 × 2 sets'));
-  await page.tap('#wv-s3-pulldown'); await page.fill('#inp-s3-pulldown', '45');
+  check('target: first time starts at the estimated weight (a cable plate)', (await text('#card-s3-pulldown .target-row')).includes('50 lbs × 8 × 2 sets'));
+  await page.tap('#wv-s3-pulldown'); await page.fill('#inp-s3-pulldown', '53');
   await log('s3-pulldown');
-  check('phone: type weight then tap Log → logged with that weight', (await summary('s3-pulldown')) === '45 kg × 8');
+  check('phone: type weight then tap Log → logged with that weight', (await summary('s3-pulldown')) === '53 lbs × 8');
   await log('s3-pulldown');
   await expand('s3-pulldown'); await page.tap('#card-s3-pulldown [data-action="set-add"]'); await log('s3-pulldown');
-  check('extra set past the target → "+1 set" on the card', (await text('#card-s3-pulldown .extra-tag')) === '+1 set' && (await summary('s3-pulldown')) === '45 kg × 8, 8, 8');
+  check('extra set past the target → "+1 set" on the card', (await text('#card-s3-pulldown .extra-tag')) === '+1 set' && (await summary('s3-pulldown')) === '53 lbs × 8, 8, 8');
   check('pick one: crunches say "or Ab Wheel"', (await text('#card-s3-crunches .ex-tags')).includes('or Ab Wheel'));
   await log('s3-crunches'); await log('s3-crunches');
   check('pick one: after crunches, ab wheel is optional', (await text('#card-s3-abwheel .ex-tags')).includes('optional — you did Cable Crunches') && (await text('#session-progress')) === '2 of 5 lifts done');

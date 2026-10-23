@@ -28,29 +28,29 @@ export const SESSIONS = {
   1: [
     { id: 's1-incline',  name: 'Incline DB Press',          detail: '3×6–12',               reps: [6, 12],  defaultWeight: 50, sets: 3 },
     { id: 's1-deadlift', name: 'Deadlift',                  detail: '2×5–8',                reps: [5, 8],   defaultWeight: 185, climb: true },
-    { id: 's1-lateral',  name: 'Cable Lateral Raises',      detail: '2×8–15',               reps: [8, 15],  defaultWeight: 5, tag: 'circuit' },
-    { id: 's1-crunches', name: 'Cable Crunches',            detail: '2×10–15',              reps: [10, 15], defaultWeight: 45, unit: 'kg', tag: 'circuit' },
+    { id: 's1-lateral',  name: 'Cable Lateral Raises',      detail: '2×8–15',               reps: [8, 15],  defaultWeight: 7, stack: 'cable', tag: 'circuit' },
+    { id: 's1-crunches', name: 'Cable Crunches',            detail: '2×10–15',              reps: [10, 15], defaultWeight: 43, stack: 'cable', tag: 'circuit' },
   ],
   2: [
     { id: 's2-ohpress',   name: 'DB Shoulder Press',    detail: '3×6–12',         reps: [6, 12], defaultWeight: 30, sets: 3, warn: '⚠ zero soreness first' },
     { id: 's2-rows',      name: 'Bent Over Rows',       detail: '2×6–12',         reps: [6, 12], defaultWeight: 35, climb: true },
-    { id: 's2-lateral',   name: 'Cable Lateral Raises', detail: '2×8–15',         reps: [8, 15],  defaultWeight: 5, tag: 'circuit' },
-    { id: 's2-pallof',    name: 'Pallof Press',         detail: '2×5 × 5s holds', reps: [5, 5], defaultWeight: 20, unit: 'kg', tag: 'circuit' },
+    { id: 's2-lateral',   name: 'Cable Lateral Raises', detail: '2×8–15',         reps: [8, 15],  defaultWeight: 7, stack: 'cable', tag: 'circuit' },
+    { id: 's2-pallof',    name: 'Pallof Press',         detail: '2×5 × 5s holds', reps: [5, 5], defaultWeight: 23, stack: 'cable', tag: 'circuit' },
     { id: 's2-legraiser', name: 'Hanging Leg Raises',   detail: '2×8–12',         reps: [8, 12], bw: true, tag: 'circuit', climb: true },
   ],
   3: [
     { id: 's3-incline',  name: 'Incline DB Press',       detail: '3×6–12',                   reps: [6, 12],  defaultWeight: 50, sets: 3 },
     { id: 's3-bss',      name: 'Bulgarian Split Squats', detail: '3×5–10',                   reps: [5, 10],   defaultWeight: 15, sets: 3 },
-    { id: 's3-pulldown', name: 'Single Arm Cable Pulldown', detail: '2×8–12',                reps: [8, 12],   defaultWeight: 25, unit: 'kg', climb: true },
-    { id: 's3-lateral',  name: 'Cable Lateral Raises',   detail: '2×8–15',                   reps: [8, 15],  defaultWeight: 5, tag: 'circuit' },
-    { id: 's3-crunches', name: 'Cable Crunches',         detail: '2×10–15 · or ab wheel',    reps: [10, 15], defaultWeight: 45, unit: 'kg', tag: 'circuit', pickOne: 'core' },
+    { id: 's3-pulldown', name: 'Single Arm Cable Pulldown', detail: '2×8–12',                reps: [8, 12],   defaultWeight: 50, stack: 'cable', climb: true },
+    { id: 's3-lateral',  name: 'Cable Lateral Raises',   detail: '2×8–15',                   reps: [8, 15],  defaultWeight: 7, stack: 'cable', tag: 'circuit' },
+    { id: 's3-crunches', name: 'Cable Crunches',         detail: '2×10–15 · or ab wheel',    reps: [10, 15], defaultWeight: 43, stack: 'cable', tag: 'circuit', pickOne: 'core' },
     { id: 's3-abwheel',  name: 'Ab Wheel',               detail: '2×8–10 · or crunches',      reps: [8, 10],   bw: true, tag: 'circuit', pickOne: 'core' },
   ],
 };
 
 /** Exercises from earlier programs: not in today's workout, but their logs still show in History and Trends. */
 export const RETIRED = [
-  { id: 's1-pulldown', name: 'Single Arm Cable Pulldown', detail: 'moved to Workout C', reps: [8, 12], unit: 'kg', climb: true },
+  { id: 's1-pulldown', name: 'Single Arm Cable Pulldown', detail: 'moved to Workout C', reps: [8, 12], stack: 'cable', climb: true },
   { id: 's2-dips',    name: 'Dips',                detail: 'old program · 3×6–12', reps: [6, 12], bw: true },
   { id: 's2-oldrows', name: 'Bent Over Rows', detail: 'old program · 3×6–12', reps: [6, 12] },   // same lift as today's rows: shares last time + Trends
 ];
@@ -61,6 +61,15 @@ export const INCREMENTS = {
   'Deadlift': 5, 'Bulgarian Split Squats': 5, 'DB Shoulder Press': 5,
 };
 export const DEFAULT_INCREMENT = 2.5;
+
+/**
+ * Weight stacks whose plates aren't a round number: the gym's cable machine goes up 1.5 kg (≈3⅓ lb)
+ * per plate, labeled in rounded lbs (some plates say "3 kg" / "4.5 kg" — same plates). Lifts with
+ * `stack` step plate by plate through this list (in lbs) instead of adding INCREMENTS.
+ */
+export const STACKS = {
+  cable: [3, 7, 10, 13, 17, 20, 23, 27, 30, 33, 37, 40, 43, 47, 50, 53, 57, 60, 63, 67, 70],
+};
 
 /**
  * Working sets per exercise unless an exercise sets its own `sets`. The pressing lifts and split squats
