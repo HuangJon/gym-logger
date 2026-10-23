@@ -198,6 +198,12 @@ try {
   await page.tap('#card-s1-deadlift [data-action="unit"][data-unit="lbs"]');
   check('units: back to lbs', (await text('#card-s1-deadlift .target-btn')).includes('lbs') && (await page.evaluate(() => JSON.parse(localStorage.getItem('liftlog:settings')).units)).Deadlift === undefined);
 
+  // minimize / expand any lift, even before starting it
+  await page.tap('#card-s1-crunches .ex-min-btn');
+  check('minimize: an untouched lift folds to one line showing its target', await page.locator('#card-s1-crunches.is-collapsed.is-todo').count() === 1 && /kg × \d+ × \d+ sets/.test(await text('#card-s1-crunches .exc-sum')));
+  await expand('s1-crunches');
+  check('expand: it opens again, nothing logged', await page.locator('#card-s1-crunches.is-collapsed').count() === 0 && await page.locator('#setlog-s1-crunches').count() === 1);
+
   // skip
   await page.tap('#card-s1-lateral [data-action="skip"]');
   check('skip: minimizes like a finished lift, greyed, says skipped', await page.locator('#card-s1-lateral.is-skipped.is-collapsed').count() === 1 && (await text('#card-s1-lateral .exc-sum')) === 'skipped' && (await text('#card-s1-lateral .exc-icon')) === '✕');
