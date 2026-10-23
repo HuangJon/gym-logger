@@ -88,7 +88,7 @@ try {
   await pickWorkout(2);
   check('picker: preview lists the session', (await text('#session-preview-area')).includes('DB Shoulder Press'));
   await page.tap('.workout-btn[data-n="2"]');
-  check('picker: clearing hides preview', (await page.locator('#session-preview-area').innerText()).trim() === '' && await page.locator('#start-btn').isDisabled());
+  check('picker: tapping the picked workout again keeps it (Start never disappears)', (await text('#session-preview-area')).includes('DB Shoulder Press') && await page.locator('#start-btn').isEnabled());
 
   // ── logging a session: targets ─────────────────────────
   // a finished lift collapses to one line; its summary is there instead
