@@ -1,5 +1,5 @@
 /** Lookups over the program definition. */
-import { SESSIONS, RETIRED, INCREMENTS, DEFAULT_INCREMENT, DEFAULT_SETS, DEFAULT_REST_SECONDS, CIRCUIT_REST_SECONDS } from '../config/program.js';
+import { SESSIONS, RETIRED, INCREMENTS, STACKS, DEFAULT_INCREMENT, DEFAULT_SETS, DEFAULT_REST_SECONDS, CIRCUIT_REST_SECONDS } from '../config/program.js';
 import { UNITS, convertWeight } from './numbers.js';
 
 const sessionOf = id => Number(String(id).match(/^s(\d)/)?.[1]) || null;
@@ -29,7 +29,27 @@ export const unitOf = ex => unitChoices[ex?.name] || programUnitOf(ex);
 /** − / + step and target bump. INCREMENTS are in the program's unit; in the other unit it's 2.5. */
 export const incrementOf = ex => (unitOf(ex) === programUnitOf(ex) ? INCREMENTS[ex?.name] ?? DEFAULT_INCREMENT : DEFAULT_INCREMENT);
 /** The program's starting weight, in the unit you're using. */
-export const defaultWeightOf = ex => (ex?.bw ? null : convertWeight(ex?.defaultWeight ?? null, programUnitOf(ex), unitOf(ex), incrementOf(ex)));
+export const defaultWeightOf = ex => (ex?.bw ? null : snapToStack(ex, convertWeight(ex?.defaultWeight ?? null, programUnitOf(ex), unitOf(ex), incrementOf(ex))));
+
+/** The machine's plates (lbs) for a stack lift used in lbs, else null (then weights move by the increment). */
+export const stackOf = ex => (ex?.stack && unitOf(ex) === 'lbs' ? STACKS[ex.stack] ?? null : null);
+/** Nearest plate on the stack (weights for other lifts come back unchanged). */
+export function snapToStack(ex, weight) {
+  const plates = stackOf(ex);
+  if (!plates || weight == null || !Number.isFinite(Number(weight))) return weight;
+  return plates.reduce((best, p) => (Math.abs(p - weight) < Math.abs(best - weight) ? p : best), plates[0]);
+}
+/**
+ * One plate up (+1) or down (−1) from `weight` on a stack lift. A weight between plates moves to the
+ * plate on that side; at either end it stays put. Null for lifts without a stack.
+ */
+export function nextPlate(ex, weight, direction) {
+  const plates = stackOf(ex);
+  if (!plates) return null;
+  const w = Number(weight) || 0;
+  if (direction > 0) return plates.find(p => p > w + 1e-9) ?? plates[plates.length - 1];
+  return [...plates].reverse().find(p => p < w - 1e-9) ?? plates[0];
+}
 export const setsOf = ex => ex?.sets ?? DEFAULT_SETS;
 export const restOf = ex => ex?.rest ?? (ex?.tag === 'circuit' ? CIRCUIT_REST_SECONDS : DEFAULT_REST_SECONDS);
 export const repRangeText = ([lo, hi]) => (lo === hi ? `${lo}` : `${lo}–${hi}`);

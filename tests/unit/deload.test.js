@@ -22,10 +22,11 @@ const legRaise = findExercise('s2-legraiser');    // bodyweight 8–12
 test('lighterWeight: ~10% down to the lift step, never a huge cut on light weights', () => {
   assert.equal(lighterWeight(deadlift, 185, 0.9), 165);
   assert.equal(lighterWeight(incline, 50, 0.9), 45);
-  assert.equal(lighterWeight(lateral, 15, 0.9), 12.5);
-  assert.equal(lighterWeight(lateral, 5, 0.9), 5);          // 2.5 would be a 50% cut
-  assert.equal(lighterWeight(lateral, 12.5, 0.9), 10);
-  assert.equal(lighterWeight(lateral, 7, 0.9), 7, 'off-step weight: never rounds up past it');
+  // cable stack (plates 3, 7, 10, 13, 17 … 70 lb): plate by plate
+  assert.equal(lighterWeight(lateral, 33, 0.9), 27);        // one plate down is within 20%
+  assert.equal(lighterWeight(lateral, 7, 0.9), 7);          // 3 would be a 57% cut
+  assert.equal(lighterWeight(lateral, 17, 0.9), 17);        // 13 is a 24% cut — 17 is nearer ~10% lighter
+  assert.equal(lighterWeight(lateral, 15, 0.9), 13, 'off-plate weight: the plate under it');
   assert.equal(lighterWeight(deadlift, null, 0.9), null);
 });
 
@@ -357,7 +358,7 @@ test('repository: climbing days are saved, snapshotted and restored with the log
   const r3 = createRepository(old); r3.load();
   assert.deepEqual(r3.climbs, []);
   assert.equal(old.dump()['pre-upgrade-v3'].schemaVersion, 3);
-  assert.equal(old.dump().log.schemaVersion, 4);
+  assert.equal(old.dump().log.schemaVersion, 5);
 });
 
 test('last note, shorter rest for circuits', async () => {
