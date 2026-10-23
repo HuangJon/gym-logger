@@ -77,9 +77,19 @@
         <div class="bk-actions">
           <button type="button" class="btn-small" data-action="export">Export</button>
           <label class="btn-small">Import<input type="file" id="import-file" accept=".json,application/json" data-action="import" hidden></label>
+          <button type="button" class="btn-small" data-action="copy-log">Copy</button>
+          <button type="button" class="btn-small" data-action="paste-open">Paste</button>
         </div>
       </div>
       <div class="bk-msg" id="backup-msg" role="status"></div>
+      <div class="bk-paste" id="paste-panel" hidden>
+        <textarea id="paste-text" rows="4" placeholder="Paste a copied log here" aria-label="Paste a copied log"></textarea>
+        <div class="bk-paste-actions">
+          <button type="button" class="btn-small" data-action="paste-import">Import pasted log</button>
+          <button type="button" class="btn-small" data-action="paste-close">Cancel</button>
+        </div>
+      </div>
+      <textarea id="copy-text" class="bk-copy" rows="3" readonly hidden aria-label="Your log as text"></textarea>
       <details class="bk-restore" id="restore-panel">
         <summary>Restore an earlier copy</summary>
         <p class="bk-hint">The app keeps copies of your last 3 saves on this phone, in case an edit goes wrong. Restoring is safe — your current log is kept as a copy too. (These copies live on the phone, so they're not a replacement for Export.)</p>

@@ -234,3 +234,17 @@ test('pick-one slots: crunches or ab wheel count as one in Workout C', async () 
   const oldA = session('2026-10-01', 1, { 's1-pulldown': done(25, 8, 'kg') });
   assert.deepEqual(slotCounts(oldA), { done: 1, total: 5 });
 });
+
+test('beyond target: extra sets and reps above target (only when the target is hit)', async () => {
+  const { beyondTarget, beyondText } = await import('../../js/core/records.js');
+  const { exerciseVerdict } = await import('../../js/core/progress.js');
+  const t = { weight: 50, reps: 8, sets: 3 };
+  const set = (reps, weight = 50) => ({ weight, reps });
+  assert.deepEqual(beyondTarget([set(10), set(9), set(8), set(8)], t), { sets: 1, reps: 3 });
+  assert.equal(beyondText({ sets: 1, reps: 3 }), '+1 set · +3 reps');
+  assert.equal(beyondText({ sets: 2, reps: 0 }), '+2 sets');
+  assert.equal(beyondTarget([set(8), set(8), set(8)], t), null);            // exactly on target
+  assert.equal(beyondTarget([set(10), set(9), set(7)], t), null);           // missed a set → no bonus
+  assert.equal(exerciseVerdict([set(9), set(8), set(8)], t).label, '✓ target hit · +1 rep');
+  assert.equal(exerciseVerdict([set(8), set(8), set(8)], t).label, '✓ target hit');
+});

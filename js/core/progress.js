@@ -2,7 +2,7 @@
 import { STALE_AFTER_DAYS, EASE_BACK_FACTOR, DELOAD } from '../config/program.js';
 import { hasValue, round2, convertWeight } from './numbers.js';
 import { daysBetween } from './dates.js';
-import { normalizeEntry, DID_IT, STATUS, MODE, byNewest, setsOfEntry, meetsTarget, entryMode, effectiveSessionMode } from './records.js';
+import { normalizeEntry, DID_IT, STATUS, MODE, byNewest, setsOfEntry, meetsTarget, beyondTarget, beyondText, entryMode, effectiveSessionMode } from './records.js';
 import { exercisesForSession, incrementOf, setsOf, unitOf, defaultWeightOf } from './exercises.js';
 
 /**
@@ -276,7 +276,7 @@ export function setBadge(set, target) {
 /** Where the exercise stands so far: how it would be saved right now. */
 export function exerciseVerdict(done, target) {
   if (!done?.length) return { status: null, label: '' };
-  if (meetsTarget(done, target)) return { status: STATUS.COMPLETE, label: `✓ target hit` };
+  if (meetsTarget(done, target)) { const extra = beyondText(beyondTarget(done, target)); return { status: STATUS.COMPLETE, label: `✓ target hit${extra ? ` · ${extra}` : ''}`, extra }; }
   const needed = target?.sets ?? done.length;
   if (done.length < needed) return { status: STATUS.PARTIAL, label: `${done.length}/${needed} sets — partial so far` };
   return { status: STATUS.PARTIAL, label: 'partial — below target' };

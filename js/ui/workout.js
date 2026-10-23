@@ -353,7 +353,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
       <button type="button" class="ex-collapsed" data-action="expand" aria-expanded="false" aria-label="${esc(ex.name)}: ${esc(summary)} — tap to open">
         <span class="exc-icon">${icon}</span>
         <span class="exc-name">${esc(ex.name)}${mode !== MODE.NORMAL ? ` <span class="${mode}-tag">${mode}</span>` : ''}</span>
-        <span class="exc-sum">${esc(summary)}</span>
+        <span class="exc-sum">${esc(summary)}</span>${verdict?.extra ? `<span class="extra-tag">${esc(verdict.extra)}</span>` : ''}
         <span class="exc-chev">▾</span>
         ${st.note ? `<span class="exc-note">✎ ${esc(st.note)}</span>` : ''}
       </button>

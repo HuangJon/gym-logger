@@ -104,6 +104,22 @@ export function meetsTarget(sets, target) {
 }
 
 /**
+ * Beyond the target: extra sets past the target count, and reps above target summed over the
+ * target sets. Null unless the target was hit. e.g. target 50 × 8 × 3, did 10, 9, 8, 8 → { sets: 1, reps: 3 }.
+ */
+export function beyondTarget(sets, target) {
+  if (!target || !sets?.length || !meetsTarget(sets, target)) return null;
+  const extraSets = Math.max(0, sets.length - target.sets);
+  const extraReps = sets.slice(0, target.sets).reduce((n, s) => n + Math.max(0, (Number(s.reps) || 0) - target.reps), 0);
+  return extraSets || extraReps ? { sets: extraSets, reps: extraReps } : null;
+}
+/** "+1 set · +3 reps" (empty if nothing beyond the target). */
+export function beyondText(b) {
+  if (!b) return '';
+  return [b.sets && `+${b.sets} set${b.sets === 1 ? '' : 's'}`, b.reps && `+${b.reps} rep${b.reps === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
+}
+
+/**
  * Turn an in-progress workout into a record to save.
  *   scratch:  { [exerciseId]: { skipped?, note?, done?: [{ weight?, reps }] } } — what you logged
  *   targetOf: ex => { weight, reps, sets } — the target for each exercise (yours if you changed it)
