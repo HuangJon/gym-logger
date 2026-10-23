@@ -114,3 +114,5 @@ button { font-family: var(--font); }
 @media (pointer: coarse) {
   input, select, textarea { font-size: 16px !important; }
 }
+.badge-extra, .extra-tag { background: var(--good-bg); color: var(--good); }
+.extra-tag { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 20px; white-space: nowrap; }

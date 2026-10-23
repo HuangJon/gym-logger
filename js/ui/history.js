@@ -3,7 +3,7 @@ import { SESSION_LABELS, SESSION_COLORS } from '../config/program.js';
 import { exercisesForSession, findExercise, unitOf, repRangeText, setsOf } from '../core/exercises.js';
 import { todayISO, formatLong, agoText, isISODate } from '../core/dates.js';
 import { hasValue, parseWeight, parseReps } from '../core/numbers.js';
-import { STATUS, MODE, normalizeEntry, statusCounts, slotCounts, byNewest, setsOfEntry, meetsTarget, formatSets, sessionMode, entryMode } from '../core/records.js';
+import { STATUS, MODE, normalizeEntry, statusCounts, slotCounts, byNewest, setsOfEntry, meetsTarget, beyondTarget, beyondText, formatSets, sessionMode, entryMode } from '../core/records.js';
 import { updateEntry, setSessionDate, setSessionMode, deleteSession, mergeSessions } from '../core/log.js';
 import { createBackup, parseBackup, backupStatus, markBackedUp, deliverFile } from '../data/backup.js';
 import { CLIMB, setClimbDay, climbsOn } from '../core/climbs.js';
@@ -14,7 +14,7 @@ const EDIT_STATUSES = [[STATUS.COMPLETE, '✓ Done'], [STATUS.PARTIAL, '~ Partia
 
 export function createHistoryView({ root, repo, storage, settings, onSettingsImported }) {
   const $ = sel => root.querySelector(sel);
-  const ui = { list: $('#history-list'), backupCard: $('#backup-card'), backupStatus: $('#backup-status'), backupMsg: $('#backup-msg'), snapshots: $('#snapshot-list') };
+  const ui = { list: $('#history-list'), backupCard: $('#backup-card'), backupStatus: $('#backup-status'), backupMsg: $('#backup-msg'), snapshots: $('#snapshot-list'), pastePanel: $('#paste-panel'), pasteText: $('#paste-text'), copyText: $('#copy-text') };
 
   let expanded = null;   // Set of open session ids; null → open the newest
   let editing = null;    // { sessionId, exerciseId, status } while editing one exercise
@@ -112,6 +112,7 @@ export function createHistoryView({ root, repo, storage, settings, onSettingsImp
       ? '<span class="badge badge-skip">skipped</span>'
       : (parts.length ? `<span class="history-wt">${parts.join(' · ')}</span>` : '') +
         (e.status === STATUS.PARTIAL ? '<span class="badge badge-partial">partial</span>' : '') +
+        (e.status === STATUS.COMPLETE && e.sets?.length && beyondTarget(e.sets, e.target) ? `<span class="badge badge-extra">${beyondText(beyondTarget(e.sets, e.target))}</span>` : '') +
         (e.status === STATUS.UNRECORDED ? '<span class="badge badge-unrec">not recorded</span>' : '') +
         (entryMode(s, e) !== sessionMode(s) && entryMode(s, e) !== MODE.NORMAL ? `<span class="${entryMode(s, e)}-tag">${entryMode(s, e)}</span>` : '');
     const dim = e.status === STATUS.SKIP || e.status === STATUS.UNRECORDED;
@@ -284,12 +285,45 @@ export function createHistoryView({ root, repo, storage, settings, onSettingsImp
     flash(ui.backupMsg, `Exported ${repo.sessions.length} sessions${climbs}. Save it to Files / iCloud Drive.`, { ms: 0 });
   }
 
+  /**
+   * Copy the whole log (same content as Export) as text, to paste into a chat or another copy of the
+   * app. If the clipboard is blocked, show the text selected so it can be copied by hand.
+   */
+  async function copyLog() {
+    const { json } = createBackup(repo.sessions, todayISO(), { climbs: repo.climbs, settings: settings?.get() ?? {} });
+    const text = JSON.stringify(JSON.parse(json));
+    const what = `${repo.sessions.length} session${repo.sessions.length === 1 ? '' : 's'}${repo.climbs.length ? ` and ${repo.climbs.length} climbing day${repo.climbs.length === 1 ? '' : 's'}` : ''}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      ui.copyText.hidden = true;
+      flash(ui.backupMsg, `Copied ${what} — paste it anywhere.`, { ms: 0 });
+    } catch {
+      ui.copyText.value = text;
+      ui.copyText.hidden = false;
+      ui.copyText.focus(); ui.copyText.select();
+      flash(ui.backupMsg, `Couldn't reach the clipboard — the text below is selected, copy it from there (${what}).`, { ms: 0 });
+    }
+  }
+
+  const openPaste = () => { ui.pastePanel.hidden = false; ui.copyText.hidden = true; ui.pasteText.focus(); };
+  const closePaste = () => { ui.pastePanel.hidden = true; ui.pasteText.value = ''; };
+  async function importPasted() {
+    const text = ui.pasteText.value.trim();
+    if (!text) { flash(ui.backupMsg, 'Paste a copied log first.', { error: true, ms: 0 }); return; }
+    if (await importText(text)) closePaste();
+  }
+
   async function importBackup(input) {
     const file = input.files?.[0];
     input.value = '';
     if (!file) return;
+    await importText(await file.text());
+  }
+
+  /** Merge a backup (file or pasted text) into the log. Same id replaces, new ids are added. */
+  async function importText(text) {
     try {
-      const { sessions, climbs, settings: prefs, skipped } = parseBackup(await file.text());
+      const { sessions, climbs, settings: prefs, skipped } = parseBackup(text);
       const merged = mergeSessions(repo.sessions, sessions);
       const mergedClimbs = mergeSessions(repo.climbs, climbs);   // same rule: same id replaces, new ids are added
       await repo.commit(merged.sessions, { climbs: mergedClimbs.sessions });
@@ -302,8 +336,10 @@ export function createHistoryView({ root, repo, storage, settings, onSettingsImp
       render();
       const climbText = climbs.length ? ` · ${climbs.length} climbing day${climbs.length === 1 ? '' : 's'}` : '';
       flash(ui.backupMsg, `Imported ${sessions.length} session${sessions.length === 1 ? '' : 's'}: ${merged.added} new, ${merged.updated} updated${skipped ? `, ${skipped} skipped (unreadable)` : ''}${climbText}.`, { ms: 0 });
+      return true;
     } catch (err) {
       flash(ui.backupMsg, err.message || 'Import failed.', { error: true, ms: 0 });
+      return false;
     }
   }
 
@@ -316,6 +352,10 @@ export function createHistoryView({ root, repo, storage, settings, onSettingsImp
     'edit-cancel': () => { editing = null; render(); },
     'delete': remove,
     'export': exportBackup,
+    'copy-log': copyLog,
+    'paste-open': openPaste,
+    'paste-close': closePaste,
+    'paste-import': importPasted,
     'hclimb': setClimb,
     'entry-mode': changeMode,
     'restore': restore,

@@ -6,7 +6,7 @@
 .bk-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .bk-text { flex: 1; min-width: 0; font-size: 12px; color: var(--fg2); }
 .bk-text b { color: var(--fg); }
-.bk-actions { display: flex; gap: 6px; }
+.bk-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .bk-msg { font-size: 11px; color: var(--good); margin-top: 4px; }
 .bk-msg:empty { display: none; }
 .bk-msg.error { color: var(--danger); }
@@ -89,3 +89,7 @@
 }
 .climb-adder .hc-what { flex: 1; min-width: 150px; }
 .entry-mode-msg { font-size: 11px; color: var(--fg3); }
+.bk-paste { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.bk-paste textarea, .bk-copy { width: 100%; box-sizing: border-box; font: 11px/1.4 ui-monospace, Menlo, monospace; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--input-bg); color: var(--fg); resize: vertical; }
+.bk-copy { margin-top: 8px; }
+.bk-paste-actions { display: flex; gap: 6px; }

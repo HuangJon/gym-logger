@@ -459,6 +459,25 @@ try {
   const snaps = await page.evaluate(() => JSON.parse(localStorage.getItem('liftlog:snapshots')));
   check('restore: local copies stay small (≤ 3)', snaps.length <= 3);
 
+  // ── copy / paste the log ────────────────────────────────
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => {});
+  await page.tap('[data-action="copy-log"]'); await wait(200);
+  const copied = await page.evaluate(() => navigator.clipboard.readText().catch(() => document.querySelector('#copy-text').value));
+  const nNow = (await savedLog()).sessions.length;
+  check('copy: whole log as one line of backup JSON', JSON.parse(copied).sessions.length === nNow && !copied.includes('\n') && (await text('#backup-msg')).includes('Copied'));
+  const pasted = JSON.parse(copied); pasted.sessions = [{ ...pasted.sessions[0], id: 'pasted-1', date: '2026-05-09' }];
+  await page.tap('[data-action="paste-open"]');
+  await page.fill('#paste-text', JSON.stringify(pasted));
+  await page.tap('[data-action="paste-import"]'); await wait(200);
+  check('paste: imports (merge) and closes the box', (await savedLog()).sessions.length === nNow + 1 && await page.locator('#paste-panel').isHidden() && (await text('#backup-msg')).includes('1 new'));
+  await page.tap('[data-action="paste-open"]'); await page.fill('#paste-text', 'hello'); await page.tap('[data-action="paste-import"]'); await wait(100);
+  check('paste: junk is refused, nothing changes', (await savedLog()).sessions.length === nNow + 1 && (await text('#backup-msg')).includes('isn’t a lifting-log backup'));
+  await page.tap('[data-action="paste-close"]');
+  const pastedEntry = page.locator('.history-entry', { has: page.locator('.history-title', { hasText: 'May 9, 2026' }) });
+  if (!(await pastedEntry.locator('.history-body').isVisible())) await pastedEntry.locator('.history-hdr').tap();
+  await pastedEntry.locator('.delete-entry').tap(); await wait(100); await pastedEntry.locator('.delete-entry').tap(); await wait(200);
+  check('paste: test entry cleaned up', (await savedLog()).sessions.length === nNow);
+
   // ── trends ──────────────────────────────────────────────
   await tab('trends');
   const pressed = async () => (await page.locator('#tab-trends .seg button[aria-pressed="true"]').first().innerText()).trim();
@@ -528,6 +547,8 @@ try {
   await log('s3-pulldown');
   check('phone: type weight then tap Log → logged with that weight', (await summary('s3-pulldown')) === '45 kg × 8');
   await log('s3-pulldown');
+  await expand('s3-pulldown'); await page.tap('#card-s3-pulldown [data-action="set-add"]'); await log('s3-pulldown');
+  check('extra set past the target → "+1 set" on the card', (await text('#card-s3-pulldown .extra-tag')) === '+1 set' && (await summary('s3-pulldown')) === '45 kg × 8, 8, 8');
   check('pick one: crunches say "or Ab Wheel"', (await text('#card-s3-crunches .ex-tags')).includes('or Ab Wheel'));
   await log('s3-crunches'); await log('s3-crunches');
   check('pick one: after crunches, ab wheel is optional', (await text('#card-s3-abwheel .ex-tags')).includes('optional — you did Cable Crunches') && (await text('#session-progress')) === '2 of 5 lifts done');
