@@ -200,10 +200,10 @@ try {
 
   // skip
   await page.tap('#card-s1-lateral [data-action="skip"]');
-  check('skip: card dims and the set panel hides', await page.locator('#card-s1-lateral.is-skipped').count() === 1 && await page.locator('#setlog-s1-lateral').count() === 0);
-  await page.tap('#card-s1-lateral [data-action="skip"]');
-  check('skip: tap again brings it back', await page.locator('#setlog-s1-lateral').count() === 1);
-  await page.tap('#card-s1-lateral [data-action="skip"]');
+  check('skip: minimizes like a finished lift, greyed, says skipped', await page.locator('#card-s1-lateral.is-skipped.is-collapsed').count() === 1 && (await text('#card-s1-lateral .exc-sum')) === 'skipped' && (await text('#card-s1-lateral .exc-icon')) === '✕');
+  await expand('s1-lateral'); await page.tap('#card-s1-lateral [data-action="skip"]');
+  check('skip: open it and tap Skip again brings it back', await page.locator('#setlog-s1-lateral').count() === 1 && await page.locator('#card-s1-lateral.is-skipped').count() === 0);
+  await page.tap('#card-s1-lateral [data-action="skip"]'); await expand('s1-lateral');
   await page.fill('#note-s1-lateral', '<b>shoulder</b> & "tired"');
   check('no Done/Partial buttons — status comes from the logged sets', await page.locator('#card-s1-incline .status-btn[data-status="complete"], #card-s1-incline .status-btn[data-status="partial"]').count() === 0);
 

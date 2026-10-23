@@ -81,6 +81,9 @@ for (const setup of SETUPS) {
     check(tag(`workout ${n}: Log set button on screen`), await logBtn.isVisible() && await inView('[data-action="log-set"]'));
     await logBtn.tap(); await wait(100);
     check(tag(`workout ${n}: logging a set counts it`), /\d+ lbs|\d+ kg|\d+ reps/.test(await page.locator('.setlog-summary').first().innerText()));
+    const lastCard = page.locator('.ex-card').last();
+    await lastCard.locator('[data-action="skip"]').tap(); await wait(80);
+    check(tag(`workout ${n}: Skip minimizes the lift, greyed out`), await page.locator('.ex-card').last().evaluate(el => el.classList.contains('is-collapsed') && el.classList.contains('is-skipped')));
     check(tag(`workout ${n}: Complete and Discard are there`), await page.locator('#complete-btn').count() === 1 && await page.locator('#discard-btn').count() === 1);
     await page.tap('#complete-btn'); await wait(900);
     check(tag(`workout ${n}: Complete saves it`), await sessions() === before + 1);

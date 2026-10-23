@@ -618,7 +618,7 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   function toggleSkip(exId) {
     const st = stateOf(exId);
     st.skipped = !st.skipped;
-    st.expanded = st.skipped ? true : undefined;   // stay open after Skip, so you can add a note why
+    st.expanded = undefined;   // Skip minimizes the card like a finished lift (tap it to add a note or undo)
     refreshCard(exId);
   }
 
