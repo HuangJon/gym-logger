@@ -81,6 +81,10 @@ for (const setup of SETUPS) {
     check(tag(`workout ${n}: Log set button on screen`), await logBtn.isVisible() && await inView('[data-action="log-set"]'));
     await logBtn.tap(); await wait(100);
     check(tag(`workout ${n}: logging a set counts it`), /\d+ lbs|\d+ kg|\d+ reps/.test(await page.locator('.setlog-summary').first().innerText()));
+    const firstCard = page.locator('.ex-card').first();
+    const tabsBefore = await firstCard.locator('.set-tab:not(.add)').count();
+    await firstCard.locator('[data-action="set-add"]').tap(); await wait(60);
+    check(tag(`workout ${n}: + plans an extra set without closing the lift`), await page.locator('.ex-card').first().locator('.set-tab:not(.add)').count() === tabsBefore + 1 && !(await page.locator('.ex-card').first().evaluate(el => el.classList.contains('is-collapsed'))));
     await page.locator('.ex-card:not(.is-collapsed) .ex-min-btn').nth(1).tap(); await wait(60);
     const minimized = page.locator('.ex-card.is-collapsed.is-todo');
     check(tag(`workout ${n}: any lift can be minimized and opened again`), await minimized.count() === 1 && (await minimized.locator('[data-action="expand"]').tap(), await wait(60), await page.locator('.ex-card.is-todo').count() === 0));

@@ -555,10 +555,21 @@ try {
   await log('s3-pulldown');
   await expand('s3-pulldown'); await page.tap('#card-s3-pulldown [data-action="set-add"]'); await log('s3-pulldown');
   check('extra set past the target → "+1 set" on the card', (await text('#card-s3-pulldown .extra-tag')) === '+1 set' && (await summary('s3-pulldown')) === '53 lbs × 8, 8, 8');
+  // plan an extra set before finishing: the lift stays open for it
+  await log('s3-incline');
+  await page.tap('#card-s3-incline [data-action="set-add"]');
+  check('extra set planned early: 4 tabs, still on set 2', (await tabState('s3-incline')).length === 4 && (await text('#card-s3-incline .set-title')).startsWith('Set 2'));
+  await log('s3-incline'); await log('s3-incline');
+  check('extra set planned early: not collapsed after the 3 target sets', await page.locator('#card-s3-incline.is-collapsed').count() === 0 && (await text('#card-s3-incline .set-title')).startsWith('Set 4'));
+  await page.tap('#card-s3-incline [data-action="set-add"]');
+  check('another one: 5 tabs', (await tabState('s3-incline')).length === 5);
+  await page.locator('#card-s3-incline [data-action="remove-set"]').tap();
+  check('remove an unlogged extra set: back to 4', (await tabState('s3-incline')).length === 4);
+  await log('s3-incline');
+  check('extra set planned early: collapses once all 4 are logged, "+1 set"', await page.locator('#card-s3-incline.is-collapsed').count() === 1 && (await text('#card-s3-incline .extra-tag')).includes('+1 set'));
   check('pick one: crunches say "or Ab Wheel"', (await text('#card-s3-crunches .ex-tags')).includes('or Ab Wheel'));
   await log('s3-crunches'); await log('s3-crunches');
-  check('pick one: after crunches, ab wheel is optional', (await text('#card-s3-abwheel .ex-tags')).includes('optional — you did Cable Crunches') && (await text('#session-progress')) === '2 of 5 lifts done');
-  await log('s3-incline');
+  check('pick one: after crunches, ab wheel is optional', (await text('#card-s3-abwheel .ex-tags')).includes('optional — you did Cable Crunches') && (await text('#session-progress')) === '3 of 5 lifts done');
   const n1 = (await savedLog()).sessions.length;
   await failWrites(true); await page.tap('#complete-btn'); await wait(300); await failWrites(false);
   check('complete failure: message, session stays open', (await text('#status')).includes('failed') && await page.locator('#session-panel').isVisible());

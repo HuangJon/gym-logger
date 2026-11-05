@@ -81,10 +81,12 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   const persist = () => { if (active) saveDraft(storage, { active, scratch, rest: rest.snapshot() }); };
 
   /** Index of the open set: one you tapped to edit, else the next set to log, else null (all logged). */
+  /** Sets you plan to do: the target, plus any extra sets you added with + (so the lift stays open for them). */
+  const plannedSets = ex => targetFor(ex).sets + (stateOf(ex.id).extra || 0);
   function openIndex(ex) {
     const st = stateOf(ex.id);
     if (st.current !== undefined) return st.current;
-    return st.done.length < targetFor(ex).sets ? st.done.length : null;
+    return st.done.length < plannedSets(ex) ? st.done.length : null;
   }
 
   /** Values in the open set: your changes, else the set you're editing, else the previous set, else the target. */
@@ -479,13 +481,13 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
   function setLog(ex) {
     if (!ex.reps) return '';
     const st = stateOf(ex.id), target = targetFor(ex), open = openIndex(ex), unit = unitOf(ex);
-    const tabCount = Math.max(target.sets, st.done.length, open !== null ? open + 1 : 0);
+    const tabCount = Math.max(plannedSets(ex), st.done.length, open !== null ? open + 1 : 0);
     const tabs = Array.from({ length: tabCount }, (_, i) => {
       const done = i < st.done.length, current = i === open, reachable = i <= st.done.length;
       const cls = ['set-tab', done && 'is-done', current && 'is-current'].filter(Boolean).join(' ');
       return `<button type="button" class="${cls}" data-action="set-tab" data-i="${i}"${reachable ? '' : ' disabled'}${current ? ' aria-current="step"' : ''} aria-label="Set ${i + 1}${done ? ', logged' : ''}">${done && !current ? '✓' : ''}${i + 1}</button>`;
     }).join('');
-    const add = open === null ? '<button type="button" class="set-tab add" data-action="set-add" aria-label="Add a set">+</button>' : '';
+    const add = '<button type="button" class="set-tab add" data-action="set-add" aria-label="Add a set" title="Add a set">+</button>';   // any time — plan an extra set before you finish
     const verdict = exerciseVerdict(st.done, target);
     return `<div class="setlog${open === null ? ' is-collapsed' : ''}" id="setlog-${ex.id}">
       <div class="setlog-head">
@@ -514,7 +516,8 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
       <div class="set-actions">
         <button type="button" class="btn-log" data-action="log-set">✓ ${editing ? 'Update' : 'Log'} set ${i + 1}</button>
         <span class="prog-badge ${badge.cls}" id="pb-${ex.id}">${badge.label}</span>
-        ${editing ? '<button type="button" class="link-btn" data-action="remove-set">remove</button><button type="button" class="link-btn" data-action="cancel-set">cancel</button>' : ''}
+        ${editing ? '<button type="button" class="link-btn" data-action="remove-set">remove</button><button type="button" class="link-btn" data-action="cancel-set">cancel</button>'
+          : i >= targetFor(ex).sets ? '<button type="button" class="link-btn" data-action="remove-set">remove this extra set</button>' : ''}
       </div>
     </div>`;
   }
@@ -604,16 +607,22 @@ export function createWorkoutView({ root, repo, storage, settings, onSaved, onUn
     refreshCard(exId);
   }
 
+  /** + : one more set than planned. The lift stays open until it's logged; the set you're on stays open. */
   function addSet(exId) {
-    const st = stateOf(exId);
-    st.current = st.done.length;
-    st.draft = undefined;
+    const ex = findExercise(exId), st = stateOf(exId);
+    const planned = Math.max(plannedSets(ex), st.done.length);
+    st.extra = planned + 1 - targetFor(ex).sets;
+    if (st.current !== undefined && st.current >= st.done.length) st.current = undefined;   // a new set opens by itself, in order
+    if (st.current === undefined) st.draft = undefined;
+    st.expanded = true;
     refreshCard(exId);
   }
 
   function removeSet(exId) {
     const ex = findExercise(exId), st = stateOf(exId), i = openIndex(ex);
+    const extraSet = i !== null && i >= targetFor(ex).sets && (st.extra || 0) > 0;
     if (i !== null && i < st.done.length) st.done.splice(i, 1);
+    if (extraSet) st.extra -= 1;   // removing an extra set (done or not) drops it from the plan too
     st.current = undefined;
     st.draft = undefined;
     refreshCard(exId);
