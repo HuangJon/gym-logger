@@ -171,10 +171,10 @@
 
 /* set-by-set panel */
 .setlog { margin: 8px 10px; border: 1px solid var(--input-border); border-radius: 10px; overflow: hidden; }
-.setlog-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--input-bg); }
-.setlog-summary { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; }
+.setlog-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 10px; background: var(--input-bg); }
+.setlog-summary { flex: 1 1 90px; min-width: 0; font-size: 12px; font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; }
 .setlog:not(.is-collapsed) .setlog-head { border-bottom: 1px solid var(--input-border); }
-.set-tabs { display: flex; gap: 4px; }
+.set-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }   /* wraps under the summary when there are many sets */
 .set-tab {
   min-width: 30px; height: 30px; padding: 0 6px; border-radius: 8px; font-size: 12px; font-weight: 700;
   border: 1.5px solid var(--input-border); background: var(--card); color: var(--fg3); cursor: pointer; touch-action: manipulation;
